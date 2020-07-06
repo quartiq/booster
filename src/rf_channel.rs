@@ -1,14 +1,14 @@
 use ad5627::{self, Ad5627};
 
-use super::{BusProxy, I2c};
+use super::{BusProxy, I2C};
 use crate::error::Error;
 
 pub struct RfChannel {
-    interlock_thresholds: Ad5627<BusProxy<I2c>>,
+    interlock_thresholds: Ad5627<BusProxy<I2C>>,
 }
 
 impl RfChannel {
-    pub fn new(ad5627: Ad5627<BusProxy<I2c>>) -> Self {
+    pub fn new(ad5627: Ad5627<BusProxy<I2C>>) -> Self {
         Self {
             interlock_thresholds: ad5627,
         }

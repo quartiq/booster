@@ -1,14 +1,14 @@
-use super::{BusManager, BusProxy, I2c};
-use ad5627::Ad5627;
+use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
 use crate::rf_channel::RfChannel;
+use ad5627::Ad5627;
 use tca9548::{self, Tca9548};
 
 use enum_iterator::IntoEnumIterator;
 
 pub struct BoosterChannels {
     channels: [Option<RfChannel>; 8],
-    mux: Tca9548<BusProxy<I2c>>,
+    mux: Tca9548<BusProxy<I2C>>,
 }
 
 #[derive(IntoEnumIterator, Copy, Clone, Debug)]
@@ -39,12 +39,11 @@ impl Into<tca9548::Bus> for Channel {
 }
 
 impl BoosterChannels {
-    pub fn new(mut mux: Tca9548<BusProxy<I2c>>, manager: &'static BusManager) -> Self {
+    pub fn new(mut mux: Tca9548<BusProxy<I2C>>, manager: &'static BusManager) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
             [None, None, None, None, None, None, None, None];
 
         for channel in Channel::into_enum_iter() {
-
             // Selecting an I2C bus should never fail.
             mux.select_bus(Some(channel.into())).unwrap();
 

@@ -15,11 +15,10 @@ mod booster_channels;
 mod error;
 mod rf_channel;
 use booster_channels::BoosterChannels;
-use tca9548::Tca9548;
 
 use shared_bus_rtic::{self, BusProxy};
 
-type I2c = hal::i2c::I2c<
+type I2C = hal::i2c::I2c<
     hal::stm32::I2C1,
     (
         hal::gpio::gpiob::PB6<hal::gpio::AlternateOD<hal::gpio::AF4>>,
@@ -27,7 +26,8 @@ type I2c = hal::i2c::I2c<
     ),
 >;
 
-type BusManager = shared_bus_rtic::shared_bus::BusManager<shared_bus_rtic::Mutex<I2c>, I2c>;
+// Convenience type definition for the shared bus BusManager type.
+type BusManager = shared_bus_rtic::shared_bus::BusManager<shared_bus_rtic::Mutex<I2C>, I2C>;
 
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true)]
 const APP: () = {
@@ -62,7 +62,7 @@ const APP: () = {
                 hal::i2c::I2c::i2c1(c.device.I2C1, (scl, sda), 100.khz(), clocks)
             };
 
-            shared_bus_rtic::new!(i2c, I2c)
+            shared_bus_rtic::new!(i2c, I2C)
         };
 
         // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
@@ -70,11 +70,8 @@ const APP: () = {
         let channels = {
             let mux = {
                 let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
-                i2c_mux_reset.set_low().unwrap();
-                // TODO: Delay here.
-                i2c_mux_reset.set_high().unwrap();
-
-                Tca9548::default(i2c_bus_manager.acquire(), &mut i2c_mux_reset, &mut delay).unwrap()
+                tca9548::Tca9548::default(i2c_bus_manager.acquire(), &mut i2c_mux_reset, &mut delay)
+                    .unwrap()
             };
 
             BoosterChannels::new(mux, &i2c_bus_manager)
