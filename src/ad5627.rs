@@ -14,6 +14,7 @@ where
 }
 
 #[doc(hidden)]
+#[allow(dead_code)]
 /// Represents various commands that can be sent to the DAC during a write.
 enum Command {
     WriteInput,

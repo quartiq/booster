@@ -1,3 +1,4 @@
+#![deny(warnings)]
 #![no_std]
 #![no_main]
 
@@ -10,10 +11,15 @@ use stm32f4xx_hal as hal;
 
 use hal::prelude::*;
 
+mod ad5627;
+mod booster_channels;
+mod error;
+mod rf_channel;
 mod tca9548;
+use booster_channels::BoosterChannels;
 use tca9548::Tca9548;
 
-use shared_bus_rtic::BusProxy;
+use shared_bus_rtic::{self, BusProxy};
 
 type I2c = hal::i2c::I2c<
     hal::stm32::I2C1,
@@ -23,10 +29,12 @@ type I2c = hal::i2c::I2c<
     ),
 >;
 
+type BusManager = shared_bus_rtic::shared_bus::BusManager<shared_bus_rtic::Mutex<I2c>, I2c>;
+
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true)]
 const APP: () = {
     struct Resources {
-        mux: Tca9548<BusProxy<I2c>>,
+        channels: BoosterChannels,
     }
 
     #[init]
@@ -61,20 +69,24 @@ const APP: () = {
 
         // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
         // bus with all of the Booster peripheral devices.
-        let mux = {
-            let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
-            i2c_mux_reset.set_low().unwrap();
-            // TODO: Delay here.
-            i2c_mux_reset.set_high().unwrap();
+        let channels = {
+            let mux = {
+                let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
+                i2c_mux_reset.set_low().unwrap();
+                // TODO: Delay here.
+                i2c_mux_reset.set_high().unwrap();
 
-            Tca9548::default(i2c_bus_manager.acquire(), &mut i2c_mux_reset, &mut delay).unwrap()
+                Tca9548::default(i2c_bus_manager.acquire(), &mut i2c_mux_reset, &mut delay).unwrap()
+            };
+
+            BoosterChannels::new(mux, &i2c_bus_manager)
         };
 
-        init::LateResources { mux: mux }
+        init::LateResources { channels: channels }
     }
 
-    #[idle(resources=[mux])]
-    fn idle(c: idle::Context) -> ! {
+    #[idle(resources=[channels])]
+    fn idle(_: idle::Context) -> ! {
         loop {
             asm::nop();
         }
