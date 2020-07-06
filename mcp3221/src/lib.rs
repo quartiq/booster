@@ -10,7 +10,7 @@ const DEVICE_ADDRESS: u8 = 0x4D;
 /// A driver for the MCP3221 external analog-to-digital converter.
 pub struct Mcp3221<I2C>
 where
-    I2C: Read
+    I2C: Read,
 {
     i2c: I2C,
     supply_voltage: f32,
@@ -18,7 +18,7 @@ where
 
 impl<I2C> Mcp3221<I2C>
 where
-    I2C: Read
+    I2C: Read,
 {
     /// Construct a MCP3221 driver.
     ///
@@ -26,7 +26,10 @@ where
     /// * `i2c` - The I2C bus used to communicate with the device.
     /// * `vdd` - The supply voltage to the VDD pin of the chip.
     pub fn new(i2c: I2C, vdd: f32) -> Self {
-        Mcp3221 { i2c, supply_voltage: vdd }
+        Mcp3221 {
+            i2c,
+            supply_voltage: vdd,
+        }
     }
 
     /// Construct a default MCP3221 driver.
