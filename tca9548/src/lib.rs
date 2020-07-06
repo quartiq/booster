@@ -85,15 +85,25 @@ where
         Tca9548::new(i2c, 0x70, reset, delay)
     }
 
+    /// Select I2C buses to connect.
+    ///
+    /// # Args
+    /// * `bus` - A bitmap indicating which buses to connect.
+    pub fn enable(&mut self, bus: u8) -> Result<(), I2C::Error> {
+        self.i2c.write(self.address, &[bus])?;
+
+        Ok(())
+    }
+
     /// Select an I2C bus to connect.
     ///
     /// # Args
     /// * `bus` - An optional bus to connect. If None, all buses will be disconnected.
     pub fn select_bus(&mut self, bus: Option<Bus>) -> Result<(), I2C::Error> {
         if let Some(bus) = bus {
-            self.i2c.write(self.address, &[bus as u8])
+            self.enable(bus as u8)
         } else {
-            self.i2c.write(self.address, &[0u8])
+            self.enable(0u8)
         }
     }
 }
