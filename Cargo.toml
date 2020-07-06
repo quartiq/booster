@@ -17,9 +17,8 @@ embedded-hal = "0.2.3"
 version = "0.8.3"
 features = ["stm32f407", "rt"]
 
-[dependencies.shared-bus]
-version = "0.1.4"
-features = ["cortexm"]
+[dependencies.shared-bus-rtic]
+path = "../../shared-bus-rtic"
 
 [profile.release]
 codegen-units = 1 # better optimizations

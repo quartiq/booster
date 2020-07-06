@@ -5,32 +5,24 @@ use panic_halt as _;
 
 use cortex_m::asm;
 
-mod tca9548;
-use tca9548::Tca9548;
-
 // Use default interrupt handlers from the HAL
 use stm32f4xx_hal as hal;
 
 use hal::prelude::*;
 
+mod tca9548;
+use tca9548::Tca9548;
+
+use shared_bus_rtic::BusProxy;
+
 type I2c = hal::i2c::I2c<hal::stm32::I2C1,
      (hal::gpio::gpiob::PB6<hal::gpio::AlternateOD<hal::gpio::AF4>>,
       hal::gpio::gpiob::PB7<hal::gpio::AlternateOD<hal::gpio::AF4>>)>;
 
-type MutexInner = core::cell::RefCell<I2c>;
-type Mutex = cortex_m::interrupt::Mutex<MutexInner>;
-type BusManager = shared_bus::CortexMBusManager<MutexInner, I2c>;
-type BusProxy = shared_bus::proxy::BusProxy<'static, Mutex, I2c>;
-
-pub struct RfChannels {
-    mux: Option<Tca9548<BusProxy>>,
-    i2c: BusManager,
-}
-
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true)]
 const APP: () = {
     struct Resources {
-        channels: RfChannels,
+        mux: Tca9548<BusProxy<I2c>>,
     }
 
     #[init]
@@ -48,31 +40,41 @@ const APP: () = {
 
         let gpiob = c.device.GPIOB.split();
 
-        // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
-        // bus with all of the Booster peripheral devices.
-        let channels = {
-            let manager = {
-                let i2c = {
-                    let scl = gpiob.pb6.into_alternate_af4_open_drain();
-                    let sda = gpiob.pb7.into_alternate_af4_open_drain();
-                    hal::i2c::I2c::i2c1(c.device.I2C1, (scl, sda), 100.khz(), clocks)
-                };
-
-                shared_bus::CortexMBusManager::new(i2c)
+        let i2c_bus_manager = {
+            let i2c = {
+                let scl = gpiob.pb6.into_alternate_af4_open_drain();
+                let sda = gpiob.pb7.into_alternate_af4_open_drain();
+                hal::i2c::I2c::i2c1(c.device.I2C1, (scl, sda), 100.khz(), clocks)
             };
 
-            RfChannels { mux: None, i2c: manager }
+            shared_bus_rtic::new!(i2c, I2c)
+        };
+
+        // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
+        // bus with all of the Booster peripheral devices.
+        let mux = {
+
+            // Manually toggle the I2C mux reset lines. We don't do this in the constructor because
+            // then we'd have to carry around the reset line pin in the RTIC resources.
+            {
+                let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
+                i2c_mux_reset.set_low().unwrap();
+                // TODO: Delay here.
+                i2c_mux_reset.set_high().unwrap();
+            }
+
+            let mux = Tca9548::default(i2c_bus_manager.acquire()).unwrap();
+
+            mux
         };
 
         init::LateResources {
-            channels: channels,
+            mux: mux,
         }
     }
 
-    #[idle(resources=[channels])]
+    #[idle(resources=[mux])]
     fn idle(c: idle::Context) -> ! {
-
-        c.resources.channels.mux.replace(Tca9548::default(c.resources.channels.i2c.acquire()));
 
         loop {
             asm::nop();

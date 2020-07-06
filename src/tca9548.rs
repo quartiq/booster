@@ -1,11 +1,5 @@
 
-use embedded_hal::{
-    digital::v2::OutputPin,
-    blocking::{
-        delay::DelayUs,
-        i2c::Write,
-    },
-};
+use embedded_hal::blocking::i2c::Write;
 
 pub struct Tca9548<I2C>
 where
@@ -30,38 +24,26 @@ impl<I2C> Tca9548<I2C>
 where
     I2C: Write,
 {
-    pub fn new<RST, DELAY>(i2c: I2C, address: u8, reset: &mut RST, delay: &mut DELAY) -> Self
-    where
-        RST: OutputPin,
-        DELAY: DelayUs<u8>,
-        RST::Error: core::fmt::Debug,
-    {
-        reset.set_low().unwrap();
-        delay.delay_us(1u8);
-        reset.set_high().unwrap();
-
-        Tca9548 {
+    pub fn new(i2c: I2C, address: u8) -> Result<Self, I2C::Error> {
+        let mut device = Tca9548 {
             i2c,
             address,
-        }
+        };
+
+        device.select_bus(None)?;
+
+        Ok(device)
     }
 
-    //pub fn default<RST, DELAY>(i2c: I2C, reset: &mut RST, delay: &mut DELAY) -> Self
-    //where
-    //    RST: OutputPin,
-    //    DELAY: DelayUs<u8>,
-    //    RST::Error: core::fmt::Debug,
-    //{
-    //    Tca9548::new(i2c, 0x70, reset, delay)
-    //}
-    pub fn default(i2c: I2C) -> Self {
-        Tca9548 {
-            address: 0x70,
-            i2c: i2c,
-        }
+    pub fn default(i2c: I2C) -> Result<Self, I2C::Error> {
+        Tca9548::new(i2c, 0x70)
     }
 
-    pub fn select_bus(&mut self, bus: Bus) -> Result<(), I2C::Error> {
-        self.i2c.write(self.address, &[bus as u8])
+    pub fn select_bus(&mut self, bus: Option<Bus>) -> Result<(), I2C::Error> {
+        if let Some(bus) = bus {
+            self.i2c.write(self.address, &[bus as u8])
+        } else {
+            self.i2c.write(self.address, &[0u8])
+        }
     }
 }
