@@ -11,11 +11,9 @@ use stm32f4xx_hal as hal;
 
 use hal::prelude::*;
 
-mod ad5627;
 mod booster_channels;
 mod error;
 mod rf_channel;
-mod tca9548;
 use booster_channels::BoosterChannels;
 use tca9548::Tca9548;
 

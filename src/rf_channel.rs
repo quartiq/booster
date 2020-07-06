@@ -1,4 +1,4 @@
-use crate::ad5627::{self, Ad5627};
+use ad5627::{self, Ad5627};
 
 use super::{BusProxy, I2c};
 use crate::error::Error;

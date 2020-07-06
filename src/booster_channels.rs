@@ -1,8 +1,8 @@
 use super::{BusManager, BusProxy, I2c};
-use crate::ad5627::Ad5627;
+use ad5627::Ad5627;
 use crate::error::Error;
 use crate::rf_channel::RfChannel;
-use crate::tca9548::{self, Tca9548};
+use tca9548::{self, Tca9548};
 
 use enum_iterator::IntoEnumIterator;
 
