@@ -103,6 +103,7 @@ where
             return Err(Error::Range);
         }
 
+        // The ADC has a 12-bit DAC output. Full range is 0xFFF.
         let steps = ((voltage / 2.5) * (0xFFF as f32)) as u16;
 
         // Write the dac level to the output.
