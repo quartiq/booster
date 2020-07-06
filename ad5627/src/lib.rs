@@ -103,11 +103,12 @@ where
             return Err(Error::Range);
         }
 
-        let steps = (voltage / 2.5) as u16;
+        let steps = ((voltage / 2.5) * (0xFFF as f32)) as u16;
 
         // Write the dac level to the output.
         self.write(Command::WriteInput, dac, steps.to_be_bytes())?;
 
-        Ok(steps as f32 * 2.5)
+        let programmed_voltage = (steps as f32) / (0xFFF as f32) * 2.5;
+        Ok(programmed_voltage)
     }
 }
