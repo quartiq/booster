@@ -28,10 +28,10 @@ impl Command {
     /// Check if a command should be followed by writable data.
     fn is_writable(&self) -> bool {
         match self {
-            Command::WriteConfigurationByte |
-            Command::WriteLocalHighLimit |
-            Command::WriteRemoteHighLimit |
-            Command::SingleShot => true,
+            Command::WriteConfigurationByte
+            | Command::WriteLocalHighLimit
+            | Command::WriteRemoteHighLimit
+            | Command::SingleShot => true,
             _ => false,
         }
     }
@@ -52,7 +52,7 @@ pub struct Max6642<I2C> {
 
 impl<I2C> Max6642<I2C>
 where
-    I2C: Write + WriteRead
+    I2C: Write + WriteRead,
 {
     /// Construct a new driver for the MAX6642-ATT94 variant.
     ///
@@ -73,7 +73,9 @@ where
 
     fn read(&mut self, command: Command) -> Result<u8, Error> {
         let mut result: [u8; 1] = [0; 1];
-        self.i2c.write_read(self.address, &[command as u8], &mut result).map_err(|_| Error::Interface)?;
+        self.i2c
+            .write_read(self.address, &[command as u8], &mut result)
+            .map_err(|_| Error::Interface)?;
 
         Ok(result[0])
     }
@@ -84,7 +86,9 @@ where
             return Err(Error::InvalidCommand);
         }
 
-        self.i2c.write(self.address, &[command as u8, value]).map_err(|_| Error::Interface)?;
+        self.i2c
+            .write(self.address, &[command as u8, value])
+            .map_err(|_| Error::Interface)?;
 
         Ok(())
     }
@@ -93,7 +97,7 @@ where
     ///
     /// # Returns
     /// The temperature of the external diode in degrees celsius.
-    pub fn get_temperature_celcius(&mut self) -> Result<f32, Error>{
+    pub fn get_temperature_celcius(&mut self) -> Result<f32, Error> {
         let temp_c = self.read(Command::ReadRemoteTemperature)?;
         if temp_c > 130 {
             return Err(Error::DiodeFault);
