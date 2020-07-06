@@ -66,8 +66,12 @@ Planned LED indications:
 * RED - Channel interlock is tripped and output is disabled.
 
 Push button assignments (TBD):
-* PB1 - Re-enable all channels
-* PB2 - Reset device
+* PB1 (short press) - Re-enable all channels
+* PB2 (short press) - Disable all channels
+* PB1 + PB2 (long press) - Reset device
+
+A long press is defined as greater than 2 seconds. Any debounced press that is less than 2 seconds
+is considered a short press.
 
 ## Software Overview
 
@@ -76,11 +80,10 @@ The final firmware of Booster will be composed of two RTIC tasks:
 * Priority 0 (Lowest) - Idle task
 
 The channel scan task will be invoked at a periodic interval of 500ms (TBD). This task will measure
-the current state of output channels and report the state over the MQTT telemetry interface. Results
-will then be cached for reporting over the ethernet interface when queried. This task will be fast
-enough such that the user will not experience any delay when using the ethernet or USB-based
-interfaces. After channel temperature measurements have been conducted, this task will update the
-speed of the cooling fans as necessary.
+the current state of output channels and report the state over the MQTT telemetry interface.  This
+task will be fast enough such that the user will not experience any delay when using the ethernet or
+USB-based interfaces. After channel temperature measurements have been conducted, this task will
+update the speed of the cooling fans as necessary.
 
 The idle task will be composed of servicing the network stack and MQTT ethernet interface as well as
 the USB terminal interface. When neither of these interfaces requires servicing, the device will
