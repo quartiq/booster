@@ -14,6 +14,9 @@ panic-halt = "0.2.0"
 version = "0.8.3"
 features = ["stm32f407", "rt"]
 
+[dependencies.mcp3221]
+path = "mcp3221"
+
 [profile.release]
 codegen-units = 1 # better optimizations
 debug = true # symbols are nice and they don't increase the size on Flash
