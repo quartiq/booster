@@ -4,6 +4,7 @@ This document outlines the initial software development plan for updated Booster
 is a multichannel RF power amplifier supporting configurable power thresholds and amplification
 levels.
 
+This plan includes implementation details that may change during the development.
 Software will be developed using Rust and the Real-Time Interrupt-driven Concurrency (RTIC)
 framework.
 
@@ -28,7 +29,7 @@ LED for each of the 8 output channels. There are also two user push-buttons on t
 
 ### Booster Channels
 Each channel is composed of two configurable hardware interlock thresholds. When either interlock is
-tripped, the corresponding output channel is disabled. Channels may be re-enabled by firmware by
+tripped, the corresponding output channel is disabled. Channels may be re-enabled by button press or network by
 disabling and re-enabling the channel.
 
 There are two interlocks per channel:
@@ -45,7 +46,7 @@ temperature.
 All channels expose an EEPROM with a EUI-48 identifier.
 
 The booster main-board also supports the following control/measurements for each channel:
-* Analog bias voltage control for adjusting the output power
+* Analog bias voltage control for adjusting the channel gain
 * Voltage measurement of the 5V main power rail provided to the channels
 * Current measurement of the 5V pre-amp power rail provided to the channels.
 * Current measurement of the 28V rail provided to the channels.
