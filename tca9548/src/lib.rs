@@ -3,6 +3,7 @@
 //! This minimal driver allows for intiailizing the I2C bus multiplexer as well as configuring a
 //! single bus connection for the output mux.
 #![no_std]
+#![deny(warnings)]
 
 use embedded_hal::{
     blocking::{delay::DelayUs, i2c::Write},

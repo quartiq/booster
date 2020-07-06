@@ -3,6 +3,8 @@
 //! This driver allows for configuring either or both DAC output voltages. It assumes that the DAC
 //! is using an internal 1.25V reference (AD5627R variant).
 #![no_std]
+#![deny(warnings)]
+
 use embedded_hal::blocking::i2c::Write;
 
 /// The driver representing the programmable reference generator.
@@ -18,14 +20,14 @@ where
 #[allow(dead_code)]
 /// Represents various commands that can be sent to the DAC during a write.
 enum Command {
-    WriteInput,
-    WriteDac,
-    WriteInputUpdate,
-    WriteDacUpdate,
-    PowerUpdate,
-    Reset,
-    LdacSetup,
-    InternalRefSetup,
+    WriteInput = 0b000,
+    WriteDac = 0b001,
+    WriteInputUpdate = 0b010,
+    WriteDacUpdate = 0b011,
+    PowerUpdate = 0b100,
+    Reset = 0b101,
+    LdacSetup = 0b110,
+    InternalRefSetup = 0b111,
 }
 
 /// Represents which DAC output to update.
