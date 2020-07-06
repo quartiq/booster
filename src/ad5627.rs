@@ -55,10 +55,7 @@ where
     /// * `i2c` - The I2C bus to communicate with the DAC.
     /// * `address` - The 7-bit I2C address of the device.
     pub fn new(i2c: I2C, address: u8) -> Result<Self, I2C::Error> {
-        let mut device = Ad5627 {
-            i2c,
-            address,
-        };
+        let mut device = Ad5627 { i2c, address };
 
         // Reset the DAC outputs.
         device.write(Command::Reset, Dac::Both, [0, 0])?;
@@ -69,8 +66,7 @@ where
         Ok(device)
     }
 
-    fn write(&mut self, command: Command, dac: Dac, payload: [u8; 2]) -> Result<(), I2C::Error>
-    {
+    fn write(&mut self, command: Command, dac: Dac, payload: [u8; 2]) -> Result<(), I2C::Error> {
         // Construct the command byte.
         let write: [u8; 3] = [((command as u8) << 3) | dac as u8, payload[0], payload[1]];
 
@@ -96,7 +92,7 @@ where
     ///
     /// # Returns
     /// The actual voltage programmed into the DAC after digitization.
-    pub fn set_voltage(&mut self, voltage: f32, dac: Dac) -> Result<f32, Error<I2C::Error>>{
+    pub fn set_voltage(&mut self, voltage: f32, dac: Dac) -> Result<f32, Error<I2C::Error>> {
         // Assuming a 1.25V internal reference with a 2x output stage gain, our full scale range is
         // 2.5V.
         if voltage > 2.5 || voltage < 0.0 {
