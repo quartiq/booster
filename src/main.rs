@@ -15,9 +15,13 @@ use tca9548::Tca9548;
 
 use shared_bus_rtic::BusProxy;
 
-type I2c = hal::i2c::I2c<hal::stm32::I2C1,
-     (hal::gpio::gpiob::PB6<hal::gpio::AlternateOD<hal::gpio::AF4>>,
-      hal::gpio::gpiob::PB7<hal::gpio::AlternateOD<hal::gpio::AF4>>)>;
+type I2c = hal::i2c::I2c<
+    hal::stm32::I2C1,
+    (
+        hal::gpio::gpiob::PB6<hal::gpio::AlternateOD<hal::gpio::AF4>>,
+        hal::gpio::gpiob::PB7<hal::gpio::AlternateOD<hal::gpio::AF4>>,
+    ),
+>;
 
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true)]
 const APP: () = {
@@ -27,16 +31,21 @@ const APP: () = {
 
     #[init]
     fn init(c: init::Context) -> init::LateResources {
+        let cp = cortex_m::peripheral::Peripherals::take().unwrap();
+
         // Initialize the chip
         let rcc = c.device.RCC.constrain();
 
         // TODO: Determine an ideal operating point for the system clock. Currently set to max.
-        let clocks = rcc.cfgr
+        let clocks = rcc
+            .cfgr
             .use_hse(8.mhz())
             .sysclk(168.mhz())
             .hclk(168.mhz())
             .require_pll48clk()
             .freeze();
+
+        let mut delay = hal::delay::Delay::new(cp.SYST, clocks);
 
         let gpiob = c.device.GPIOB.split();
 
@@ -53,29 +62,19 @@ const APP: () = {
         // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
         // bus with all of the Booster peripheral devices.
         let mux = {
+            let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
+            i2c_mux_reset.set_low().unwrap();
+            // TODO: Delay here.
+            i2c_mux_reset.set_high().unwrap();
 
-            // Manually toggle the I2C mux reset lines. We don't do this in the constructor because
-            // then we'd have to carry around the reset line pin in the RTIC resources.
-            {
-                let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
-                i2c_mux_reset.set_low().unwrap();
-                // TODO: Delay here.
-                i2c_mux_reset.set_high().unwrap();
-            }
-
-            let mux = Tca9548::default(i2c_bus_manager.acquire()).unwrap();
-
-            mux
+            Tca9548::default(i2c_bus_manager.acquire(), &mut i2c_mux_reset, &mut delay).unwrap()
         };
 
-        init::LateResources {
-            mux: mux,
-        }
+        init::LateResources { mux: mux }
     }
 
     #[idle(resources=[mux])]
     fn idle(c: idle::Context) -> ! {
-
         loop {
             asm::nop();
         }
