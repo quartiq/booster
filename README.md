@@ -19,4 +19,5 @@ Unauthorized usage, editing, or copying of this code or the contents of this
 this repository, via any medium is strictly prohibited.
 Proprietary and confidential.
 
-You may purchase a [license](LICENSE) to use this software.
+You may purchase a [license](LICENSE) to use this software from
+[QUARTIQ](mailto:sales@quartiq.com).
