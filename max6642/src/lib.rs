@@ -7,8 +7,8 @@
 #![no_std]
 #![deny(warnings)]
 
-use embedded_hal::blocking::i2c::{Write, WriteRead};
 use bit_field::BitField;
+use embedded_hal::blocking::i2c::{Write, WriteRead};
 
 #[allow(dead_code)]
 #[doc(hidden)]
@@ -108,7 +108,9 @@ where
         }
 
         // 0.25C temperature is stored in the top 2 bits of the extended data register.
-        let temp_c_4ths = self.read(Command::ReadRemoteExtendedTemperature)?.get_bits(6..8);
+        let temp_c_4ths = self
+            .read(Command::ReadRemoteExtendedTemperature)?
+            .get_bits(6..8);
 
         let temp_c = (temp_c as f32) + (temp_c_4ths as f32) * 0.25;
 
