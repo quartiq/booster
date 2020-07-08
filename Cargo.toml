@@ -10,15 +10,18 @@ cortex-m = "0.6.0"
 cortex-m-rt = "0.6.10"
 panic-halt = "0.2.0"
 
+[dependencies.stm32f4xx-hal]
+version = "0.8.3"
+features = ["stm32f407", "rt"]
+
 [dependencies.ad5627]
 path = "ad5627"
 
 [dependencies.tca9548]
 path = "tca9548"
 
-[dependencies.stm32f4xx-hal]
-version = "0.8.3"
-features = ["stm32f407", "rt"]
+[dependencies.mcp3221]
+path = "mcp3221"
 
 [dependencies.dac7571]
 path = "dac7571"
