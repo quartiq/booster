@@ -97,7 +97,7 @@ where
         Ok(())
     }
 
-    /// Get the temperature of the external diode.
+    /// Get the temperature of the remote diode.
     ///
     /// # Returns
     /// The temperature of the remote diode in degrees celsius.
