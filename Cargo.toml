@@ -32,6 +32,9 @@ path = "mcp3221"
 [dependencies.dac7571]
 path = "dac7571"
 
+[dependencies.max6639]
+path = "max6639"
+
 [profile.release]
 codegen-units = 1 # better optimizations
 debug = true # symbols are nice and they don't increase the size on Flash
