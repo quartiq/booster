@@ -1,3 +1,9 @@
+//! Definitions for Booster RF management channels.
+//!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
 use ad5627::{self, Ad5627};
 
 use super::{BusProxy, I2C};
