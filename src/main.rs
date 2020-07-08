@@ -24,6 +24,9 @@ use rf_channel::{
     ControlPins as RfChannelPins
 };
 
+#[macro_use]
+extern crate log;
+
 use shared_bus_rtic::{self, BusProxy};
 
 type I2C = hal::i2c::I2c<
@@ -115,7 +118,7 @@ const APP: () = {
                     .unwrap()
             };
 
-            BoosterChannels::new(mux, &i2c_bus_manager, channel_pins)
+            BoosterChannels::new(mux, &i2c_bus_manager, channel_pins, &mut delay)
         };
 
         init::LateResources { channels: channels }

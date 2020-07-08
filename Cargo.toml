@@ -12,6 +12,8 @@ panic-halt = "0.2.0"
 cortex-m-rtic = "0.5.3"
 embedded-hal = "0.2.3"
 enum-iterator = "0.6.0"
+cortex-m-log = { version = "0.6.1", features = ["log-integration"] }
+log = "0.4.8"
 
 
 [dependencies.stm32f4xx-hal]

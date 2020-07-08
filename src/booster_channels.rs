@@ -11,6 +11,7 @@ use crate::rf_channel::{
     ControlPins as RfChannelPins,
     RfChannel
 };
+use embedded_hal::blocking::delay::DelayMs;
 use tca9548::{self, Tca9548};
 
 use enum_iterator::IntoEnumIterator;
@@ -48,11 +49,15 @@ impl Into<tca9548::Bus> for Channel {
 }
 
 impl BoosterChannels {
-    pub fn new(
+    pub fn new<DELAY>(
         mut mux: Tca9548<BusProxy<I2C>>,
         manager: &'static BusManager,
         mut pins: [Option<RfChannelPins>; 8],
-    ) -> Self {
+        delay: &mut DELAY
+    ) -> Self
+    where
+        DELAY: DelayMs<u8>
+    {
         let mut rf_channels: [Option<RfChannel>; 8] =
             [None, None, None, None, None, None, None, None];
 
@@ -60,14 +65,22 @@ impl BoosterChannels {
             // Selecting an I2C bus should never fail.
             mux.select_bus(Some(channel.into())).unwrap();
 
-            if let Some(devices) = RfChannelDevices::new(manager) {
-                let mut rf_channel = RfChannel::new(devices,
-                        pins[channel as usize].take().expect("Channel pins already used"));
+            let mut control_pins = pins[channel as usize].take()
+                .expect("Channel pins not available");
 
-                // Setting interlock thresholds should not fail here as we have verified the device
-                // is on the bus.
-                rf_channel.set_interlock_thresholds(-30.0, -30.0).unwrap();
-                rf_channels[channel as usize].replace(rf_channel);
+            match RfChannelDevices::new(manager, &mut control_pins, delay) {
+                Some(devices) => {
+                    let mut rf_channel = RfChannel::new(devices, control_pins);
+
+                    // Setting interlock thresholds should not fail here as we have verified the device
+                    // is on the bus.
+                    rf_channel.set_interlock_thresholds(-30.0, -30.0).unwrap();
+                    rf_channels[channel as usize].replace(rf_channel);
+                },
+                None => {
+                    // Ensure the channel is properly powered down if we didn't locate an RF module.
+                    control_pins.power_down_channel()
+                }
             }
         }
 
