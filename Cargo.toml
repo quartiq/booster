@@ -14,15 +14,27 @@ embedded-hal = "0.2.3"
 enum-iterator = "0.6.0"
 
 
-[dependencies.ad5627]
-path = "ad5627"
-
-[dependencies.tca9548]
-path = "tca9548"
+[dependencies.max6642]
+path = "max6642"
 
 [dependencies.stm32f4xx-hal]
 version = "0.8.3"
 features = ["stm32f407", "rt"]
+
+[dependencies.ad5627]
+path = "ad5627"
+
+[dependencies.ads7924]
+path = "ads7924"
+
+[dependencies.tca9548]
+path = "tca9548"
+
+[dependencies.mcp3221]
+path = "mcp3221"
+
+[dependencies.dac7571]
+path = "dac7571"
 
 [dependencies.shared-bus-rtic]
 version = "0.1.2"

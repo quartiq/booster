@@ -1,5 +1,11 @@
 //! Driver for the AD5627R 2-output programmable reference generator (2-channel DAC).
 //!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
+//!
+//! # Description
 //! This driver allows for configuring either or both DAC output voltages. It assumes that the DAC
 //! is using an internal 1.25V reference (AD5627R variant).
 #![no_std]
@@ -104,12 +110,20 @@ where
         }
 
         // The DAC has a 12-bit DAC output. Full scale is 0xFFF.
-        let steps = ((voltage / 2.5) * (0xFFF as f32)) as u16;
+        let code = ((voltage / 2.5) * (0x1000 as f32)) as u16;
+
+        // Check that the DAC code has not overflown.
+        if code > 0xFFF {
+            return Err(Error::Range);
+        }
+
+        // The 12-bit code must be stored MSB-aligned.
+        let code = code << 4;
 
         // Write the dac level to the output.
-        self.write(Command::WriteInput, dac, steps.to_be_bytes())?;
+        self.write(Command::WriteInput, dac, code.to_be_bytes())?;
 
-        let programmed_voltage = (steps as f32) / (0xFFF as f32) * 2.5;
+        let programmed_voltage = (code as f32) / (0x1000 as f32) * 2.5;
         Ok(programmed_voltage)
     }
 }
