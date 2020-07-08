@@ -79,7 +79,7 @@ where
 
         // Verify the write does not cross a page boundary.
         let start_page = (address >> 3) as usize;
-        let end_page = ((address as usize + data.len() - 1) >> 3) as usize;
+        let end_page = (end_address >> 3) as usize;
 
         if start_page != end_page {
             return Err(Error::PageFault);
@@ -95,29 +95,6 @@ where
 
         // Wait for the internal page write sequence to complete.
         self.wait_for_write_sequence()?;
-
-        Ok(())
-    }
-
-    fn read_page(&mut self, address: u8, data: &mut [u8]) -> Result<(), Error> {
-        let end_address: usize = address as usize + data.len() - 1;
-
-        // The EEPROM only contains 256 bytes.
-        if end_address > PAGE_SIZE * TOTAL_PAGES {
-            return Err(Error::Bounds);
-        }
-
-        // Verify the read does not cross a page boundary.
-        let start_page = (address >> 3) as usize;
-        let end_page = ((address as usize + data.len() - 1) >> 3) as usize;
-
-        if start_page != end_page {
-            return Err(Error::PageFault);
-        }
-
-        self.i2c
-            .write_read(DEVICE_ADDRESS, &[address], data)
-            .map_err(|_| Error::Interface)?;
 
         Ok(())
     }
@@ -169,24 +146,9 @@ where
             return Err(Error::Bounds);
         }
 
-        // Determine the number of bytes in the first page.
-        let start_page = (address >> 3) as usize;
-        let next_page_address = ((start_page + 1) << 3) as usize;
-
-        let mut bytes_in_first_page: usize = address as usize - next_page_address;
-        if bytes_in_first_page > data.len() {
-            bytes_in_first_page = data.len();
-        }
-
-        // First, write the data in the initial page.
-        self.read_page(address, &mut data[..bytes_in_first_page])?;
-
-        // Continue writing pages until data is exhausted.
-        let mut address = address + bytes_in_first_page as u8;
-        for chunk in data[bytes_in_first_page..].chunks_mut(PAGE_SIZE) {
-            self.read_page(address, chunk)?;
-            address += chunk.len() as u8;
-        }
+        self.i2c
+            .write_read(DEVICE_ADDRESS, &[address], data)
+            .map_err(|_| Error::Interface)?;
 
         Ok(())
     }
@@ -200,7 +162,7 @@ where
             return Err(Error::Size);
         }
 
-        self.read_page(0xFA, data)?;
+        self.read(0xFA, data)?;
 
         Ok(())
     }
@@ -220,10 +182,10 @@ where
             return Err(Error::Size);
         }
 
-        self.read_page(0xFA, &mut data[..3])?;
+        self.read(0xFA, &mut data[..3])?;
         data[3] = 0xFF;
         data[4] = 0xFE;
-        self.read_page(0xFD, &mut data[5..])?;
+        self.read(0xFD, &mut data[5..])?;
 
         Ok(())
     }
