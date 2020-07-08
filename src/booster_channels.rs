@@ -6,8 +6,7 @@
 //! Proprietary and confidential.
 use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
-use crate::rf_channel::RfChannel;
-use ad5627::Ad5627;
+use crate::rf_channel::{Devices as RfChannelDevices, RfChannel};
 use tca9548::{self, Tca9548};
 
 use enum_iterator::IntoEnumIterator;
@@ -53,9 +52,8 @@ impl BoosterChannels {
             // Selecting an I2C bus should never fail.
             mux.select_bus(Some(channel.into())).unwrap();
 
-            // TODO: Query all the devices on the bus to detect presence.
-            if let Ok(ad5627) = Ad5627::default(manager.acquire()) {
-                let mut rf_channel = RfChannel::new(ad5627);
+            if let Some(devices) = RfChannelDevices::new(manager) {
+                let mut rf_channel = RfChannel::new(devices);
 
                 // Setting interlock thresholds should not fail here as we have verified the device
                 // is on the bus.
