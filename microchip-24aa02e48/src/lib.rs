@@ -69,10 +69,10 @@ where
         }
     }
 
-    fn write_page(&mut self, data: &[u8], address: u8) -> Result<(), Error> {
+    fn write_page(&mut self, address: u8, data: &[u8]) -> Result<(), Error> {
         let end_address: usize = address as usize + data.len() - 1;
 
-        // The EEPROM only supports writing to the first page of 128 bytes.
+        // The EEPROM only supports writing to the first 16 pages (128 bytes).
         if end_address > PAGE_SIZE * WRITABLE_PAGES {
             return Err(Error::Bounds);
         }
@@ -85,7 +85,7 @@ where
             return Err(Error::PageFault);
         }
 
-        let mut write_data: [u8; 9] = [0; PAGE_SIZE + 1];
+        let mut write_data: [u8; PAGE_SIZE + 1] = [0; PAGE_SIZE + 1];
         write_data[0] = address;
         write_data[1..][..data.len()].copy_from_slice(data);
 
@@ -99,7 +99,7 @@ where
         Ok(())
     }
 
-    fn read_page(&mut self, data: &mut [u8], address: u8) -> Result<(), Error> {
+    fn read_page(&mut self, address: u8, data: &mut [u8]) -> Result<(), Error> {
         let end_address: usize = address as usize + data.len() - 1;
 
         // The EEPROM only contains 256 bytes.
@@ -128,9 +128,9 @@ where
     /// The chip only supports writing to the first 128 bytes.
     ///
     /// # Args
-    /// * `data` - The data to write into EEPROM.
     /// * `address` - The address to write data to.
-    pub fn write(&mut self, data: &[u8], address: u8) -> Result<(), Error> {
+    /// * `data` - The data to write into EEPROM.
+    pub fn write(&mut self, address: u8, data: &[u8]) -> Result<(), Error> {
         let final_address = address as usize + data.len() - 1;
         if final_address > PAGE_SIZE * WRITABLE_PAGES {
             return Err(Error::Bounds);
@@ -146,12 +146,12 @@ where
         }
 
         // First, write the data in the initial page.
-        self.write_page(&data[..bytes_in_first_page], address)?;
+        self.write_page(address, &data[..bytes_in_first_page])?;
 
         // Continue writing pages until data is exhausted.
         let mut address = address + bytes_in_first_page as u8;
         for chunk in data[bytes_in_first_page..].chunks(PAGE_SIZE) {
-            self.write_page(chunk, address)?;
+            self.write_page(address, chunk)?;
             address += chunk.len() as u8;
         }
 
@@ -161,9 +161,9 @@ where
     /// Rea data from the EEPROM in the chip.
     ///
     /// # Args
-    /// * `data` - The location to place read data into.
     /// * `address` - The address to read data from.
-    pub fn read(&mut self, data: &mut [u8], address: u8) -> Result<(), Error> {
+    /// * `data` - The location to place read data into.
+    pub fn read(&mut self, address: u8, data: &mut [u8]) -> Result<(), Error> {
         let final_address = address as usize + data.len() - 1;
         if final_address > PAGE_SIZE * TOTAL_PAGES {
             return Err(Error::Bounds);
@@ -179,12 +179,12 @@ where
         }
 
         // First, write the data in the initial page.
-        self.read_page(&mut data[..bytes_in_first_page], address)?;
+        self.read_page(address, &mut data[..bytes_in_first_page])?;
 
         // Continue writing pages until data is exhausted.
         let mut address = address + bytes_in_first_page as u8;
         for chunk in data[bytes_in_first_page..].chunks_mut(PAGE_SIZE) {
-            self.read_page(chunk, address)?;
+            self.read_page(address, chunk)?;
             address += chunk.len() as u8;
         }
 
@@ -200,7 +200,7 @@ where
             return Err(Error::Size);
         }
 
-        self.read_page(data, 0xFA)?;
+        self.read_page(0xFA, data)?;
 
         Ok(())
     }
@@ -220,10 +220,10 @@ where
             return Err(Error::Size);
         }
 
-        self.read_page(&mut data[..3], 0xFA)?;
+        self.read_page(0xFA, &mut data[..3])?;
         data[3] = 0xFF;
         data[4] = 0xFE;
-        self.read_page(&mut data[5..], 0xFD)?;
+        self.read_page(0xFD, &mut data[5..])?;
 
         Ok(())
     }
