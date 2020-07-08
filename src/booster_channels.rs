@@ -4,23 +4,22 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::{BusManager, BusProxy, I2C};
-use crate::error::Error;
-use crate::rf_channel::{
-    Devices as RfChannelDevices,
-    ControlPins as RfChannelPins,
-    RfChannel
-};
+
 use embedded_hal::blocking::delay::DelayMs;
+use enum_iterator::IntoEnumIterator;
 use tca9548::{self, Tca9548};
 
-use enum_iterator::IntoEnumIterator;
+use super::{BusManager, BusProxy, I2C};
+use crate::error::Error;
+use crate::rf_channel::{ControlPins as RfChannelPins, RfChannel};
 
+/// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
     channels: [Option<RfChannel>; 8],
     mux: Tca9548<BusProxy<I2C>>,
 }
 
+/// Indicates a booster RF channel.
 #[derive(IntoEnumIterator, Copy, Clone, Debug)]
 pub enum Channel {
     Zero = 0,
@@ -49,14 +48,27 @@ impl Into<tca9548::Bus> for Channel {
 }
 
 impl BoosterChannels {
+    /// Construct booster RF channels.
+    ///
+    /// # Note
+    /// This function will scan and enable channels to check if they are present.
+    ///
+    /// # Args
+    /// * `mux` - The I2C mux used for switching between channel communications.
+    /// * `manager` - The I2C bus manager used for the shared I2C bus.
+    /// * `pins` - An array of all RfChannel control/status pins.
+    /// * `delay` - A delay function to delay while waiting for channels to power up.
+    ///
+    /// # Returns
+    /// A `BoosterChannels` object that can be used to manage all available RF channels.
     pub fn new<DELAY>(
         mut mux: Tca9548<BusProxy<I2C>>,
         manager: &'static BusManager,
         mut pins: [Option<RfChannelPins>; 8],
-        delay: &mut DELAY
+        delay: &mut DELAY,
     ) -> Self
     where
-        DELAY: DelayMs<u8>
+        DELAY: DelayMs<u8>,
     {
         let mut rf_channels: [Option<RfChannel>; 8] =
             [None, None, None, None, None, None, None, None];
@@ -65,22 +77,16 @@ impl BoosterChannels {
             // Selecting an I2C bus should never fail.
             mux.select_bus(Some(channel.into())).unwrap();
 
-            let mut control_pins = pins[channel as usize].take()
-                .expect("Channel pins not available");
+            let control_pins = pins[channel as usize].take().expect("Channel pins not available");
 
-            match RfChannelDevices::new(manager, &mut control_pins, delay) {
-                Some(devices) => {
-                    let mut rf_channel = RfChannel::new(devices, control_pins);
-
-                    // Setting interlock thresholds should not fail here as we have verified the device
-                    // is on the bus.
+            match RfChannel::new(manager, control_pins, delay) {
+                Some(mut rf_channel) => {
+                    // Setting interlock thresholds should not fail here as we have verified the
+                    // device is on the bus.
                     rf_channel.set_interlock_thresholds(-30.0, -30.0).unwrap();
                     rf_channels[channel as usize].replace(rf_channel);
                 },
-                None => {
-                    // Ensure the channel is properly powered down if we didn't locate an RF module.
-                    control_pins.power_down_channel()
-                }
+                None => {}
             }
         }
 
@@ -90,6 +96,12 @@ impl BoosterChannels {
         }
     }
 
+    /// Set the interlock thresholds for the channel.
+    ///
+    /// # Args
+    /// * `channel` - The RF channel to set thresholds for.
+    /// * `forward_threshold` - The dBm interlock threshold for forward power.
+    /// * `reflected_threshold` - The dBm interlock threshold for reflected power.
     pub fn set_interlock_thresholds(
         &mut self,
         channel: Channel,
@@ -109,7 +121,7 @@ impl BoosterChannels {
                     // Configuring a present channel should never have an interface failure
                     // (although the requested value may be out of range).
                     Err(Error::Interface) => {
-                        panic!("Failed to configure thresholds on {}", channel as usize);
+                        panic!("Failed to configure thresholds on CH{}", channel as usize);
                     }
                     x => x,
                 }

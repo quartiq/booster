@@ -7,11 +7,15 @@
 #![no_std]
 #![no_main]
 
-use panic_halt as _;
+#[macro_use]
+extern crate log;
 
 use cortex_m::asm;
-
-// Use default interrupt handlers from the HAL
+use panic_halt as _;
+use shared_bus_rtic::{
+    self,
+    BusProxy
+};
 use stm32f4xx_hal as hal;
 
 use hal::prelude::*;
@@ -20,15 +24,9 @@ mod booster_channels;
 mod error;
 mod rf_channel;
 use booster_channels::BoosterChannels;
-use rf_channel::{
-    ControlPins as RfChannelPins
-};
+use rf_channel::ControlPins as RfChannelPins;
 
-#[macro_use]
-extern crate log;
-
-use shared_bus_rtic::{self, BusProxy};
-
+// Convenience type definition for the I2C bus used for booster RF channels.
 type I2C = hal::i2c::I2c<
     hal::stm32::I2C1,
     (
@@ -37,24 +35,41 @@ type I2C = hal::i2c::I2c<
     ),
 >;
 
-macro_rules! channel_pins {
-    ($gpiod:ident, $gpioe:ident, $gpiog:ident, $enable:ident, $alert:ident, $input_overdrive:ident,
-     $output_overdrive:ident, $signal_on:ident) => {
-        {
-            let enable_power = $gpiod.$enable.into_push_pull_output().downgrade();
-            let alert = $gpiod.$alert.into_floating_input().downgrade();
-            let input_overdrive = $gpioe.$input_overdrive.into_floating_input().downgrade();
-            let output_overdrive = $gpioe.$output_overdrive.into_pull_down_input().downgrade();
-            let signal_on = $gpiog.$signal_on.into_push_pull_output().downgrade();
-
-            Some(RfChannelPins::new(enable_power, alert, input_overdrive, output_overdrive,
-                        signal_on))
-        }
-    }
-}
-
 // Convenience type definition for the shared bus BusManager type.
 type BusManager = shared_bus_rtic::shared_bus::BusManager<shared_bus_rtic::Mutex<I2C>, I2C>;
+
+/// Macro for genering an RfChannelPins structure.
+///
+/// # Args
+/// * `gpiod` - The GPIOD Parts structure to extract pins from.
+/// * `gpioe` - The GPIOE Parts structure to extract pins from.
+/// * `gpiog` - The GPIOG Parts structure to extract pins from.
+/// * `enable` - The pin ID of the enable pin in GPIOD.
+/// * `alert` - The pin ID of the alert pin in GPIOD.
+/// * `input_overdrive` - The pin ID of the input overdrive pin in GPIOE.
+/// * `output_overdrive` - The pin ID of the output overdrive pin in GPIOE.
+/// * `signal_on` - The pin ID of the signal on pin in GPIOG.
+///
+/// # Returns
+/// An option containing the RfChannelPins structure.
+macro_rules! channel_pins {
+    ($gpiod:ident, $gpioe:ident, $gpiog:ident, $enable:ident, $alert:ident, $input_overdrive:ident,
+     $output_overdrive:ident, $signal_on:ident) => {{
+        let enable_power = $gpiod.$enable.into_push_pull_output().downgrade();
+        let alert = $gpiod.$alert.into_floating_input().downgrade();
+        let input_overdrive = $gpioe.$input_overdrive.into_floating_input().downgrade();
+        let output_overdrive = $gpioe.$output_overdrive.into_pull_down_input().downgrade();
+        let signal_on = $gpiog.$signal_on.into_push_pull_output().downgrade();
+
+        Some(RfChannelPins::new(
+            enable_power,
+            alert,
+            input_overdrive,
+            output_overdrive,
+            signal_on,
+        ))
+    }};
+}
 
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true)]
 const APP: () = {
@@ -98,7 +113,6 @@ const APP: () = {
         // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
         // bus with all of the Booster peripheral devices.
         let channels = {
-
             let channel_pins = {
                 let ch1_pins = channel_pins!(gpiod, gpioe, gpiog, pd0, pd8, pe8, pe0, pg8);
                 let ch2_pins = channel_pins!(gpiod, gpioe, gpiog, pd1, pd9, pe9, pe1, pg9);
@@ -109,7 +123,9 @@ const APP: () = {
                 let ch7_pins = channel_pins!(gpiod, gpioe, gpiog, pd6, pd14, pe14, pe6, pg14);
                 let ch8_pins = channel_pins!(gpiod, gpioe, gpiog, pd7, pd15, pe15, pe7, pg15);
 
-                [ch1_pins, ch2_pins, ch3_pins, ch4_pins, ch5_pins, ch6_pins, ch7_pins, ch8_pins]
+                [
+                    ch1_pins, ch2_pins, ch3_pins, ch4_pins, ch5_pins, ch6_pins, ch7_pins, ch8_pins,
+                ]
             };
 
             let mux = {
