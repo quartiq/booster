@@ -6,7 +6,11 @@
 //! Proprietary and confidential.
 use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
-use crate::rf_channel::{Devices as RfChannelDevices, RfChannel};
+use crate::rf_channel::{
+    Devices as RfChannelDevices,
+    ControlPins as RfChannelPins,
+    RfChannel
+};
 use tca9548::{self, Tca9548};
 
 use enum_iterator::IntoEnumIterator;
@@ -44,7 +48,11 @@ impl Into<tca9548::Bus> for Channel {
 }
 
 impl BoosterChannels {
-    pub fn new(mut mux: Tca9548<BusProxy<I2C>>, manager: &'static BusManager) -> Self {
+    pub fn new(
+        mut mux: Tca9548<BusProxy<I2C>>,
+        manager: &'static BusManager,
+        mut pins: [Option<RfChannelPins>; 8],
+    ) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
             [None, None, None, None, None, None, None, None];
 
@@ -53,7 +61,8 @@ impl BoosterChannels {
             mux.select_bus(Some(channel.into())).unwrap();
 
             if let Some(devices) = RfChannelDevices::new(manager) {
-                let mut rf_channel = RfChannel::new(devices);
+                let mut rf_channel = RfChannel::new(devices,
+                        pins[channel as usize].take().expect("Channel pins already used"));
 
                 // Setting interlock thresholds should not fail here as we have verified the device
                 // is on the bus.

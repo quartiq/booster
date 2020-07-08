@@ -19,13 +19,13 @@ use stm32f4xx_hal::{
         Output,
         PushPull,
         PullDown,
-        //Analog,
         Floating,
     },
 };
 
 type I2cDevice = BusProxy<I2C>;
 
+#[allow(dead_code)]
 pub struct Devices {
     interlock_thresholds_dac: Ad5627<I2cDevice>,
     input_power_adc: Mcp3221<I2cDevice>,
@@ -61,6 +61,7 @@ impl Devices {
     }
 }
 
+#[allow(dead_code)]
 pub struct ControlPins {
     enable_power_pin: hal::gpio::gpiod::PD<Output<PushPull>>,
 
@@ -75,19 +76,35 @@ pub struct ControlPins {
     signal_on_pin: hal::gpio::gpiog::PG<Output<PushPull>>,
 }
 
+impl ControlPins {
+    pub fn new(
+        enable_power_pin: hal::gpio::gpiod::PD<Output<PushPull>>,
+        alert_pin: hal::gpio::gpiod::PD<Input<Floating>>,
+        input_overdrive_pin: hal::gpio::gpioe::PE<Input<Floating>>,
+        output_overdrive_pin: hal::gpio::gpioe::PE<Input<PullDown>>,
+        signal_on_pin: hal::gpio::gpiog::PG<Output<PushPull>>,
+    ) -> Self {
+        Self {
+            enable_power_pin,
+            alert_pin,
+            input_overdrive_pin,
+            output_overdrive_pin,
+            signal_on_pin
+        }
+    }
+}
+
+#[allow(dead_code)]
 pub struct RfChannel {
     i2c_devices: Devices,
-//    io_pins: ControlPins,
+    io_pins: ControlPins,
 }
 
 impl RfChannel {
-    pub fn new(
-        devices: Devices,
-        //control_pins: ControlPins
-    ) -> Self {
+    pub fn new(devices: Devices, control_pins: ControlPins) -> Self {
         Self {
             i2c_devices: devices,
-            //io_pins: control_pins,
+            io_pins: control_pins,
         }
     }
 
