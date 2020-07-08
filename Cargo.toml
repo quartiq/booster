@@ -14,8 +14,17 @@ panic-halt = "0.2.0"
 version = "0.8.3"
 features = ["stm32f407", "rt"]
 
+[dependencies.ad5627]
+path = "ad5627"
+
+[dependencies.tca9548]
+path = "tca9548"
+
 [dependencies.mcp3221]
 path = "mcp3221"
+
+[dependencies.dac7571]
+path = "dac7571"
 
 [profile.release]
 codegen-units = 1 # better optimizations
