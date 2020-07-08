@@ -94,7 +94,7 @@ struct Devices {
     temperature_monitor: Max6642<I2cDevice>,
     bias_dac: Dac7571<I2cDevice>,
     power_monitor: Ads7924<I2cDevice>,
-    eui48: Microchip24AA02E48<I2cDevice>,
+    pub eui48: Microchip24AA02E48<I2cDevice>,
 }
 
 impl Devices {
@@ -213,7 +213,7 @@ impl ChannelPins {
 /// Represents a means of interacting with an RF output channel.
 #[allow(dead_code)]
 pub struct RfChannel {
-    i2c_devices: Devices,
+    pub i2c_devices: Devices,
     io_pins: ChannelPins,
 }
 

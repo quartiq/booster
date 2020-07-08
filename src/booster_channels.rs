@@ -12,6 +12,19 @@ use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 
+pub struct Channelidentifier {
+    data: [u8; 6]
+}
+
+impl ChannelIdentifier {
+    pub fn new(identifier: [u8; 6]) {
+        Self {
+            identifier
+        }
+
+    }
+}
+
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
     channels: [Option<RfChannel>; 8],
@@ -129,5 +142,38 @@ impl BoosterChannels {
             }
             None => Err(Error::NotPresent),
         }
+    }
+
+    pub fn get_identifier(&mut self, channel: Channel) -> Result<ChannelIdentifier, Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => {
+                self.
+            },
+            None => Err(Error::NotPresent),
+        }
+    }
+
+    pub fn warning_detected(&mut self, channel: Channel) -> Result<bool, Error> {
+    }
+
+    pub fn error_detected(&mut self, channel: Channel) -> Result<bool, Error> {
+        // If input overdrive, output overdrive, or ALERT has been tripped, 
+    }
+
+    pub fn enable_channel(&mut self, channel: Channel) -> Result<(), Error> {
+    }
+
+    pub fn disable_channel(&mut self, channel: Channel) -> Result<(), Error> {
+    }
+
+    pub fn get_temperature(&mut self, channel: Channel) -> Result<f32, Error> {
+    }
+
+    pub fn set_bias(&mut self, channel: Channel, bias_voltage: f32) -> Result<(), Error> {
+    }
+
+    pub fn get_status(&mut self, channel: Channel) -> Result<ChannelStatus, Error> {
     }
 }
