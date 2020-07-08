@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 embedded-hal = "0.2.4"
+bit_field = "0.10.0"

@@ -1,10 +1,14 @@
 //! Implements a driver for the MAX6642 temperature sensor.
 //!
-//!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
 #![no_std]
 #![deny(warnings)]
 
 use embedded_hal::blocking::i2c::{Write, WriteRead};
+use bit_field::BitField;
 
 #[allow(dead_code)]
 #[doc(hidden)]
@@ -96,14 +100,15 @@ where
     /// Get the temperature of the external diode.
     ///
     /// # Returns
-    /// The temperature of the external diode in degrees celsius.
-    pub fn get_temperature_celcius(&mut self) -> Result<f32, Error> {
+    /// The temperature of the remote diode in degrees celsius.
+    pub fn get_remote_temperature(&mut self) -> Result<f32, Error> {
         let temp_c = self.read(Command::ReadRemoteTemperature)?;
         if temp_c > 130 {
             return Err(Error::DiodeFault);
         }
 
-        let temp_c_4ths = self.read(Command::ReadRemoteExtendedTemperature)?;
+        // 0.25C temperature is stored in the top 2 bits of the extended data register.
+        let temp_c_4ths = self.read(Command::ReadRemoteExtendedTemperature)?.get_bits(6..8);
 
         let temp_c = (temp_c as f32) + (temp_c_4ths as f32) * 0.25;
 
