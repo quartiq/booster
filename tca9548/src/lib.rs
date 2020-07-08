@@ -1,5 +1,11 @@
 //! Driver for the TCA9548 I2C bus multiplexer
 //!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
+//!
+//! # Description
 //! This minimal driver allows for intiailizing the I2C bus multiplexer as well as configuring a
 //! single bus connection for the output mux.
 #![no_std]
