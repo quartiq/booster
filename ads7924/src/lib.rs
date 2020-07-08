@@ -1,4 +1,9 @@
 //! Driver for the ADS7924 external ADC.
+//!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
 #![no_std]
 #![deny(warnings)]
 
@@ -13,7 +18,7 @@ where
 {
     i2c: I2C,
     address: u8,
-    supply_voltage: f32,
+    volts_per_lsb: f32,
 }
 
 #[doc(hidden)]
@@ -56,6 +61,7 @@ pub enum Channel {
 pub enum Error {
     Interface,
     Size,
+    Bounds,
 }
 
 impl<I2C> Ads7924<I2C>
@@ -72,7 +78,7 @@ where
         let mut ads7924 = Ads7924 {
             i2c: i2c,
             address: address,
-            supply_voltage: avdd,
+            volts_per_lsb: avdd / 0x1000 as f32,
         };
 
         ads7924.reset()?;
@@ -111,20 +117,35 @@ where
 
         let mut write_data: [u8; 3] = [register as u8, 0, 0];
         write_data[1..][..data.len()].copy_from_slice(data);
+
+        // Set the INC bit in the register address byte if writing more than one register.
+        if data.len() > 1 {
+            write_data[0].set_bit(7, true);
+        }
+
         self.i2c
-            .write(self.address, data)
+            .write(self.address, &write_data[..data.len() + 1])
             .map_err(|_| Error::Interface)?;
+
         Ok(())
     }
 
     fn read(&mut self, register: Register, data: &mut [u8]) -> Result<(), Error> {
+        let mut command_byte = register as u8;
+
+        // Set the INC bit in the command byte if reading more than 1 register.
+        if data.len() > 1 {
+            command_byte.set_bit(7, true);
+        }
+
         self.i2c
-            .write_read(self.address, &[register as u8], data)
+            .write_read(self.address, &[command_byte], data)
             .map_err(|_| Error::Interface)?;
+
         Ok(())
     }
 
-    /// Configure alarm thresholds for a channel.
+    /// Configure and enable alarm thresholds for a channel.
     ///
     /// # Args
     /// * `channel` - The channel to configure thresholds for.
@@ -136,6 +157,10 @@ where
         low_threshold: f32,
         high_threshold: f32,
     ) -> Result<(), Error> {
+        if high_threshold < low_threshold || low_threshold < 0.0 || high_threshold < 0.0 {
+            return Err(Error::Bounds);
+        }
+
         let upper_limit_register = match channel {
             Channel::Zero => Register::ULR0,
             Channel::One => Register::ULR1,
@@ -144,8 +169,12 @@ where
         };
 
         // Convert the voltages to ADC codes.
-        let low_threshold_code = (low_threshold / self.supply_voltage * 0xFFF as f32) as u16;
-        let high_threshold_code = (high_threshold / self.supply_voltage * 0xFFF as f32) as u16;
+        let low_threshold_code = (low_threshold / self.volts_per_lsb) as u16;
+        let high_threshold_code = (high_threshold / self.volts_per_lsb) as u16;
+
+        if low_threshold_code >= 0x1000 || high_threshold_code >= 0x1000 {
+            return Err(Error::Bounds);
+        }
 
         // The thresholds are configured using only the 8 most significant bits.
         let low_threshold_code = (low_threshold_code >> 4) as u8;
@@ -203,9 +232,10 @@ where
         let mut voltage_register: [u8; 2] = [0; 2];
         self.read(upper_data_register, &mut voltage_register)?;
 
-        // Convert the voltage register to an ADC code.
+        // Convert the voltage register to an ADC code. The code is stored MSB-aligned, so we need
+        // to shift it back into alignment.
         let code = u16::from_be_bytes(voltage_register) >> 4;
 
-        Ok(code as f32 / 0xFFF as f32 * self.supply_voltage)
+        Ok(code as f32 * self.volts_per_lsb)
     }
 }
