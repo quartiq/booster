@@ -1,4 +1,9 @@
 //! Driver for the MCP3221 external analog-to-digital converter.
+//!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
 #![no_std]
 #![deny(warnings)]
 
