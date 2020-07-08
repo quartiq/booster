@@ -72,6 +72,11 @@ impl<I2C> Max6639<I2C>
 where
     I2C: Write + WriteRead,
 {
+    /// Create a new MAX6639 driver.
+    ///
+    /// # Args
+    /// * `i2c` - The I2C interface used to communicate with the device.
+    /// * `address_pin` - the pin state of the ADD input pin.
     pub fn new(i2c: I2C, address_pin: AddressPin) -> Result<Self, Error> {
         let mut device = Max6639 {
             i2c,
