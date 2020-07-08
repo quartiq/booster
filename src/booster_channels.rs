@@ -77,7 +77,9 @@ impl BoosterChannels {
             // Selecting an I2C bus should never fail.
             mux.select_bus(Some(channel.into())).unwrap();
 
-            let control_pins = pins[channel as usize].take().expect("Channel pins not available");
+            let control_pins = pins[channel as usize]
+                .take()
+                .expect("Channel pins not available");
 
             match RfChannel::new(manager, control_pins, delay) {
                 Some(mut rf_channel) => {
@@ -85,7 +87,7 @@ impl BoosterChannels {
                     // device is on the bus.
                     rf_channel.set_interlock_thresholds(-30.0, -30.0).unwrap();
                     rf_channels[channel as usize].replace(rf_channel);
-                },
+                }
                 None => {}
             }
         }

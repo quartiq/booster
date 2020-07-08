@@ -52,10 +52,7 @@ impl Devices {
     /// # Returns
     /// An option containing the devices if they were discovered on the bus. If any device did not
     /// properly enumerate, the option will be empty.
-    fn new<DELAY>(
-        manager: &'static BusManager,
-        delay: &mut DELAY,
-    ) -> Option<Self>
+    fn new<DELAY>(manager: &'static BusManager, delay: &mut DELAY) -> Option<Self>
     where
         DELAY: DelayMs<u8>,
     {
@@ -199,7 +196,7 @@ impl RfChannel {
     pub fn new<DELAY>(
         manager: &'static BusManager,
         mut control_pins: ControlPins,
-        delay: &mut DELAY
+        delay: &mut DELAY,
     ) -> Option<Self>
     where
         DELAY: DelayMs<u8>,
@@ -209,12 +206,10 @@ impl RfChannel {
 
         // Attempt to instantiate the I2C devices on the channel.
         match Devices::new(manager, delay) {
-            Some(devices) => {
-                Some(Self {
-                    i2c_devices: devices,
-                    io_pins: control_pins,
-                })
-            },
+            Some(devices) => Some(Self {
+                i2c_devices: devices,
+                io_pins: control_pins,
+            }),
             None => {
                 // The I2C devices were not properly discovered on the bus. This channel is not
                 // present.
