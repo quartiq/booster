@@ -10,6 +10,9 @@ cortex-m = "0.6.0"
 cortex-m-rt = "0.6.10"
 panic-halt = "0.2.0"
 
+[dependencies.max6642]
+path = "max6642"
+
 [dependencies.stm32f4xx-hal]
 version = "0.8.3"
 features = ["stm32f407", "rt"]
