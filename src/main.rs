@@ -12,10 +12,7 @@ extern crate log;
 
 use cortex_m::asm;
 use panic_halt as _;
-use shared_bus_rtic::{
-    self,
-    BusProxy
-};
+use shared_bus_rtic::{self, BusProxy};
 use stm32f4xx_hal as hal;
 
 use hal::prelude::*;
