@@ -12,15 +12,19 @@ extern crate log;
 
 use cortex_m::asm;
 use panic_halt as _;
-use shared_bus_rtic::{self, BusProxy};
 use stm32f4xx_hal as hal;
+use enum_iterator::IntoEnumIterator;
 
-use hal::prelude::*;
+use hal::{
+    prelude::*,
+    timer::Event,
+};
 
 mod booster_channels;
 mod error;
 mod rf_channel;
-use booster_channels::BoosterChannels;
+use error::Error;
+use booster_channels::{BoosterChannels, Channel};
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
 
 // Convenience type definition for the I2C bus used for booster RF channels.
@@ -31,9 +35,6 @@ type I2C = hal::i2c::I2c<
         hal::gpio::gpiob::PB7<hal::gpio::AlternateOD<hal::gpio::AF4>>,
     ),
 >;
-
-// Convenience type definition for the shared bus BusManager type.
-type BusManager = shared_bus_rtic::shared_bus::BusManager<shared_bus_rtic::Mutex<I2C>, I2C>;
 
 /// Construct ADC pins associated with an RF channel.
 ///
@@ -89,6 +90,8 @@ macro_rules! channel_pins {
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true)]
 const APP: () = {
     struct Resources {
+        monitor_timer: hal::timer::Timer<hal::stm32::TIM2>,
+        telemetry_timer: hal::timer::Timer<hal::stm32::TIM3>,
         channels: BoosterChannels,
     }
 
@@ -181,7 +184,63 @@ const APP: () = {
 
         info!("Startup complete");
 
-        init::LateResources { channels: channels }
+        // Configure a timer to periodically monitor the output channels.
+        let mut monitor_timer = hal::timer::Timer::tim2(c.device.TIM2, 50.hz(), clocks);
+        monitor_timer.listen(Event::TimeOut);
+
+        // Configure a timer to periodically gather telemetry.
+        let mut telemetry_timer = hal::timer::Timer::tim3(c.device.TIM3, 50.hz(), clocks);
+        telemetry_timer.listen(Event::TimeOut);
+
+        init::LateResources {
+            monitor_timer: monitor_timer,
+            telemetry_timer: telemetry_timer,
+            channels: channels,
+        }
+    }
+
+    #[task(binds=TIM2, priority=2, resources=[monitor_timer, channels])]
+    fn channel_monitor(c: channel_monitor::Context) {
+        c.resources.monitor_timer.clear_interrupt(Event::TimeOut);
+
+        // Check all of the timer channels.
+        for channel in Channel::into_enum_iter() {
+            let _error_detected = match c.resources.channels.error_detected(channel) {
+                Err(Error::NotPresent) => {
+                    // TODO: Clear all LEDs for this channel.
+                    continue;
+                },
+                Ok(detected) => detected,
+                Err(error) => panic!("Encountered error: {:?}", error),
+            };
+
+            let _warning_detected = match c.resources.channels.warning_detected(channel) {
+                Ok(detected) => detected,
+                Err(error) => panic!("Encountered error: {:?}", error),
+            };
+
+            let _enabled = match c.resources.channels.is_enabled(channel) {
+                Ok(detected) => detected,
+                Err(error) => panic!("Encountered error: {:?}", error),
+            };
+
+            // TODO: Echo the measured values to the LEDs on the user interface for this channel.
+        }
+    }
+
+    #[task(binds=TIM3, priority=1, resources=[telemetry_timer, channels])]
+    fn telemetry(mut c: telemetry::Context) {
+        c.resources.telemetry_timer.clear_interrupt(Event::TimeOut);
+
+        // Gather telemetry for all of the channels.
+        for _channel in Channel::into_enum_iter() {
+            let measurements = c.resources.channels.lock(|_booster_channels| {
+                //channels.get_status(channel)
+            });
+
+            // TODO: Broadcast the measured data over the telemetry interface.
+            info!("{:?}", measurements);
+        }
     }
 
     #[idle(resources=[channels])]

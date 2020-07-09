@@ -11,7 +11,8 @@ use max6642::Max6642;
 use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
 
-use super::{BusManager, BusProxy, I2C};
+use super::I2C;
+use shared_bus_rtic::SharedBus;
 use crate::error::Error;
 use stm32f4xx_hal::{
     self as hal,
@@ -21,7 +22,7 @@ use stm32f4xx_hal::{
 };
 
 // Convenience type definition for all I2C devices on the bus.
-type I2cDevice = BusProxy<I2C>;
+type I2cDevice = &'static shared_bus_rtic::SharedBus<I2C>;
 
 /// A structure representing power measurements of a channel.
 pub struct PowerMeasurements {
@@ -141,7 +142,7 @@ impl Devices {
     /// # Returns
     /// An option containing the devices if they were discovered on the bus. If any device did not
     /// properly enumerate, the option will be empty.
-    fn new(manager: &'static BusManager) -> Option<Self> {
+    fn new(manager: &'static SharedBus<I2C>) -> Option<Self> {
         // The ADS7924 and DAC7571 are present on the booster mainboard, so instantiation
         // and communication should never fail.
         let mut dac7571 = Dac7571::default(manager.acquire());
@@ -263,7 +264,7 @@ impl RfChannel {
     ///
     /// # Returns
     /// An option containing an RfChannel if a channel was discovered on the bus. None otherwise.
-    pub fn new(manager: &'static BusManager, control_pins: ChannelPins) -> Option<Self> {
+    pub fn new(manager: &'static SharedBus<I2C>, control_pins: ChannelPins) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
         match Devices::new(manager) {
             Some(devices) => {

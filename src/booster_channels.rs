@@ -12,7 +12,8 @@ use tca9548::{self, Tca9548};
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 
-use super::{BusManager, BusProxy, I2C};
+use super::{I2C};
+use shared_bus_rtic::SharedBus;
 
 /// A EUI-48 identifier for a given channel.
 pub struct ChannelIdentifier {
@@ -27,6 +28,7 @@ impl ChannelIdentifier {
 }
 
 /// Contains channel status information in SI base units.
+#[derive(Debug)]
 pub struct ChannelStatus {
     pub input_overdrive: bool,
     pub output_overdrive: bool,
@@ -47,7 +49,7 @@ pub struct ChannelStatus {
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
     channels: [Option<RfChannel>; 8],
-    mux: Tca9548<BusProxy<I2C>>,
+    mux: Tca9548<&'static SharedBus<I2C>>,
 }
 
 /// Indicates a booster RF channel.
@@ -92,8 +94,8 @@ impl BoosterChannels {
     /// # Returns
     /// A `BoosterChannels` object that can be used to manage all available RF channels.
     pub fn new(
-        mut mux: Tca9548<BusProxy<I2C>>,
-        manager: &'static BusManager,
+        mut mux: Tca9548<&'static SharedBus<I2C>>,
+        manager: &'static SharedBus<I2C>,
         mut pins: [Option<RfChannelPins>; 8],
     ) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
