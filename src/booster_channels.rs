@@ -276,6 +276,7 @@ impl BoosterChannels {
     ///
     /// # Args
     /// * `channel` - The channel to set the bias voltage of.
+    /// * `bias_voltage` - The desired bias voltage to apply to the RF amplification transistor.
     pub fn set_bias(&mut self, channel: Channel, bias_voltage: f32) -> Result<(), Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
@@ -292,6 +293,7 @@ impl BoosterChannels {
     ///
     /// # Args
     /// * `channel` - The channel to get the status of.
+    /// * `adc` - The ADC to use for measuring channel power measurements.
     ///
     /// Returns
     /// A structure indicating all measurements on the channel.
