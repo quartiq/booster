@@ -58,6 +58,7 @@ pub enum Channel {
 }
 
 /// Indicates errors that the ADC may encounter.
+#[derive(Debug)]
 pub enum Error {
     Interface,
     Size,
