@@ -266,14 +266,48 @@ impl RfChannel {
     pub fn new(manager: &'static BusManager, control_pins: ChannelPins) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
         match Devices::new(manager) {
-            // TODO: Configure alerts/alarms for the power monitor.
-            Some(devices) => Some(Self {
-                i2c_devices: devices,
-                pins: control_pins,
-                output_interlock_threshold: -100.0,
-                reflected_interlock_threshold: -100.0,
-                bias_voltage: -3.3,
-            }),
+            Some(devices) => {
+                let mut channel = Self {
+                    i2c_devices: devices,
+                    pins: control_pins,
+                    output_interlock_threshold: -100.0,
+                    reflected_interlock_threshold: -100.0,
+                    bias_voltage: -3.3,
+                };
+
+                channel.set_interlock_thresholds(0.0, 0.0).unwrap();
+                channel.set_bias(-3.3).unwrap();
+
+                // Configure alerts/alarms for the power monitor.
+
+                // Ensure that P5V0MP remains within +/- 500mV of the specified voltage. Note that
+                // the 5V rail is divided by 2.5 before entering the ADC.
+                channel
+                    .i2c_devices
+                    .power_monitor
+                    .set_thresholds(ads7924::Channel::Three, 4.5 / 2.5, 5.5 / 2.5)
+                    .unwrap();
+
+                // The P28V0 current rail has an equivalent equation of Isns = Vsns * 0.233.
+                // Configure limits for 500mA range.
+                channel
+                    .i2c_devices
+                    .power_monitor
+                    .set_thresholds(ads7924::Channel::Zero, 0.0, 500.0 * 0.233)
+                    .unwrap();
+
+                // The P5V0 current rail has an equivalent equation of Isns = Vsns * 0.156.
+                // Configure limits for 300mA of range.
+                channel
+                    .i2c_devices
+                    .power_monitor
+                    .set_thresholds(ads7924::Channel::One, 0.0, 300.0 * 0.156)
+                    .unwrap();
+
+                channel.i2c_devices.power_monitor.clear_alarm().unwrap();
+
+                Some(channel)
+            }
             None => None,
         }
     }
@@ -406,11 +440,14 @@ impl RfChannel {
     /// # Returns
     /// The most recent power measurements of the channel.
     pub fn get_power_measurements(&mut self) -> PowerMeasurements {
-        let v_p5v0mp = self
+        // The P5V0 rail goes through a resistor divider of 15K -> 10K. This corresponds with a 2.5x
+        // reduction in measured voltage.
+        let p5v_voltage = self
             .i2c_devices
             .power_monitor
             .get_voltage(ads7924::Channel::Three)
             .unwrap();
+        let v_p5v0mp = p5v_voltage * 2.5;
 
         // The 28V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
         // output resistance on the current sensor is 4.3K Ohm.
