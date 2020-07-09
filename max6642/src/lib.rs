@@ -42,6 +42,7 @@ impl Command {
 }
 
 /// Represents possible errors from the temperature sensor.
+#[derive(Debug)]
 pub enum Error {
     Interface,
     DiodeFault,

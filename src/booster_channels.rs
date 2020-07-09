@@ -12,17 +12,20 @@ use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 
-pub struct Channelidentifier {
-    data: [u8; 6]
+pub struct ChannelIdentifier {
+    pub data: [u8; 6]
 }
 
 impl ChannelIdentifier {
-    pub fn new(identifier: [u8; 6]) {
+    pub fn new(identifier: [u8; 6]) -> Self {
         Self {
-            identifier
+            data: identifier
         }
 
     }
+}
+
+pub struct ChannelStatus {
 }
 
 /// Represents a control structure for interfacing to booster RF channels.
@@ -144,36 +147,93 @@ impl BoosterChannels {
         }
     }
 
+    pub fn is_enabled(&mut self, channel: Channel) -> Result<bool, Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &self.channels[channel as usize] {
+            Some(rf_channel) => Ok(rf_channel.is_enabled()),
+            None => Err(Error::NotPresent),
+        }
+    }
+
     pub fn get_identifier(&mut self, channel: Channel) -> Result<ChannelIdentifier, Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
             Some(rf_channel) => {
-                self.
+                let mut identifier: [u8; 6] = [0; 6];
+                rf_channel.i2c_devices.eui48.read_eui48(&mut identifier).unwrap();
+                Ok(ChannelIdentifier::new(identifier))
             },
             None => Err(Error::NotPresent),
         }
     }
 
     pub fn warning_detected(&mut self, channel: Channel) -> Result<bool, Error> {
+        // Check if any alerts/alarms are present on the channel.
+        // TODO: Determine what other conditions may constitute a warning to the user.
+
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &self.channels[channel as usize] {
+            Some(rf_channel) => Ok(rf_channel.is_alarmed()),
+            None => Err(Error::NotPresent),
+        }
     }
 
     pub fn error_detected(&mut self, channel: Channel) -> Result<bool, Error> {
-        // If input overdrive, output overdrive, or ALERT has been tripped, 
+        // If input or output overdrive is detected
+
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &self.channels[channel as usize] {
+            Some(rf_channel) => Ok(rf_channel.is_overdriven()),
+            None => Err(Error::NotPresent),
+        }
     }
 
     pub fn enable_channel(&mut self, channel: Channel) -> Result<(), Error> {
+
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => rf_channel.enable(),
+            None => Err(Error::NotPresent),
+        }
     }
 
     pub fn disable_channel(&mut self, channel: Channel) -> Result<(), Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => rf_channel.disable(),
+            None => Err(Error::NotPresent),
+        }
     }
 
     pub fn get_temperature(&mut self, channel: Channel) -> Result<f32, Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => rf_channel.get_temperature(),
+            None => Err(Error::NotPresent),
+        }
     }
 
     pub fn set_bias(&mut self, channel: Channel, bias_voltage: f32) -> Result<(), Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => {
+                rf_channel.set_bias(bias_voltage)?;
+                Ok(())
+            },
+            None => Err(Error::NotPresent),
+        }
     }
 
-    pub fn get_status(&mut self, channel: Channel) -> Result<ChannelStatus, Error> {
+    pub fn get_status(&mut self, _channel: Channel) -> Result<ChannelStatus, Error> {
+        // TODO: Fill out.
+        Ok(ChannelStatus{})
     }
 }

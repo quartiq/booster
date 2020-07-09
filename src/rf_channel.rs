@@ -88,7 +88,7 @@ impl AdcPins {
 
 /// Represents all of the I2C devices on the bus for a single RF channel.
 #[allow(dead_code)]
-struct Devices {
+pub struct Devices {
     interlock_thresholds_dac: Ad5627<I2cDevice>,
     input_power_adc: Mcp3221<I2cDevice>,
     temperature_monitor: Max6642<I2cDevice>,
@@ -156,17 +156,17 @@ impl Devices {
 /// Represents the control and status pins for an RF channel.
 #[allow(dead_code)]
 pub struct ChannelPins {
-    enable_power_pin: hal::gpio::gpiod::PD<Output<PushPull>>,
+    enable_power: hal::gpio::gpiod::PD<Output<PushPull>>,
 
     // The alert and input overdrive pins have external pull resistors, so we don't need to pull
     // them internall.
-    alert_pin: hal::gpio::gpiod::PD<Input<Floating>>,
-    input_overdrive_pin: hal::gpio::gpioe::PE<Input<Floating>>,
+    alert: hal::gpio::gpiod::PD<Input<Floating>>,
+    input_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
 
     // There are no pullup/pulldown resistors on this input, so we will pull it down internally.
-    output_overdrive_pin: hal::gpio::gpioe::PE<Input<PullDown>>,
+    output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
 
-    signal_on_pin: hal::gpio::gpiog::PG<Output<PushPull>>,
+    signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
 
     adc_pins: AdcPins,
 }
@@ -182,19 +182,19 @@ impl ChannelPins {
     /// * `output_overdrive_pin` - An input pin that indicates an output overdrive.
     /// * `signal_on_pin` - An output pin that is set high to enable output signal amplification.
     pub fn new(
-        enable_power_pin: hal::gpio::gpiod::PD<Output<PushPull>>,
-        alert_pin: hal::gpio::gpiod::PD<Input<Floating>>,
-        input_overdrive_pin: hal::gpio::gpioe::PE<Input<Floating>>,
-        output_overdrive_pin: hal::gpio::gpioe::PE<Input<PullDown>>,
-        signal_on_pin: hal::gpio::gpiog::PG<Output<PushPull>>,
+        enable_power: hal::gpio::gpiod::PD<Output<PushPull>>,
+        alert: hal::gpio::gpiod::PD<Input<Floating>>,
+        input_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
+        output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
+        signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
         adc_pins: AdcPins,
     ) -> Self {
         let mut pins = Self {
-            enable_power_pin,
-            alert_pin,
-            input_overdrive_pin,
-            output_overdrive_pin,
-            signal_on_pin,
+            enable_power,
+            alert,
+            input_overdrive,
+            output_overdrive,
+            signal_on,
             adc_pins,
         };
 
@@ -205,8 +205,8 @@ impl ChannelPins {
 
     /// Power down a channel.
     fn power_down_channel(&mut self) {
-        self.signal_on_pin.set_low().unwrap();
-        self.enable_power_pin.set_low().unwrap();
+        self.signal_on.set_low().unwrap();
+        self.enable_power.set_low().unwrap();
     }
 }
 
@@ -214,7 +214,7 @@ impl ChannelPins {
 #[allow(dead_code)]
 pub struct RfChannel {
     pub i2c_devices: Devices,
-    io_pins: ChannelPins,
+    pins: ChannelPins,
 }
 
 impl RfChannel {
@@ -232,9 +232,10 @@ impl RfChannel {
     pub fn new(manager: &'static BusManager, control_pins: ChannelPins) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
         match Devices::new(manager) {
+            // TODO: Configure alerts/alarms for the power monitor.
             Some(devices) => Some(Self {
                 i2c_devices: devices,
-                io_pins: control_pins,
+                pins: control_pins,
             }),
             None => None,
         }
@@ -283,5 +284,56 @@ impl RfChannel {
         }
 
         Ok(())
+    }
+
+    pub fn is_overdriven(&self) -> bool {
+        let input_overdrive = self.pins.input_overdrive.is_low().unwrap();
+        let output_overdrive = self.pins.output_overdrive.is_low().unwrap();
+
+        input_overdrive || output_overdrive
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        let enabled = self.pins.enable_power.is_high().unwrap() &&
+            self.pins.signal_on.is_high().unwrap();
+
+        // TODO: Check that the bias is out of pinch off?
+
+        enabled && !self.is_overdriven()
+    }
+
+    pub fn is_alarmed(&self) -> bool {
+        self.pins.alert.is_low().unwrap()
+    }
+
+    pub fn enable(&mut self) -> Result<(), Error> {
+        // TODO: Power-up the channel.
+        Err(Error::NotImplemented)
+    }
+
+    pub fn disable(&mut self) -> Result<(), Error> {
+        self.pins.power_down_channel();
+
+        // Set the bias DAC output into pinch-off.
+        self.i2c_devices.bias_dac.set_voltage(-3.3).expect("Failed to disable RF bias voltage");
+
+        Ok(())
+    }
+
+    pub fn get_temperature(&mut self) -> Result<f32, Error> {
+        self.i2c_devices.temperature_monitor.get_remote_temperature().map_err(|_| Error::Interface)
+    }
+
+    pub fn set_bias(&mut self, bias_voltage: f32) -> Result<f32, Error> {
+        // The bias voltage is the inverse of the DAC output voltage.
+        let bias_voltage = -1.0 * bias_voltage;
+
+        let set_voltage = match self.i2c_devices.bias_dac.set_voltage(bias_voltage) {
+            Err(dac7571::Error::Bounds) => return Err(Error::Bounds),
+            Err(_) => panic!("Failed to set DAC bias voltage"),
+            Ok(voltage) => voltage,
+        };
+
+        Ok(-1.0 * set_voltage)
     }
 }
