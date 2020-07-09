@@ -35,6 +35,15 @@ type I2C = hal::i2c::I2c<
 // Convenience type definition for the shared bus BusManager type.
 type BusManager = shared_bus_rtic::shared_bus::BusManager<shared_bus_rtic::Mutex<I2C>, I2C>;
 
+/// Construct ADC pins associated with an RF channel.
+///
+/// # Args
+/// * `gpio` - The GPIO port used to instantiate analog pins.
+/// * `tx_power` - The name of the pin to instantiate for the TX power measurement.
+/// * `reflected_power` - The name of the pin to instantiate for the reflected power measurement.
+///
+/// # Returns
+/// An AdcPin enumeration describing the ADC pins.
 macro_rules! adc_pins {
     ($gpio:ident, $tx_power:ident, $reflected_power:ident) => {{
         let tx_power = $gpio.$tx_power.into_analog().downgrade();
