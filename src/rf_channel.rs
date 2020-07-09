@@ -15,9 +15,9 @@ use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
 use stm32f4xx_hal::{
     self as hal,
+    adc::config::SampleTime,
     gpio::{Analog, Floating, Input, Output, PullDown, PushPull},
     prelude::*,
-    adc::config::SampleTime,
 };
 
 // Convenience type definition for all I2C devices on the bus.
@@ -93,22 +93,9 @@ macro_rules! adc_pins {
 //
 // This allows storing non-generic pin types into a single enumeration type.
 adc_pins!([
-    PA0, pa0, gpioa,
-    PA1, pa1, gpioa,
-    PA2, pa2, gpioa,
-    PA3, pa3, gpioa,
-    PC0, pc0, gpioc,
-    PC1, pc1, gpioc,
-    PC2, pc2, gpioc,
-    PC3, pc3, gpioc,
-    PF3, pf3, gpiof,
-    PF4, pf4, gpiof,
-    PF5, pf5, gpiof,
-    PF6, pf6, gpiof,
-    PF7, pf7, gpiof,
-    PF8, pf8, gpiof,
-    PF9, pf9, gpiof,
-    PF10, pf10, gpiof
+    PA0, pa0, gpioa, PA1, pa1, gpioa, PA2, pa2, gpioa, PA3, pa3, gpioa, PC0, pc0, gpioc, PC1, pc1,
+    gpioc, PC2, pc2, gpioc, PC3, pc3, gpioc, PF3, pf3, gpiof, PF4, pf4, gpiof, PF5, pf5, gpiof,
+    PF6, pf6, gpiof, PF7, pf7, gpiof, PF8, pf8, gpiof, PF9, pf9, gpiof, PF10, pf10, gpiof
 ]);
 
 /// A collection of analog pins (ADC channels) associated with an RF channel.
@@ -120,7 +107,10 @@ pub struct AnalogPins {
 
 impl AnalogPins {
     pub fn new(tx_power: AdcPin, reflected_power: AdcPin) -> Self {
-        Self { tx_power, reflected_power }
+        Self {
+            tx_power,
+            reflected_power,
+        }
     }
 }
 
@@ -343,8 +333,8 @@ impl RfChannel {
     }
 
     pub fn is_enabled(&self) -> bool {
-        let enabled = self.pins.enable_power.is_high().unwrap() &&
-            self.pins.signal_on.is_high().unwrap();
+        let enabled =
+            self.pins.enable_power.is_high().unwrap() && self.pins.signal_on.is_high().unwrap();
 
         // TODO: Check that the bias is out of pinch off?
 
@@ -364,13 +354,19 @@ impl RfChannel {
         self.pins.power_down_channel();
 
         // Set the bias DAC output into pinch-off.
-        self.i2c_devices.bias_dac.set_voltage(-3.3).expect("Failed to disable RF bias voltage");
+        self.i2c_devices
+            .bias_dac
+            .set_voltage(-3.3)
+            .expect("Failed to disable RF bias voltage");
 
         Ok(())
     }
 
     pub fn get_temperature(&mut self) -> f32 {
-        self.i2c_devices.temperature_monitor.get_remote_temperature().unwrap()
+        self.i2c_devices
+            .temperature_monitor
+            .get_remote_temperature()
+            .unwrap()
     }
 
     pub fn set_bias(&mut self, bias_voltage: f32) -> Result<(), Error> {
@@ -383,15 +379,19 @@ impl RfChannel {
             Ok(voltage) => {
                 self.bias_voltage = voltage;
                 voltage
-            },
+            }
         };
 
         Ok(())
     }
 
     pub fn get_power_measurements(&mut self) -> PowerMeasurements {
-        let v_p5v0mp = self.i2c_devices.power_monitor.get_voltage(ads7924::Channel::Three)
-                .map_err(|_| Error::Interface).unwrap();
+        let v_p5v0mp = self
+            .i2c_devices
+            .power_monitor
+            .get_voltage(ads7924::Channel::Three)
+            .map_err(|_| Error::Interface)
+            .unwrap();
 
         // The 28V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
         // output resistance on the current sensor is 4.3K Ohm.
@@ -407,16 +407,28 @@ impl RfChannel {
         //
         // Vout = Isns * Rsns * Rout / Rin
         // Isns = (Vout * Rin) / Rsns / Rout
-        let p28v_rail_current_sense = self.i2c_devices.power_monitor
-            .get_voltage(ads7924::Channel::Zero).map_err(|_| Error::Interface).unwrap();
+        let p28v_rail_current_sense = self
+            .i2c_devices
+            .power_monitor
+            .get_voltage(ads7924::Channel::Zero)
+            .map_err(|_| Error::Interface)
+            .unwrap();
         let i_p28v0ch = (p28v_rail_current_sense * 100.0) / 0.100 / 4300.0;
 
         // P5V rail uses an Rout of 6.2K with identical other characteristics.
-        let p5v_rail_current_sense = self.i2c_devices.power_monitor
-            .get_voltage(ads7924::Channel::One).map_err(|_| Error::Interface).unwrap();
+        let p5v_rail_current_sense = self
+            .i2c_devices
+            .power_monitor
+            .get_voltage(ads7924::Channel::One)
+            .map_err(|_| Error::Interface)
+            .unwrap();
         let i_p5v0ch = (p5v_rail_current_sense * 100.0) / 0.100 / 6200.0;
 
-        PowerMeasurements { v_p5v0mp, i_p28v0ch, i_p5v0ch }
+        PowerMeasurements {
+            v_p5v0mp,
+            i_p28v0ch,
+            i_p5v0ch,
+        }
     }
 
     pub fn get_input_power(&mut self) -> f32 {
@@ -434,7 +446,11 @@ impl RfChannel {
     }
 
     pub fn get_reflected_power(&mut self, mut adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
-        let sample = self.pins.adc_pins.reflected_power.convert(&mut adc, SampleTime::Cycles_480);
+        let sample = self
+            .pins
+            .adc_pins
+            .reflected_power
+            .convert(&mut adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
         // When operating at 100MHz, the power detectors specify the following output
@@ -449,7 +465,11 @@ impl RfChannel {
     }
 
     pub fn get_output_power(&mut self, mut adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
-        let sample = self.pins.adc_pins.tx_power.convert(&mut adc, SampleTime::Cycles_480);
+        let sample = self
+            .pins
+            .adc_pins
+            .tx_power
+            .convert(&mut adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
         // When operating at 100MHz, the power detectors specify the following output

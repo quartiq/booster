@@ -8,23 +8,20 @@
 use enum_iterator::IntoEnumIterator;
 use tca9548::{self, Tca9548};
 
-use stm32f4xx_hal::prelude::*;
 use stm32f4xx_hal as hal;
+use stm32f4xx_hal::prelude::*;
 
 use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 
 pub struct ChannelIdentifier {
-    pub data: [u8; 6]
+    pub data: [u8; 6],
 }
 
 impl ChannelIdentifier {
     pub fn new(identifier: [u8; 6]) -> Self {
-        Self {
-            data: identifier
-        }
-
+        Self { data: identifier }
     }
 }
 
@@ -203,9 +200,13 @@ impl BoosterChannels {
         match &mut self.channels[channel as usize] {
             Some(rf_channel) => {
                 let mut identifier: [u8; 6] = [0; 6];
-                rf_channel.i2c_devices.eui48.read_eui48(&mut identifier).unwrap();
+                rf_channel
+                    .i2c_devices
+                    .eui48
+                    .read_eui48(&mut identifier)
+                    .unwrap();
                 Ok(ChannelIdentifier::new(identifier))
-            },
+            }
             None => Err(Error::NotPresent),
         }
     }
@@ -234,7 +235,6 @@ impl BoosterChannels {
     }
 
     pub fn enable_channel(&mut self, channel: Channel) -> Result<(), Error> {
-
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
@@ -268,12 +268,16 @@ impl BoosterChannels {
             Some(rf_channel) => {
                 rf_channel.set_bias(bias_voltage)?;
                 Ok(())
-            },
+            }
             None => Err(Error::NotPresent),
         }
     }
 
-    pub fn get_status(&mut self, channel: Channel, mut adc: hal::adc::Adc<hal::stm32::ADC3>) -> Result<ChannelStatus, Error> {
+    pub fn get_status(
+        &mut self,
+        channel: Channel,
+        mut adc: hal::adc::Adc<hal::stm32::ADC3>,
+    ) -> Result<ChannelStatus, Error> {
         let mut status = ChannelStatus::empty();
 
         self.mux.select_bus(Some(channel.into())).unwrap();
@@ -298,7 +302,7 @@ impl BoosterChannels {
                 status.bias_voltage = rf_channel.get_bias_voltage();
 
                 Ok(status)
-            },
+            }
             None => Err(Error::NotPresent),
         }
     }
