@@ -465,9 +465,12 @@ impl RfChannel {
 
         // The input power detector is then passed through an op-amp with gain 1.5x - this
         // modifies the slope from 35mV/dB to 52.5mV/dB
+        //
+        // Additionally, there is 10dB of input attenuation due to coupling from the input signal to
+        // the power detector. This adds to the input power signal.
         let voltage = self.i2c_devices.input_power_adc.get_voltage().unwrap();
 
-        voltage / 0.0525 - 35.6
+        voltage / 0.0525 - 25.6
     }
 
     /// Get the current reflected power measurement.
@@ -493,7 +496,10 @@ impl RfChannel {
 
         // The reflected power detector is then passed through an op-amp with gain 1.5x - this
         // modifies the slope from 35mV/dB to 52.5mV/dB
-        voltage / 0.0525 - 35.6
+        //
+        // There is an additional 30dB of attenuation before the power monitor (20dB from the
+        // coupler and then a 10dB attenuator). This increases the power measurement.
+        voltage / 0.0525 - 5.6
     }
 
     /// Get the current output power measurement.
@@ -516,7 +522,10 @@ impl RfChannel {
         // for different power levels and frequencies):
         //
         // dBm = V(Vout) / .035 V/dB - 35.6 dBm
-        voltage / 0.035 - 35.6
+        //
+        // There is an additional 30dB of attenuation before the power monitor (20dB from the
+        // coupler and then a 10dB attenuator). This increases the power measurement.
+        voltage / 0.035 - 5.6
     }
 
     /// Get the current output power interlock threshold.
