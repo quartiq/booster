@@ -80,7 +80,7 @@ impl BoosterChannels {
                 Some(mut rf_channel) => {
                     // Setting interlock thresholds should not fail here as we have verified the
                     // device is on the bus.
-                    rf_channel.set_interlock_thresholds(-30.0, -30.0).unwrap();
+                    rf_channel.set_interlock_thresholds(0.0, 0.0).unwrap();
                     rf_channels[channel as usize].replace(rf_channel);
                 }
                 None => {
