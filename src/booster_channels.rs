@@ -63,14 +63,14 @@ impl BoosterChannels {
         mut mux: Tca9548<BusProxy<I2C>>,
         manager: &'static BusManager,
         mut pins: [Option<RfChannelPins>; 8],
-    ) -> Self
-    {
+    ) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
             [None, None, None, None, None, None, None, None];
 
         for channel in Channel::into_enum_iter() {
             // Selecting an I2C bus should never fail.
-            mux.select_bus(Some(channel.into())).expect("Failed to select channel");
+            mux.select_bus(Some(channel.into()))
+                .expect("Failed to select channel");
 
             let control_pins = pins[channel as usize]
                 .take()
@@ -112,7 +112,9 @@ impl BoosterChannels {
         }
 
         // Selecting an I2C bus should never fail.
-        self.mux.select_bus(Some(channel.into())).expect("Failed to select channel");
+        self.mux
+            .select_bus(Some(channel.into()))
+            .expect("Failed to select channel");
 
         match &mut self.channels[channel as usize] {
             Some(rf_channel) => {

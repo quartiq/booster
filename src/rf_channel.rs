@@ -55,9 +55,11 @@ impl Devices {
         dac7571.set_voltage(3.3).expect("Bias DAC did not respond");
 
         // Verify we can communicate with the power monitor.
-        let mut ads7924 = Ads7924::default(manager.acquire())
-            .expect("Power monitor did not enumerate");
-        ads7924.get_voltage(ads7924::Channel::Three).expect("Power monitor did not respond");
+        let mut ads7924 =
+            Ads7924::default(manager.acquire()).expect("Power monitor did not enumerate");
+        ads7924
+            .get_voltage(ads7924::Channel::Three)
+            .expect("Power monitor did not respond");
 
         if let Ok(ad5627) = Ad5627::default(manager.acquire()) {
             if let Ok(eui48) = Microchip24AA02E48::new(manager.acquire()) {
@@ -79,7 +81,7 @@ impl Devices {
                     bias_dac: dac7571,
                     power_monitor: ads7924,
                     eui48: eui48,
-                })
+                });
             }
         }
 
@@ -159,8 +161,7 @@ impl RfChannel {
     ///
     /// # Returns
     /// An option containing an RfChannel if a channel was discovered on the bus. None otherwise.
-    pub fn new(manager: &'static BusManager, control_pins: ControlPins) -> Option<Self>
-    {
+    pub fn new(manager: &'static BusManager, control_pins: ControlPins) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
         match Devices::new(manager) {
             Some(devices) => Some(Self {
