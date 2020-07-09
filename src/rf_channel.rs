@@ -100,7 +100,6 @@ adc_pins!([
 ]);
 
 /// A collection of analog pins (ADC channels) associated with an RF channel.
-#[allow(dead_code)]
 pub struct AnalogPins {
     pub tx_power: AdcPin,
     pub reflected_power: AdcPin,
@@ -121,7 +120,6 @@ impl AnalogPins {
 }
 
 /// Represents all of the I2C devices on the bus for a single RF channel.
-#[allow(dead_code)]
 pub struct Devices {
     interlock_thresholds_dac: Ad5627<I2cDevice>,
     input_power_adc: Mcp3221<I2cDevice>,
@@ -188,7 +186,6 @@ impl Devices {
 }
 
 /// Represents the control and status pins for an RF channel.
-#[allow(dead_code)]
 pub struct ChannelPins {
     enable_power: hal::gpio::gpiod::PD<Output<PushPull>>,
 
@@ -247,7 +244,6 @@ impl ChannelPins {
 }
 
 /// Represents a means of interacting with an RF output channel.
-#[allow(dead_code)]
 pub struct RfChannel {
     pub i2c_devices: Devices,
     pub pins: ChannelPins,
