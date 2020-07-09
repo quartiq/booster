@@ -30,7 +30,6 @@ pub struct PowerMeasurements {
     pub i_p28v0ch: f32,
 }
 
-
 // Macro magic to generate an enum that looks like:
 //
 // ```rust
