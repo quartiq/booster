@@ -8,6 +8,9 @@
 use enum_iterator::IntoEnumIterator;
 use tca9548::{self, Tca9548};
 
+use stm32f4xx_hal::prelude::*;
+use stm32f4xx_hal as hal;
+
 use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
@@ -31,17 +34,17 @@ pub struct ChannelStatus {
     pub output_overdrive: bool,
     pub alert: bool,
     pub enabled: bool,
-    pub bias_voltage: f32,
     pub temperature: f32,
     pub p28v_current: f32,
     pub p5v_current: f32,
     pub p5v_voltage: f32,
-    pub input_overdrive_threshold: f32,
-    pub output_overdrive_threshold: f32,
-
     pub input_power: f32,
     pub reflected_power: f32,
     pub output_power: f32,
+
+    pub input_overdrive_threshold: f32,
+    pub output_overdrive_threshold: f32,
+    pub bias_voltage: f32,
 }
 
 impl ChannelStatus {
@@ -253,7 +256,7 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.get_temperature(),
+            Some(rf_channel) => Ok(rf_channel.get_temperature()),
             None => Err(Error::NotPresent),
         }
     }
@@ -270,8 +273,33 @@ impl BoosterChannels {
         }
     }
 
-    pub fn get_status(&mut self, _channel: Channel) -> Result<ChannelStatus, Error> {
-        // TODO: Fill out.
-        Ok(ChannelStatus::empty())
+    pub fn get_status(&mut self, channel: Channel, mut adc: hal::adc::Adc<hal::stm32::ADC3>) -> Result<ChannelStatus, Error> {
+        let mut status = ChannelStatus::empty();
+
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => {
+                let power_measurements = rf_channel.get_power_measurements();
+
+                status.input_overdrive = rf_channel.pins.input_overdrive.is_high().unwrap();
+                status.output_overdrive = rf_channel.pins.output_overdrive.is_high().unwrap();
+                status.alert = rf_channel.is_alarmed();
+                status.enabled = rf_channel.is_enabled();
+                status.temperature = rf_channel.get_temperature();
+                status.p28v_current = power_measurements.i_p28v0ch;
+                status.p5v_current = power_measurements.i_p5v0ch;
+                status.p5v_voltage = power_measurements.v_p5v0mp;
+                status.input_power = rf_channel.get_input_power();
+                status.output_power = rf_channel.get_output_power(&mut adc);
+                status.reflected_power = rf_channel.get_reflected_power(&mut adc);
+                status.input_overdrive_threshold = rf_channel.get_reflected_interlock_threshold();
+                status.output_overdrive_threshold = rf_channel.get_output_interlock_threshold();
+                status.bias_voltage = rf_channel.get_bias_voltage();
+
+                Ok(status)
+            },
+            None => Err(Error::NotPresent),
+        }
     }
 }

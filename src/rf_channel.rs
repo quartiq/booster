@@ -17,72 +17,110 @@ use stm32f4xx_hal::{
     self as hal,
     gpio::{Analog, Floating, Input, Output, PullDown, PushPull},
     prelude::*,
+    adc::config::SampleTime,
 };
 
 // Convenience type definition for all I2C devices on the bus.
 type I2cDevice = BusProxy<I2C>;
 
+pub struct PowerMeasurements {
+    pub v_p5v0mp: f32,
+    pub i_p5v0ch: f32,
+    pub i_p28v0ch: f32,
+}
+
+macro_rules! adc_pins {
+    (define: [$($pin:ident, $pin_lower:ident, $port:ident),*]) => {
+        pub enum AdcPin {
+            $(
+             $pin(hal::gpio::$port::$pin<Analog>),
+             )*
+        }
+    };
+
+    (implement: $pin_defs:tt) => {
+        impl AdcPin {
+            adc_pins!(implement_convert: $pin_defs);
+            adc_pins!(implement_new: $pin_defs);
+        }
+    };
+
+    (implement_new: [$($pin:ident, $pin_lower:ident, $port:ident),*]) => {
+        $(
+        pub fn $pin_lower(pin: hal::gpio::$port::$pin<Analog>) -> Self {
+            AdcPin::$pin(pin)
+        }
+        )*
+    };
+
+    (implement_convert: [$($pin:ident, $pin_lower:ident, $port:ident),*]) => {
+        pub fn convert(&self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>, sample_time: SampleTime) -> u16 {
+            match self {
+                $(
+                 AdcPin::$pin(pin) => adc.convert(pin, sample_time),
+                 )*
+            }
+        }
+    };
+
+    ($pin_defs:tt) => {
+        adc_pins!(define: $pin_defs);
+        adc_pins!(implement: $pin_defs);
+    };
+}
+
+// Macro magic to generate an enum that looks like:
+//
+// ```rust
+// pub enum AdcPins {
+//     PA0(hal::gpio::gpioa::PA0<Analog>),
+//     // ...
+// }
+//
+// impl AdcPins {
+//     pub fn pa0(pin: hal::gpio::gpioa::PA0<Analog>) -> Self {
+//         AdcPins::PA0(pin)
+//     }
+//
+//     pub fn convert(&self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>, sample_time: SampleTime) -> u16 {
+//         match self {
+//             AdcPin::PA0(pin) => adc.convert(pin, sample_time)
+//             // ...
+//         }
+//     }
+// }
+// ```
+//
+// This allows storing non-generic pin types into a single enumeration type.
+adc_pins!([
+    PA0, pa0, gpioa,
+    PA1, pa1, gpioa,
+    PA2, pa2, gpioa,
+    PA3, pa3, gpioa,
+    PC0, pc0, gpioc,
+    PC1, pc1, gpioc,
+    PC2, pc2, gpioc,
+    PC3, pc3, gpioc,
+    PF3, pf3, gpiof,
+    PF4, pf4, gpiof,
+    PF5, pf5, gpiof,
+    PF6, pf6, gpiof,
+    PF7, pf7, gpiof,
+    PF8, pf8, gpiof,
+    PF9, pf9, gpiof,
+    PF10, pf10, gpiof
+]);
+
 /// A collection of analog pins (ADC channels) associated with an RF channel.
 #[allow(dead_code)]
-pub struct AnalogPins<AdcPin> {
-    tx_power_analog_pin: AdcPin,
-    reflected_power_analog_pin: AdcPin,
+pub struct AnalogPins {
+    pub tx_power: AdcPin,
+    pub reflected_power: AdcPin,
 }
 
-/// Enumeration containing ADC pins associated with an RF channel.
-///
-/// # Note
-/// This is a convenience enumeration to allow an `RfChannel` to be generic across analog pin types.
-pub enum AdcPins {
-    PortA(AnalogPins<hal::gpio::gpioa::PA<Analog>>),
-    PortC(AnalogPins<hal::gpio::gpioc::PC<Analog>>),
-    PortF(AnalogPins<hal::gpio::gpiof::PF<Analog>>),
-}
-
-impl AdcPins {
-    /// Construct a pair of ADC pins from the GPIOA port.
-    ///
-    /// # Args
-    /// * `tx_power` The TX-power analog input pin.
-    /// * `reflected_power` The reflected -power analog input pin.
-    pub fn gpioa(
-        tx_power: hal::gpio::gpioa::PA<Analog>,
-        reflected_power: hal::gpio::gpioa::PA<Analog>,
-    ) -> Self {
-        AdcPins::PortA(AnalogPins {
-            tx_power_analog_pin: tx_power,
-            reflected_power_analog_pin: reflected_power,
-        })
-    }
-
-    /// Construct a pair of ADC pins from the GPIOC port.
-    ///
-    /// # Args
-    /// * `tx_power` The TX-power analog input pin.
-    /// * `reflected_power` The reflected -power analog input pin.
-    pub fn gpioc(
-        tx_power: hal::gpio::gpioc::PC<Analog>,
-        reflected_power: hal::gpio::gpioc::PC<Analog>,
-    ) -> Self {
-        AdcPins::PortC(AnalogPins {
-            tx_power_analog_pin: tx_power,
-            reflected_power_analog_pin: reflected_power,
-        })
-    }
-
-    /// Construct a pair of ADC pins from the GPIOF port.
-    ///
-    /// # Args
-    /// * `tx_power` The TX-power analog input pin.
-    /// * `reflected_power` The reflected -power analog input pin.
-    pub fn gpiof(
-        tx_power: hal::gpio::gpiof::PF<Analog>,
-        reflected_power: hal::gpio::gpiof::PF<Analog>,
-    ) -> Self {
-        AdcPins::PortF(AnalogPins {
-            tx_power_analog_pin: tx_power,
-            reflected_power_analog_pin: reflected_power,
-        })
+impl AnalogPins {
+    pub fn new(tx_power: AdcPin, reflected_power: AdcPin) -> Self {
+        Self { tx_power, reflected_power }
     }
 }
 
@@ -160,15 +198,16 @@ pub struct ChannelPins {
 
     // The alert and input overdrive pins have external pull resistors, so we don't need to pull
     // them internall.
-    alert: hal::gpio::gpiod::PD<Input<Floating>>,
-    input_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
+    pub alert: hal::gpio::gpiod::PD<Input<Floating>>,
+
+    pub input_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
 
     // There are no pullup/pulldown resistors on this input, so we will pull it down internally.
-    output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
+    pub output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
 
     signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
 
-    adc_pins: AdcPins,
+    adc_pins: AnalogPins,
 }
 
 impl ChannelPins {
@@ -187,7 +226,7 @@ impl ChannelPins {
         input_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
         output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
         signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
-        adc_pins: AdcPins,
+        adc_pins: AnalogPins,
     ) -> Self {
         let mut pins = Self {
             enable_power,
@@ -214,7 +253,10 @@ impl ChannelPins {
 #[allow(dead_code)]
 pub struct RfChannel {
     pub i2c_devices: Devices,
-    pins: ChannelPins,
+    pub pins: ChannelPins,
+    output_interlock_threshold: f32,
+    reflected_interlock_threshold: f32,
+    bias_voltage: f32,
 }
 
 impl RfChannel {
@@ -236,6 +278,9 @@ impl RfChannel {
             Some(devices) => Some(Self {
                 i2c_devices: devices,
                 pins: control_pins,
+                output_interlock_threshold: -100.0,
+                reflected_interlock_threshold: -100.0,
+                bias_voltage: -3.3,
             }),
             None => None,
         }
@@ -267,7 +312,9 @@ impl RfChannel {
         {
             Err(ad5627::Error::Range) => return Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
-            Ok(_) => {}
+            Ok(voltage) => {
+                self.reflected_interlock_threshold = voltage / 0.0525 + 35.6;
+            }
         }
 
         // The output power detector passes through an op-amp with unity gain (1.0x) - the power
@@ -280,7 +327,9 @@ impl RfChannel {
         {
             Err(ad5627::Error::Range) => return Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
-            Ok(_) => {}
+            Ok(_) => {
+                self.output_interlock_threshold = voltage / 0.035 + 35.6;
+            }
         }
 
         Ok(())
@@ -320,20 +369,106 @@ impl RfChannel {
         Ok(())
     }
 
-    pub fn get_temperature(&mut self) -> Result<f32, Error> {
-        self.i2c_devices.temperature_monitor.get_remote_temperature().map_err(|_| Error::Interface)
+    pub fn get_temperature(&mut self) -> f32 {
+        self.i2c_devices.temperature_monitor.get_remote_temperature().unwrap()
     }
 
-    pub fn set_bias(&mut self, bias_voltage: f32) -> Result<f32, Error> {
+    pub fn set_bias(&mut self, bias_voltage: f32) -> Result<(), Error> {
         // The bias voltage is the inverse of the DAC output voltage.
         let bias_voltage = -1.0 * bias_voltage;
 
-        let set_voltage = match self.i2c_devices.bias_dac.set_voltage(bias_voltage) {
+        match self.i2c_devices.bias_dac.set_voltage(bias_voltage) {
             Err(dac7571::Error::Bounds) => return Err(Error::Bounds),
             Err(_) => panic!("Failed to set DAC bias voltage"),
-            Ok(voltage) => voltage,
+            Ok(voltage) => {
+                self.bias_voltage = voltage;
+                voltage
+            },
         };
 
-        Ok(-1.0 * set_voltage)
+        Ok(())
+    }
+
+    pub fn get_power_measurements(&mut self) -> PowerMeasurements {
+        let v_p5v0mp = self.i2c_devices.power_monitor.get_voltage(ads7924::Channel::Three)
+                .map_err(|_| Error::Interface).unwrap();
+
+        // The 28V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
+        // output resistance on the current sensor is 4.3K Ohm.
+        //
+        // From the LT6106 (current monitor) datasheet:
+        // Vout = Vsns * Rout / Rin
+        //
+        // Given:
+        // Vsns = Isns * Rsns
+        // Rsns = 100m Ohm
+        // Rin = 100 Ohm
+        // Rout = 6.2K Ohm
+        //
+        // Vout = Isns * Rsns * Rout / Rin
+        // Isns = (Vout * Rin) / Rsns / Rout
+        let p28v_rail_current_sense = self.i2c_devices.power_monitor
+            .get_voltage(ads7924::Channel::Zero).map_err(|_| Error::Interface).unwrap();
+        let i_p28v0ch = (p28v_rail_current_sense * 100.0) / 0.100 / 4300.0;
+
+        // P5V rail uses an Rout of 6.2K with identical other characteristics.
+        let p5v_rail_current_sense = self.i2c_devices.power_monitor
+            .get_voltage(ads7924::Channel::One).map_err(|_| Error::Interface).unwrap();
+        let i_p5v0ch = (p5v_rail_current_sense * 100.0) / 0.100 / 6200.0;
+
+        PowerMeasurements { v_p5v0mp, i_p28v0ch, i_p5v0ch }
+    }
+
+    pub fn get_input_power(&mut self) -> f32 {
+        // When operating at 100MHz, the power detectors specify the following output
+        // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
+        // for different power levels and frequencies):
+        //
+        // dBm = V(Vout) / .035 V/dB - 35.6 dBm
+
+        // The input power detector is then passed through an op-amp with gain 1.5x - this
+        // modifies the slope from 35mV/dB to 52.5mV/dB
+        let voltage = self.i2c_devices.input_power_adc.get_voltage().unwrap();
+
+        voltage / 0.0525 - 35.6
+    }
+
+    pub fn get_reflected_power(&mut self, mut adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
+        let sample = self.pins.adc_pins.reflected_power.convert(&mut adc, SampleTime::Cycles_480);
+        let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
+
+        // When operating at 100MHz, the power detectors specify the following output
+        // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
+        // for different power levels and frequencies):
+        //
+        // dBm = V(Vout) / .035 V/dB - 35.6 dBm
+
+        // The reflected power detector is then passed through an op-amp with gain 1.5x - this
+        // modifies the slope from 35mV/dB to 52.5mV/dB
+        voltage / 0.0525 - 35.6
+    }
+
+    pub fn get_output_power(&mut self, mut adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
+        let sample = self.pins.adc_pins.tx_power.convert(&mut adc, SampleTime::Cycles_480);
+        let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
+
+        // When operating at 100MHz, the power detectors specify the following output
+        // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
+        // for different power levels and frequencies):
+        //
+        // dBm = V(Vout) / .035 V/dB - 35.6 dBm
+        voltage / 0.035 - 35.6
+    }
+
+    pub fn get_output_interlock_threshold(&self) -> f32 {
+        self.output_interlock_threshold
+    }
+
+    pub fn get_reflected_interlock_threshold(&self) -> f32 {
+        self.output_interlock_threshold
+    }
+
+    pub fn get_bias_voltage(&mut self) -> f32 {
+        self.bias_voltage
     }
 }

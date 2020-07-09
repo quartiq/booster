@@ -21,7 +21,7 @@ mod booster_channels;
 mod error;
 mod rf_channel;
 use booster_channels::BoosterChannels;
-use rf_channel::{AdcPins, ChannelPins as RfChannelPins};
+use rf_channel::{AnalogPins as AdcPins, AdcPin, ChannelPins as RfChannelPins};
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 type I2C = hal::i2c::I2c<
@@ -46,10 +46,9 @@ type BusManager = shared_bus_rtic::shared_bus::BusManager<shared_bus_rtic::Mutex
 /// An AdcPin enumeration describing the ADC pins.
 macro_rules! adc_pins {
     ($gpio:ident, $tx_power:ident, $reflected_power:ident) => {{
-        let tx_power = $gpio.$tx_power.into_analog().downgrade();
-        let reflected_power = $gpio.$reflected_power.into_analog().downgrade();
-
-        AdcPins::$gpio(tx_power, reflected_power)
+        let tx_power = AdcPin::$tx_power($gpio.$tx_power.into_analog());
+        let reflected_power = AdcPin::$reflected_power($gpio.$reflected_power.into_analog());
+        AdcPins::new(tx_power, reflected_power)
     }};
 }
 
