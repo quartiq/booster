@@ -378,9 +378,12 @@ impl RfChannel {
         let enabled =
             self.pins.enable_power.is_high().unwrap() && self.pins.signal_on.is_high().unwrap();
 
-        // TODO: Check that the bias is out of pinch off?
+        // Check that the bias is out of pinch off. We're using a somewhat arbitrary value here as
+        // the nominal threshold voltage is -1.6V, but the disabled channel should always be set to
+        // -3.3 V.
+        let bias_enabled = self.bias_voltage > -3.0;
 
-        enabled && !self.is_overdriven()
+        enabled && !self.is_overdriven() && bias_enabled
     }
 
     /// Check if the channel is indicating an alarm.
