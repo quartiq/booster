@@ -21,7 +21,7 @@ mod booster_channels;
 mod error;
 mod rf_channel;
 use booster_channels::BoosterChannels;
-use rf_channel::ControlPins as RfChannelPins;
+use rf_channel::{AdcPins, ControlPins as RfChannelPins};
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 type I2C = hal::i2c::I2c<
@@ -34,6 +34,15 @@ type I2C = hal::i2c::I2c<
 
 // Convenience type definition for the shared bus BusManager type.
 type BusManager = shared_bus_rtic::shared_bus::BusManager<shared_bus_rtic::Mutex<I2C>, I2C>;
+
+macro_rules! adc_pins {
+    ($gpio:ident, $tx_power:ident, $reflected_power:ident) => {{
+        let tx_power = $gpio.$tx_power.into_analog().downgrade();
+        let reflected_power = $gpio.$reflected_power.into_analog().downgrade();
+
+        AdcPins::$gpio(tx_power, reflected_power)
+    }};
+}
 
 /// Macro for genering an RfChannelPins structure.
 ///
@@ -51,7 +60,7 @@ type BusManager = shared_bus_rtic::shared_bus::BusManager<shared_bus_rtic::Mutex
 /// An option containing the RfChannelPins structure.
 macro_rules! channel_pins {
     ($gpiod:ident, $gpioe:ident, $gpiog:ident, $enable:ident, $alert:ident, $input_overdrive:ident,
-     $output_overdrive:ident, $signal_on:ident) => {{
+     $output_overdrive:ident, $signal_on:ident, $analog_pins:ident) => {{
         let enable_power = $gpiod.$enable.into_push_pull_output().downgrade();
         let alert = $gpiod.$alert.into_floating_input().downgrade();
         let input_overdrive = $gpioe.$input_overdrive.into_floating_input().downgrade();
@@ -64,6 +73,7 @@ macro_rules! channel_pins {
             input_overdrive,
             output_overdrive,
             signal_on,
+            $analog_pins,
         ))
     }};
 }
@@ -92,9 +102,12 @@ const APP: () = {
 
         let mut delay = hal::delay::Delay::new(cp.SYST, clocks);
 
+        let gpioa = c.device.GPIOA.split();
         let gpiob = c.device.GPIOB.split();
+        let gpioc = c.device.GPIOC.split();
         let gpiod = c.device.GPIOD.split();
         let gpioe = c.device.GPIOE.split();
+        let gpiof = c.device.GPIOF.split();
         let gpiog = c.device.GPIOG.split();
 
         let i2c_bus_manager = {
@@ -111,14 +124,38 @@ const APP: () = {
         // bus with all of the Booster peripheral devices.
         let channels = {
             let channel_pins = {
-                let ch1_pins = channel_pins!(gpiod, gpioe, gpiog, pd0, pd8, pe8, pe0, pg8);
-                let ch2_pins = channel_pins!(gpiod, gpioe, gpiog, pd1, pd9, pe9, pe1, pg9);
-                let ch3_pins = channel_pins!(gpiod, gpioe, gpiog, pd2, pd10, pe10, pe2, pg10);
-                let ch4_pins = channel_pins!(gpiod, gpioe, gpiog, pd3, pd11, pe11, pe3, pg11);
-                let ch5_pins = channel_pins!(gpiod, gpioe, gpiog, pd4, pd12, pe12, pe4, pg12);
-                let ch6_pins = channel_pins!(gpiod, gpioe, gpiog, pd5, pd13, pe13, pe5, pg13);
-                let ch7_pins = channel_pins!(gpiod, gpioe, gpiog, pd6, pd14, pe14, pe6, pg14);
-                let ch8_pins = channel_pins!(gpiod, gpioe, gpiog, pd7, pd15, pe15, pe7, pg15);
+                let ch1_pins = {
+                    let analog_pins = adc_pins!(gpioa, pa0, pa1);
+                    channel_pins!(gpiod, gpioe, gpiog, pd0, pd8, pe8, pe0, pg8, analog_pins)
+                };
+                let ch2_pins = {
+                    let analog_pins = adc_pins!(gpioa, pa2, pa3);
+                    channel_pins!(gpiod, gpioe, gpiog, pd1, pd9, pe9, pe1, pg9, analog_pins)
+                };
+                let ch3_pins = {
+                    let analog_pins = adc_pins!(gpiof, pf6, pf7);
+                    channel_pins!(gpiod, gpioe, gpiog, pd2, pd10, pe10, pe2, pg10, analog_pins)
+                };
+                let ch4_pins = {
+                    let analog_pins = adc_pins!(gpiof, pf8, pf9);
+                    channel_pins!(gpiod, gpioe, gpiog, pd3, pd11, pe11, pe3, pg11, analog_pins)
+                };
+                let ch5_pins = {
+                    let analog_pins = adc_pins!(gpiof, pf10, pf3);
+                    channel_pins!(gpiod, gpioe, gpiog, pd4, pd12, pe12, pe4, pg12, analog_pins)
+                };
+                let ch6_pins = {
+                    let analog_pins = adc_pins!(gpioc, pc0, pc1);
+                    channel_pins!(gpiod, gpioe, gpiog, pd5, pd13, pe13, pe5, pg13, analog_pins)
+                };
+                let ch7_pins = {
+                    let analog_pins = adc_pins!(gpioc, pc2, pc3);
+                    channel_pins!(gpiod, gpioe, gpiog, pd6, pd14, pe14, pe6, pg14, analog_pins)
+                };
+                let ch8_pins = {
+                    let analog_pins = adc_pins!(gpiof, pf4, pf5);
+                    channel_pins!(gpiod, gpioe, gpiog, pd7, pd15, pe15, pe7, pg15, analog_pins)
+                };
 
                 [
                     ch1_pins, ch2_pins, ch3_pins, ch4_pins, ch5_pins, ch6_pins, ch7_pins, ch8_pins,

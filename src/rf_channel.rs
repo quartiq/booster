@@ -15,12 +15,75 @@ use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
 use stm32f4xx_hal::{
     self as hal,
-    gpio::{Floating, Input, Output, PullDown, PushPull},
+    gpio::{Analog, Floating, Input, Output, PullDown, PushPull},
     prelude::*,
 };
 
 // Convenience type definition for all I2C devices on the bus.
 type I2cDevice = BusProxy<I2C>;
+
+#[allow(dead_code)]
+pub struct AnalogPins<AdcPin> {
+    tx_power_analog_pin: AdcPin,
+    reflected_power_analog_pin: AdcPin,
+}
+
+/// Enumeration containing ADC pins associated with an RF channel.
+///
+/// # Note
+/// This is a convenience enumeration to allow an `RfChannel` to be generic across analog pin types.
+pub enum AdcPins {
+    PortA(AnalogPins<hal::gpio::gpioa::PA<Analog>>),
+    PortC(AnalogPins<hal::gpio::gpioc::PC<Analog>>),
+    PortF(AnalogPins<hal::gpio::gpiof::PF<Analog>>),
+}
+
+impl AdcPins {
+    /// Construct a pair of ADC pins from the GPIOA port.
+    ///
+    /// # Args
+    /// * `tx_power` The TX-power analog input pin.
+    /// * `reflected_power` The reflected -power analog input pin.
+    pub fn gpioa(
+        tx_power: hal::gpio::gpioa::PA<Analog>,
+        reflected_power: hal::gpio::gpioa::PA<Analog>,
+    ) -> Self {
+        AdcPins::PortA(AnalogPins {
+            tx_power_analog_pin: tx_power,
+            reflected_power_analog_pin: reflected_power,
+        })
+    }
+
+    /// Construct a pair of ADC pins from the GPIOC port.
+    ///
+    /// # Args
+    /// * `tx_power` The TX-power analog input pin.
+    /// * `reflected_power` The reflected -power analog input pin.
+    pub fn gpioc(
+        tx_power: hal::gpio::gpioc::PC<Analog>,
+        reflected_power: hal::gpio::gpioc::PC<Analog>,
+    ) -> Self {
+        AdcPins::PortC(AnalogPins {
+            tx_power_analog_pin: tx_power,
+            reflected_power_analog_pin: reflected_power,
+        })
+    }
+
+    /// Construct a pair of ADC pins from the GPIOF port.
+    ///
+    /// # Args
+    /// * `tx_power` The TX-power analog input pin.
+    /// * `reflected_power` The reflected -power analog input pin.
+    pub fn gpiof(
+        tx_power: hal::gpio::gpiof::PF<Analog>,
+        reflected_power: hal::gpio::gpiof::PF<Analog>,
+    ) -> Self {
+        AdcPins::PortF(AnalogPins {
+            tx_power_analog_pin: tx_power,
+            reflected_power_analog_pin: reflected_power,
+        })
+    }
+}
 
 /// Represents all of the I2C devices on the bus for a single RF channel.
 #[allow(dead_code)]
@@ -103,6 +166,8 @@ pub struct ControlPins {
     output_overdrive_pin: hal::gpio::gpioe::PE<Input<PullDown>>,
 
     signal_on_pin: hal::gpio::gpiog::PG<Output<PushPull>>,
+
+    adc_pins: AdcPins,
 }
 
 impl ControlPins {
@@ -121,6 +186,7 @@ impl ControlPins {
         input_overdrive_pin: hal::gpio::gpioe::PE<Input<Floating>>,
         output_overdrive_pin: hal::gpio::gpioe::PE<Input<PullDown>>,
         signal_on_pin: hal::gpio::gpiog::PG<Output<PushPull>>,
+        adc_pins: AdcPins,
     ) -> Self {
         let mut pins = Self {
             enable_power_pin,
@@ -128,6 +194,7 @@ impl ControlPins {
             input_overdrive_pin,
             output_overdrive_pin,
             signal_on_pin,
+            adc_pins,
         };
 
         pins.power_down_channel();
