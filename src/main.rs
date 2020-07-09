@@ -179,7 +179,9 @@ const APP: () = {
                     .unwrap()
             };
 
-            BoosterChannels::new(mux, &i2c_bus_manager, channel_pins)
+            let adc = hal::adc::Adc::adc3(c.device.ADC3, true, hal::adc::config::AdcConfig::default());
+
+            BoosterChannels::new(mux, adc, &i2c_bus_manager, channel_pins)
         };
 
         info!("Startup complete");
@@ -233,9 +235,9 @@ const APP: () = {
         c.resources.telemetry_timer.clear_interrupt(Event::TimeOut);
 
         // Gather telemetry for all of the channels.
-        for _channel in Channel::into_enum_iter() {
-            let measurements = c.resources.channels.lock(|_booster_channels| {
-                //channels.get_status(channel)
+        for channel in Channel::into_enum_iter() {
+            let measurements = c.resources.channels.lock(|booster_channels| {
+                booster_channels.get_status(channel)
             });
 
             // TODO: Broadcast the measured data over the telemetry interface.
