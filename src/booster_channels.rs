@@ -25,7 +25,45 @@ impl ChannelIdentifier {
     }
 }
 
+/// Contains channel status information in SI base units.
 pub struct ChannelStatus {
+    pub input_overdrive: bool,
+    pub output_overdrive: bool,
+    pub alert: bool,
+    pub enabled: bool,
+    pub bias_voltage: f32,
+    pub temperature: f32,
+    pub p28v_current: f32,
+    pub p5v_current: f32,
+    pub p5v_voltage: f32,
+    pub input_overdrive_threshold: f32,
+    pub output_overdrive_threshold: f32,
+
+    pub input_power: f32,
+    pub reflected_power: f32,
+    pub output_power: f32,
+}
+
+impl ChannelStatus {
+    /// Create an empty status structure.
+    pub fn empty() -> ChannelStatus {
+        ChannelStatus {
+            input_overdrive: true,
+            output_overdrive: true,
+            alert: true,
+            enabled: false,
+            bias_voltage: 1000.0,
+            temperature: -1.0,
+            p28v_current: -1.0,
+            p5v_current: -1.0,
+            p5v_voltage: -1.0,
+            input_overdrive_threshold: 1000.0,
+            output_overdrive_threshold: 1000.0,
+            input_power: -1.0,
+            reflected_power: -1.0,
+            output_power: -1.0,
+        }
+    }
 }
 
 /// Represents a control structure for interfacing to booster RF channels.
@@ -234,6 +272,6 @@ impl BoosterChannels {
 
     pub fn get_status(&mut self, _channel: Channel) -> Result<ChannelStatus, Error> {
         // TODO: Fill out.
-        Ok(ChannelStatus{})
+        Ok(ChannelStatus::empty())
     }
 }
