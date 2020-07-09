@@ -190,7 +190,7 @@ pub struct ChannelPins {
     enable_power: hal::gpio::gpiod::PD<Output<PushPull>>,
 
     // The alert and input overdrive pins have external pull resistors, so we don't need to pull
-    // them internall.
+    // them internally.
     pub alert: hal::gpio::gpiod::PD<Input<Floating>>,
 
     pub input_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
@@ -294,10 +294,14 @@ impl RfChannel {
         // Because we're comparing the output of the detector with an analog comparator, we need to
         // scale the provided power thresholds into analog voltages comparable to the output of the
         // detectors. To accomplish this, we invert the equation.
+        //
+        // Additionally, the output coupler has an additional 20dB attenuation followed by a 10dB
+        // attenuator before hitting the power monitor. This increases the y-intercept from -35.6
+        // dBm to -5.6 dBm.
 
         // The reflected power detector is then passed through an op-amp with gain 1.5x - this
         // modifies the slope from 35mV/dB to 52.5mV/dB
-        let voltage = (reflected + 35.6) * 0.0525;
+        let voltage = (reflected + 5.6) * 0.0525;
         match self
             .i2c_devices
             .interlock_thresholds_dac
@@ -312,7 +316,7 @@ impl RfChannel {
 
         // The output power detector passes through an op-amp with unity gain (1.0x) - the power
         // detector equation is not modified.
-        let voltage = (output + 35.6) * 0.035;
+        let voltage = (output + 5.6) * 0.035;
         match self
             .i2c_devices
             .interlock_thresholds_dac
