@@ -131,8 +131,10 @@ const APP: () = {
                     .unwrap()
             };
 
-            BoosterChannels::new(mux, &i2c_bus_manager, channel_pins, &mut delay)
+            BoosterChannels::new(mux, &i2c_bus_manager, channel_pins)
         };
+
+        info!("Startup complete");
 
         init::LateResources { channels: channels }
     }

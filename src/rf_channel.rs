@@ -13,15 +13,11 @@ use microchip_24aa02e48::Microchip24AA02E48;
 
 use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
-use embedded_hal::blocking::delay::DelayMs;
 use stm32f4xx_hal::{
     self as hal,
     gpio::{Floating, Input, Output, PullDown, PushPull},
     prelude::*,
 };
-
-/// The minimum voltage necessary on the 5.0V main power rail for I2C devices to power up.
-const MINIMUM_RF_CHANNEL_VOLTAGE: f32 = 4.0;
 
 // Convenience type definition for all I2C devices on the bus.
 type I2cDevice = BusProxy<I2C>;
@@ -41,49 +37,27 @@ impl Devices {
     /// Check if an RF channel is available and construct devices for it.
     ///
     /// # Note
-    /// This function will and probe devices on the RF channel to see if the module is installed. It
-    /// is assumed the module is already powered.
+    /// This function will and probe devices on the RF channel to see if the module is installed.
     ///
     /// # Args
     /// * `manager` - The I2C bus manager used interfacing with devices on the I2C bus.
     /// * `control_pins` - The pins used for interacting with the RF channel.
-    /// * `delay` - A delay to use for waiting for I2C devices on the module to power up.
     ///
     /// # Returns
     /// An option containing the devices if they were discovered on the bus. If any device did not
     /// properly enumerate, the option will be empty.
-    fn new<DELAY>(manager: &'static BusManager, delay: &mut DELAY) -> Option<Self>
-    where
-        DELAY: DelayMs<u8>,
-    {
+    fn new(manager: &'static BusManager) -> Option<Self> {
         // The ADS7924 and DAC7571 are present on the booster mainboard, so instantiation
         // and communication should never fail.
-        let dac7571 = Dac7571::default(manager.acquire());
+        let mut dac7571 = Dac7571::default(manager.acquire());
 
-        // TODO: Ensure the bias DAC is outputting low voltage.
-        //dac7571.set_voltage(0.0).unwrap();
+        // Ensure the bias DAC is placing the RF amplifier in pinch off (disabled).
+        dac7571.set_voltage(3.3).expect("Bias DAC did not respond");
 
-        let mut ads7924 = Ads7924::default(manager.acquire()).unwrap();
-
-        // Wait for a valid voltage on the 5.0V main power rail to the RF channel.
-        let mut valid_voltage = false;
-        for _ in 0..10 {
-            if ads7924.get_voltage(ads7924::Channel::Three).unwrap() > MINIMUM_RF_CHANNEL_VOLTAGE {
-                valid_voltage = true;
-                break;
-            }
-
-            delay.delay_ms(10);
-        }
-
-        if valid_voltage == false {
-            warn!("Channel did not power up properly");
-            return None;
-        }
-
-        // Wait for devices on the RF module to power up.
-        // TODO: Verify this value from hardware.
-        delay.delay_ms(200);
+        // Verify we can communicate with the power monitor.
+        let mut ads7924 = Ads7924::default(manager.acquire())
+            .expect("Power monitor did not enumerate");
+        ads7924.get_voltage(ads7924::Channel::Three).expect("Power monitor did not respond");
 
         if let Ok(ad5627) = Ad5627::default(manager.acquire()) {
             if let Ok(eui48) = Microchip24AA02E48::new(manager.acquire()) {
@@ -98,7 +72,7 @@ impl Devices {
                     return None;
                 }
 
-                Some(Self {
+                return Some(Self {
                     interlock_thresholds_dac: ad5627,
                     input_power_adc: mcp3221,
                     temperature_monitor: max6642,
@@ -106,12 +80,10 @@ impl Devices {
                     power_monitor: ads7924,
                     eui48: eui48,
                 })
-            } else {
-                None
             }
-        } else {
-            None
         }
+
+        None
     }
 }
 
@@ -148,25 +120,17 @@ impl ControlPins {
         output_overdrive_pin: hal::gpio::gpioe::PE<Input<PullDown>>,
         signal_on_pin: hal::gpio::gpiog::PG<Output<PushPull>>,
     ) -> Self {
-        Self {
+        let mut pins = Self {
             enable_power_pin,
             alert_pin,
             input_overdrive_pin,
             output_overdrive_pin,
             signal_on_pin,
-        }
-    }
+        };
 
-    /// Power up a channel.
-    ///
-    /// # Note
-    /// The channel will be powered up with output signal amplification disabled by default.
-    fn power_up_channel(&mut self) {
-        // Ensure the channel is disabled.
-        self.signal_on_pin.set_low().unwrap();
+        pins.power_down_channel();
 
-        // Power on the channel.
-        self.enable_power_pin.set_high().unwrap();
+        pins
     }
 
     /// Power down a channel.
@@ -187,35 +151,23 @@ impl RfChannel {
     /// Construct a new RF channel.
     ///
     /// # Note
-    /// This function will enable power and attempt to detect an installed RF module.
+    /// This function attempts to detect an installed RF module.
     ///
     /// # Args
     /// * `manager` - The manager that controls the shared I2C bus used for RF module devices.
     /// * `control_pins` - The control and status pins associated with the channel.
-    /// * `delay` - A means of delaying after power is enabled to a channel.
-    pub fn new<DELAY>(
-        manager: &'static BusManager,
-        mut control_pins: ControlPins,
-        delay: &mut DELAY,
-    ) -> Option<Self>
-    where
-        DELAY: DelayMs<u8>,
+    ///
+    /// # Returns
+    /// An option containing an RfChannel if a channel was discovered on the bus. None otherwise.
+    pub fn new(manager: &'static BusManager, control_pins: ControlPins) -> Option<Self>
     {
-        // Power up the channel before we attempt to probe I2C devices.
-        control_pins.power_up_channel();
-
         // Attempt to instantiate the I2C devices on the channel.
-        match Devices::new(manager, delay) {
+        match Devices::new(manager) {
             Some(devices) => Some(Self {
                 i2c_devices: devices,
                 io_pins: control_pins,
             }),
-            None => {
-                // The I2C devices were not properly discovered on the bus. This channel is not
-                // present.
-                control_pins.power_down_channel();
-                None
-            }
+            None => None,
         }
     }
 
@@ -225,8 +177,19 @@ impl RfChannel {
     /// * `output` - The dBm interlock threshold to configure for the output power.
     /// * `reflected` - The dBm interlock threshold to configure for reflected power.
     pub fn set_interlock_thresholds(&mut self, output: f32, reflected: f32) -> Result<(), Error> {
-        // From the power detectors, dBm = Vout / 0.035 - 35.7;
-        let voltage = (reflected + 35.6) * 0.055;
+        // When operating at 100MHz, the power detectors specify the following output
+        // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
+        // for different power levels and frequencies):
+        //
+        // dBm = V(Vout) / .035 V/dB - 35.6 dBm
+        //
+        // Because we're comparing the output of the detector with an analog comparator, we need to
+        // scale the provided power thresholds into analog voltages comparable to the output of the
+        // detectors. To accomplish this, we invert the equation.
+
+        // The reflected power detector is then passed through an op-amp with gain 1.5x - this
+        // modifies the slope from 35mV/dB to 52.5mV/dB
+        let voltage = (reflected + 35.6) * 0.0525;
         match self
             .i2c_devices
             .interlock_thresholds_dac
@@ -237,7 +200,9 @@ impl RfChannel {
             Ok(_) => {}
         }
 
-        let voltage = (output + 35.6) * 0.055;
+        // The output power detector passes through an op-amp with unity gain (1.0x) - the power
+        // detector equation is not modified.
+        let voltage = (output + 35.6) * 0.035;
         match self
             .i2c_devices
             .interlock_thresholds_dac

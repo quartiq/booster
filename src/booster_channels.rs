@@ -5,7 +5,6 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
-use embedded_hal::blocking::delay::DelayMs;
 use enum_iterator::IntoEnumIterator;
 use tca9548::{self, Tca9548};
 
@@ -51,44 +50,42 @@ impl BoosterChannels {
     /// Construct booster RF channels.
     ///
     /// # Note
-    /// This function will scan and enable channels to check if they are present.
+    /// This function will scan channels to check if they are present.
     ///
     /// # Args
     /// * `mux` - The I2C mux used for switching between channel communications.
     /// * `manager` - The I2C bus manager used for the shared I2C bus.
     /// * `pins` - An array of all RfChannel control/status pins.
-    /// * `delay` - A delay function to delay while waiting for channels to power up.
     ///
     /// # Returns
     /// A `BoosterChannels` object that can be used to manage all available RF channels.
-    pub fn new<DELAY>(
+    pub fn new(
         mut mux: Tca9548<BusProxy<I2C>>,
         manager: &'static BusManager,
         mut pins: [Option<RfChannelPins>; 8],
-        delay: &mut DELAY,
     ) -> Self
-    where
-        DELAY: DelayMs<u8>,
     {
         let mut rf_channels: [Option<RfChannel>; 8] =
             [None, None, None, None, None, None, None, None];
 
         for channel in Channel::into_enum_iter() {
             // Selecting an I2C bus should never fail.
-            mux.select_bus(Some(channel.into())).unwrap();
+            mux.select_bus(Some(channel.into())).expect("Failed to select channel");
 
             let control_pins = pins[channel as usize]
                 .take()
                 .expect("Channel pins not available");
 
-            match RfChannel::new(manager, control_pins, delay) {
+            match RfChannel::new(manager, control_pins) {
                 Some(mut rf_channel) => {
                     // Setting interlock thresholds should not fail here as we have verified the
                     // device is on the bus.
                     rf_channel.set_interlock_thresholds(-30.0, -30.0).unwrap();
                     rf_channels[channel as usize].replace(rf_channel);
                 }
-                None => {}
+                None => {
+                    info!("Channel {} did not enumerate", channel as usize);
+                }
             }
         }
 
@@ -115,7 +112,7 @@ impl BoosterChannels {
         }
 
         // Selecting an I2C bus should never fail.
-        self.mux.select_bus(Some(channel.into())).unwrap();
+        self.mux.select_bus(Some(channel.into())).expect("Failed to select channel");
 
         match &mut self.channels[channel as usize] {
             Some(rf_channel) => {
