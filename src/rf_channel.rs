@@ -411,7 +411,6 @@ impl RfChannel {
             .i2c_devices
             .power_monitor
             .get_voltage(ads7924::Channel::Three)
-            .map_err(|_| Error::Interface)
             .unwrap();
 
         // The 28V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
@@ -432,7 +431,6 @@ impl RfChannel {
             .i2c_devices
             .power_monitor
             .get_voltage(ads7924::Channel::Zero)
-            .map_err(|_| Error::Interface)
             .unwrap();
         let i_p28v0ch = (p28v_rail_current_sense * 100.0) / 0.100 / 4300.0;
 
@@ -441,7 +439,6 @@ impl RfChannel {
             .i2c_devices
             .power_monitor
             .get_voltage(ads7924::Channel::One)
-            .map_err(|_| Error::Interface)
             .unwrap();
         let i_p5v0ch = (p5v_rail_current_sense * 100.0) / 0.100 / 6200.0;
 
