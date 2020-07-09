@@ -10,7 +10,7 @@ use tca9548::{self, Tca9548};
 
 use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
-use crate::rf_channel::{ControlPins as RfChannelPins, RfChannel};
+use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {

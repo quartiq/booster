@@ -22,6 +22,7 @@ use stm32f4xx_hal::{
 // Convenience type definition for all I2C devices on the bus.
 type I2cDevice = BusProxy<I2C>;
 
+/// A collection of analog pins (ADC channels) associated with an RF channel.
 #[allow(dead_code)]
 pub struct AnalogPins<AdcPin> {
     tx_power_analog_pin: AdcPin,
@@ -154,7 +155,7 @@ impl Devices {
 
 /// Represents the control and status pins for an RF channel.
 #[allow(dead_code)]
-pub struct ControlPins {
+pub struct ChannelPins {
     enable_power_pin: hal::gpio::gpiod::PD<Output<PushPull>>,
 
     // The alert and input overdrive pins have external pull resistors, so we don't need to pull
@@ -170,7 +171,7 @@ pub struct ControlPins {
     adc_pins: AdcPins,
 }
 
-impl ControlPins {
+impl ChannelPins {
     /// Construct new set of control pins.
     ///
     /// # Args
@@ -213,7 +214,7 @@ impl ControlPins {
 #[allow(dead_code)]
 pub struct RfChannel {
     i2c_devices: Devices,
-    io_pins: ControlPins,
+    io_pins: ChannelPins,
 }
 
 impl RfChannel {
@@ -228,7 +229,7 @@ impl RfChannel {
     ///
     /// # Returns
     /// An option containing an RfChannel if a channel was discovered on the bus. None otherwise.
-    pub fn new(manager: &'static BusManager, control_pins: ControlPins) -> Option<Self> {
+    pub fn new(manager: &'static BusManager, control_pins: ChannelPins) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
         match Devices::new(manager) {
             Some(devices) => Some(Self {

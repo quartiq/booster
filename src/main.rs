@@ -21,7 +21,7 @@ mod booster_channels;
 mod error;
 mod rf_channel;
 use booster_channels::BoosterChannels;
-use rf_channel::{AdcPins, ControlPins as RfChannelPins};
+use rf_channel::{AdcPins, ChannelPins as RfChannelPins};
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 type I2C = hal::i2c::I2c<
