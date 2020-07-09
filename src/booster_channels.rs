@@ -15,11 +15,13 @@ use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 
+/// A EUI-48 identifier for a given channel.
 pub struct ChannelIdentifier {
     pub data: [u8; 6],
 }
 
 impl ChannelIdentifier {
+    /// Construct a new channel identifier.
     pub fn new(identifier: [u8; 6]) -> Self {
         Self { data: identifier }
     }
@@ -185,6 +187,13 @@ impl BoosterChannels {
         }
     }
 
+    /// Determine if a channel is enabled.
+    ///
+    /// # Args
+    /// * `channel` - The channel to check the enabled state of.
+    ///
+    /// # Returns
+    /// True if the channel is enabled. False otherwise.
     pub fn is_enabled(&mut self, channel: Channel) -> Result<bool, Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
@@ -194,6 +203,13 @@ impl BoosterChannels {
         }
     }
 
+    /// Get a channel's EUI-48 identifier.
+    ///
+    /// # Args
+    /// * `channel` - The channel to get the identifier from.
+    ///
+    /// # Returns
+    /// The channel identifier.
     pub fn get_identifier(&mut self, channel: Channel) -> Result<ChannelIdentifier, Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
@@ -211,6 +227,13 @@ impl BoosterChannels {
         }
     }
 
+    /// Check if a channel has encountered a warning condition.
+    ///
+    /// # Args
+    /// * `channel` - The channel to check.
+    ///
+    /// # Returns
+    /// True if a warning condition is present on the channel.
     pub fn warning_detected(&mut self, channel: Channel) -> Result<bool, Error> {
         // Check if any alerts/alarms are present on the channel.
         // TODO: Determine what other conditions may constitute a warning to the user.
@@ -223,17 +246,27 @@ impl BoosterChannels {
         }
     }
 
+    /// Check if a channel has encountered an error condition.
+    ///
+    /// # Args
+    /// * `channel` - The channel to check.
+    ///
+    /// # Returns
+    /// True if an error condition is present on the channel.
     pub fn error_detected(&mut self, channel: Channel) -> Result<bool, Error> {
         // If input or output overdrive is detected
 
         self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &self.channels[channel as usize] {
+match &self.channels[channel as usize] {
             Some(rf_channel) => Ok(rf_channel.is_overdriven()),
             None => Err(Error::NotPresent),
         }
     }
 
+    /// Enable an RF channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to enable.
     pub fn enable_channel(&mut self, channel: Channel) -> Result<(), Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
@@ -243,6 +276,10 @@ impl BoosterChannels {
         }
     }
 
+    /// Disable an RF channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to disable.
     pub fn disable_channel(&mut self, channel: Channel) -> Result<(), Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
@@ -252,6 +289,13 @@ impl BoosterChannels {
         }
     }
 
+    /// Get the temperature of a channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to get the temperature of.
+    ///
+    /// # Returns
+    /// The temperature of the channel in degrees celsius.
     pub fn get_temperature(&mut self, channel: Channel) -> Result<f32, Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
@@ -261,6 +305,10 @@ impl BoosterChannels {
         }
     }
 
+    /// Set the bias voltage of a channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to set the bias voltage of.
     pub fn set_bias(&mut self, channel: Channel, bias_voltage: f32) -> Result<(), Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
@@ -273,6 +321,13 @@ impl BoosterChannels {
         }
     }
 
+    /// Get the current status of the channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to get the status of.
+    ///
+    /// Returns
+    /// A structure indicating all measurements on the channel.
     pub fn get_status(
         &mut self,
         channel: Channel,

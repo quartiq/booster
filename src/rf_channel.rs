@@ -23,12 +23,37 @@ use stm32f4xx_hal::{
 // Convenience type definition for all I2C devices on the bus.
 type I2cDevice = BusProxy<I2C>;
 
+/// A structure representing power measurements of a channel.
 pub struct PowerMeasurements {
     pub v_p5v0mp: f32,
     pub i_p5v0ch: f32,
     pub i_p28v0ch: f32,
 }
 
+
+// Macro magic to generate an enum that looks like:
+//
+// ```rust
+// pub enum AdcPins {
+//     PA0(hal::gpio::gpioa::PA0<Analog>),
+//     // ...
+// }
+//
+// impl AdcPins {
+//     pub fn pa0(pin: hal::gpio::gpioa::PA0<Analog>) -> Self {
+//         AdcPins::PA0(pin)
+//     }
+//
+//     pub fn convert(&self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>, sample_time: SampleTime) -> u16 {
+//         match self {
+//             AdcPin::PA0(pin) => adc.convert(pin, sample_time)
+//             // ...
+//         }
+//     }
+// }
+// ```
+//
+// This allows storing non-generic pin types into a single enumeration type.
 macro_rules! adc_pins {
     (define: [$($pin:ident, $pin_lower:ident, $port:ident),*]) => {
         pub enum AdcPin {
@@ -68,30 +93,6 @@ macro_rules! adc_pins {
         adc_pins!(implement: $pin_defs);
     };
 }
-
-// Macro magic to generate an enum that looks like:
-//
-// ```rust
-// pub enum AdcPins {
-//     PA0(hal::gpio::gpioa::PA0<Analog>),
-//     // ...
-// }
-//
-// impl AdcPins {
-//     pub fn pa0(pin: hal::gpio::gpioa::PA0<Analog>) -> Self {
-//         AdcPins::PA0(pin)
-//     }
-//
-//     pub fn convert(&self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>, sample_time: SampleTime) -> u16 {
-//         match self {
-//             AdcPin::PA0(pin) => adc.convert(pin, sample_time)
-//             // ...
-//         }
-//     }
-// }
-// ```
-//
-// This allows storing non-generic pin types into a single enumeration type.
 adc_pins!([
     PA0, pa0, gpioa, PA1, pa1, gpioa, PA2, pa2, gpioa, PA3, pa3, gpioa, PC0, pc0, gpioc, PC1, pc1,
     gpioc, PC2, pc2, gpioc, PC3, pc3, gpioc, PF3, pf3, gpiof, PF4, pf4, gpiof, PF5, pf5, gpiof,
@@ -106,6 +107,11 @@ pub struct AnalogPins {
 }
 
 impl AnalogPins {
+    /// Create a new analog pin structure.
+    ///
+    /// # Args
+    /// * `tx_power` - The pin to use for measuring transmitted power.
+    /// * `reflected_power` - The pin to use for measuring reflected power.
     pub fn new(tx_power: AdcPin, reflected_power: AdcPin) -> Self {
         Self {
             tx_power,
@@ -210,6 +216,7 @@ impl ChannelPins {
     /// * `input_overdrive_pin` - An input pin that indicates an input overdrive.
     /// * `output_overdrive_pin` - An input pin that indicates an output overdrive.
     /// * `signal_on_pin` - An output pin that is set high to enable output signal amplification.
+    /// * `adc_pins` - The AnalogPins that are associated with the channel.
     pub fn new(
         enable_power: hal::gpio::gpiod::PD<Output<PushPull>>,
         alert: hal::gpio::gpiod::PD<Input<Floating>>,
@@ -325,6 +332,7 @@ impl RfChannel {
         Ok(())
     }
 
+    /// Check if the channel is indicating an interlock has tripped.
     pub fn is_overdriven(&self) -> bool {
         let input_overdrive = self.pins.input_overdrive.is_low().unwrap();
         let output_overdrive = self.pins.output_overdrive.is_low().unwrap();
@@ -332,6 +340,7 @@ impl RfChannel {
         input_overdrive || output_overdrive
     }
 
+    /// Check if the channel is enabled.
     pub fn is_enabled(&self) -> bool {
         let enabled =
             self.pins.enable_power.is_high().unwrap() && self.pins.signal_on.is_high().unwrap();
@@ -341,15 +350,18 @@ impl RfChannel {
         enabled && !self.is_overdriven()
     }
 
+    /// Check if the channel is indicating an alarm.
     pub fn is_alarmed(&self) -> bool {
         self.pins.alert.is_low().unwrap()
     }
 
+    /// Enable the channel and power it up.
     pub fn enable(&mut self) -> Result<(), Error> {
         // TODO: Power-up the channel.
         Err(Error::NotImplemented)
     }
 
+    /// Disable the channel and power it off.
     pub fn disable(&mut self) -> Result<(), Error> {
         self.pins.power_down_channel();
 
@@ -362,6 +374,7 @@ impl RfChannel {
         Ok(())
     }
 
+    /// Get the temperature of the channel in celsius.
     pub fn get_temperature(&mut self) -> f32 {
         self.i2c_devices
             .temperature_monitor
@@ -369,6 +382,10 @@ impl RfChannel {
             .unwrap()
     }
 
+    /// Set the bias of the channel.
+    ///
+    /// # Args
+    /// * `bias_voltage` - The desired bias voltage on the RF amplification transitor.
     pub fn set_bias(&mut self, bias_voltage: f32) -> Result<(), Error> {
         // The bias voltage is the inverse of the DAC output voltage.
         let bias_voltage = -1.0 * bias_voltage;
@@ -385,6 +402,10 @@ impl RfChannel {
         Ok(())
     }
 
+    /// Get current power measurements from the channel.
+    ///
+    /// # Returns
+    /// The most recent power measurements of the channel.
     pub fn get_power_measurements(&mut self) -> PowerMeasurements {
         let v_p5v0mp = self
             .i2c_devices
@@ -431,6 +452,10 @@ impl RfChannel {
         }
     }
 
+    /// Get the current input power measurement.
+    ///
+    /// # Returns
+    /// The input power in dBm.
     pub fn get_input_power(&mut self) -> f32 {
         // When operating at 100MHz, the power detectors specify the following output
         // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
@@ -445,6 +470,13 @@ impl RfChannel {
         voltage / 0.0525 - 35.6
     }
 
+    /// Get the current reflected power measurement.
+    ///
+    /// # Args
+    /// * `adc` - The ADC to use for performing the measurement.
+    ///
+    /// # Returns
+    /// The reflected power in dBm.
     pub fn get_reflected_power(&mut self, mut adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
         let sample = self
             .pins
@@ -464,6 +496,13 @@ impl RfChannel {
         voltage / 0.0525 - 35.6
     }
 
+    /// Get the current output power measurement.
+    ///
+    /// # Args
+    /// * `adc` - The ADC to use for performing the measurement.
+    ///
+    /// # Returns
+    /// The output power in dBm.
     pub fn get_output_power(&mut self, mut adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
         let sample = self
             .pins
@@ -480,14 +519,23 @@ impl RfChannel {
         voltage / 0.035 - 35.6
     }
 
+    /// Get the current output power interlock threshold.
+    ///
+    /// # Returns
+    /// The current output interlock threshold in dBm.
     pub fn get_output_interlock_threshold(&self) -> f32 {
         self.output_interlock_threshold
     }
 
+    /// Get the current reflected power interlock threshold.
+    ///
+    /// # Returns
+    /// The current reflected interlock threshold in dBm.
     pub fn get_reflected_interlock_threshold(&self) -> f32 {
         self.output_interlock_threshold
     }
 
+    /// Get the current bias voltage programmed to the RF amplification transistor.
     pub fn get_bias_voltage(&mut self) -> f32 {
         self.bias_voltage
     }
