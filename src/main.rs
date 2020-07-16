@@ -181,7 +181,7 @@ const APP: () = {
 
             let adc = hal::adc::Adc::adc3(c.device.ADC3, true, hal::adc::config::AdcConfig::default());
 
-            BoosterChannels::new(mux, adc, &i2c_bus_manager, channel_pins)
+            BoosterChannels::new(mux, adc, i2c_bus_manager, channel_pins)
         };
 
         info!("Startup complete");

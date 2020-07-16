@@ -49,7 +49,7 @@ pub struct ChannelStatus {
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
     channels: [Option<RfChannel>; 8],
-    mux: Tca9548<&'static SharedBus<I2C>>,
+    mux: Tca9548<SharedBus<I2C>>,
     adc: core::cell::RefCell<hal::adc::Adc<hal::stm32::ADC3>>,
 }
 
@@ -96,9 +96,9 @@ impl BoosterChannels {
     /// # Returns
     /// A `BoosterChannels` object that can be used to manage all available RF channels.
     pub fn new(
-        mut mux: Tca9548<&'static SharedBus<I2C>>,
+        mut mux: Tca9548<SharedBus<I2C>>,
         adc: hal::adc::Adc<hal::stm32::ADC3>,
-        manager: &'static SharedBus<I2C>,
+        manager: SharedBus<I2C>,
         mut pins: [Option<RfChannelPins>; 8],
     ) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
