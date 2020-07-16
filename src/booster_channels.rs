@@ -204,8 +204,6 @@ impl BoosterChannels {
     /// # Returns
     /// True if a warning condition is present on the channel.
     pub fn warning_detected(&mut self, channel: Channel) -> Result<bool, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
         // TODO: Determine what other conditions may constitute a warning to the user.
         // Check if any alerts/alarms are present on the channel.
         match &self.channels[channel as usize] {
@@ -306,7 +304,7 @@ impl BoosterChannels {
 
         match &mut self.channels[channel as usize] {
             Some(rf_channel) => {
-                let power_measurements = rf_channel.get_power_measurements();
+                let power_measurements = rf_channel.get_supply_measurements();
 
                 let status = ChannelStatus {
                     input_overdrive: rf_channel.pins.input_overdrive.is_high().unwrap(),

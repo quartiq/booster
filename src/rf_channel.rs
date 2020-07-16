@@ -23,8 +23,8 @@ use stm32f4xx_hal::{
 // Convenience type definition for all I2C devices on the bus.
 type I2cDevice = BusProxy<I2C>;
 
-/// A structure representing power measurements of a channel.
-pub struct PowerMeasurements {
+/// A structure representing power supply measurements of a channel.
+pub struct SupplyMeasurements {
     pub v_p5v0mp: f32,
     pub i_p5v0ch: f32,
     pub i_p28v0ch: f32,
@@ -272,11 +272,11 @@ impl RfChannel {
                     pins: control_pins,
                     output_interlock_threshold: -100.0,
                     reflected_interlock_threshold: -100.0,
-                    bias_voltage: -3.3,
+                    bias_voltage: -3.2,
                 };
 
                 channel.set_interlock_thresholds(0.0, 0.0).unwrap();
-                channel.set_bias(-3.3).unwrap();
+                channel.set_bias(-3.2).unwrap();
 
                 // Configure alerts/alarms for the power monitor.
 
@@ -285,7 +285,7 @@ impl RfChannel {
                 channel
                     .i2c_devices
                     .power_monitor
-                    .set_thresholds(ads7924::Channel::Three, 4.5 / 2.5, 5.5 / 2.5)
+                    .set_thresholds(ads7924::Channel::Three, 0.0, 5.5 / 2.5)
                     .unwrap();
 
                 // The P28V0 current rail has an equivalent equation of Isns = Vsns * 0.233.
@@ -293,7 +293,7 @@ impl RfChannel {
                 channel
                     .i2c_devices
                     .power_monitor
-                    .set_thresholds(ads7924::Channel::Zero, 0.0, 500.0 * 0.233)
+                    .set_thresholds(ads7924::Channel::Zero, 0.0, 0.500 * (100.0 / 0.100 / 4300.0))
                     .unwrap();
 
                 // The P5V0 current rail has an equivalent equation of Isns = Vsns * 0.156.
@@ -301,7 +301,7 @@ impl RfChannel {
                 channel
                     .i2c_devices
                     .power_monitor
-                    .set_thresholds(ads7924::Channel::One, 0.0, 300.0 * 0.156)
+                    .set_thresholds(ads7924::Channel::One, 0.0, 0.300 * (100.0 / 0.100 / 6200.0))
                     .unwrap();
 
                 channel.i2c_devices.power_monitor.clear_alarm().unwrap();
@@ -343,7 +343,7 @@ impl RfChannel {
             Err(ad5627::Error::Range) => return Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
             Ok(voltage) => {
-                self.reflected_interlock_threshold = voltage / 0.0525 + 35.6;
+                self.reflected_interlock_threshold = voltage / 0.0525 + 5.6;
             }
         }
 
@@ -358,7 +358,7 @@ impl RfChannel {
             Err(ad5627::Error::Range) => return Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
             Ok(_) => {
-                self.output_interlock_threshold = voltage / 0.035 + 35.6;
+                self.output_interlock_threshold = voltage / 0.035 + 5.6;
             }
         }
 
@@ -380,7 +380,7 @@ impl RfChannel {
 
         // Check that the bias is out of pinch off. We're using a somewhat arbitrary value here as
         // the nominal threshold voltage is -1.6V, but the disabled channel should always be set to
-        // -3.3 V.
+        // -3.2 V.
         let bias_enabled = self.bias_voltage > -3.0;
 
         enabled && !self.is_overdriven() && bias_enabled
@@ -394,7 +394,12 @@ impl RfChannel {
     /// Enable the channel and power it up.
     pub fn enable(&mut self) -> Result<(), Error> {
         // TODO: Power-up the channel.
-        Err(Error::NotImplemented)
+        self.i2c_devices.bias_dac.set_voltage(-3.2).expect("Failed to disable RF bias voltage");
+        self.pins.enable_power.set_high().unwrap();
+        self.i2c_devices.bias_dac.set_voltage(self.bias_voltage).expect("Failed to configure RF bias voltage");
+        self.pins.signal_on.set_high().unwrap();
+
+        Ok(())
     }
 
     /// Disable the channel and power it off.
@@ -404,7 +409,7 @@ impl RfChannel {
         // Set the bias DAC output into pinch-off.
         self.i2c_devices
             .bias_dac
-            .set_voltage(-3.3)
+            .set_voltage(-3.2)
             .expect("Failed to disable RF bias voltage");
 
         Ok(())
@@ -430,19 +435,18 @@ impl RfChannel {
             Err(dac7571::Error::Bounds) => return Err(Error::Bounds),
             Err(_) => panic!("Failed to set DAC bias voltage"),
             Ok(voltage) => {
-                self.bias_voltage = voltage;
-                voltage
+                self.bias_voltage = -voltage;
             }
         };
 
         Ok(())
     }
 
-    /// Get current power measurements from the channel.
+    /// Get current power supply measurements from the channel.
     ///
     /// # Returns
-    /// The most recent power measurements of the channel.
-    pub fn get_power_measurements(&mut self) -> PowerMeasurements {
+    /// The most recent power supply measurements of the channel.
+    pub fn get_supply_measurements(&mut self) -> SupplyMeasurements {
         // The P5V0 rail goes through a resistor divider of 15K -> 10K. This corresponds with a 2.5x
         // reduction in measured voltage.
         let p5v_voltage = self
@@ -471,7 +475,7 @@ impl RfChannel {
             .power_monitor
             .get_voltage(ads7924::Channel::Zero)
             .unwrap();
-        let i_p28v0ch = (p28v_rail_current_sense * 100.0) / 0.100 / 4300.0;
+        let i_p28v0ch = p28v_rail_current_sense * (100.0 / 0.100 / 4300.0);
 
         // P5V rail uses an Rout of 6.2K with identical other characteristics.
         let p5v_rail_current_sense = self
@@ -479,9 +483,9 @@ impl RfChannel {
             .power_monitor
             .get_voltage(ads7924::Channel::One)
             .unwrap();
-        let i_p5v0ch = (p5v_rail_current_sense * 100.0) / 0.100 / 6200.0;
+        let i_p5v0ch = p5v_rail_current_sense * (100.0 / 0.100 / 6200.0);
 
-        PowerMeasurements {
+        SupplyMeasurements {
             v_p5v0mp,
             i_p28v0ch,
             i_p5v0ch,
