@@ -14,10 +14,7 @@ impl LinearTransformation {
     /// * `slope` - The slope of the y = mx + b equation.
     /// * `offset` - The slope of the y-intercept. Equals the b portion of y = mx + b.
     pub fn new(slope: f32, offset: f32) -> Self {
-        LinearTransformation {
-            slope,
-            offset
-        }
+        LinearTransformation { slope, offset }
     }
 
     /// Convert a value from the Y-domain into the X-domain.
