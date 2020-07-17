@@ -19,6 +19,7 @@ use hal::prelude::*;
 
 mod booster_channels;
 mod error;
+mod linear_transformation;
 mod rf_channel;
 use booster_channels::BoosterChannels;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};

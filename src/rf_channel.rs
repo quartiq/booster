@@ -4,6 +4,7 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
+use crate::linear_transformation::LinearTransformation;
 use ad5627::{self, Ad5627};
 use ads7924::Ads7924;
 use dac7571::Dac7571;
@@ -249,6 +250,9 @@ pub struct RfChannel {
     output_interlock_threshold: f32,
     reflected_interlock_threshold: f32,
     bias_voltage: f32,
+    input_power_linearization: LinearTransformation,
+    reflected_power_linearization: LinearTransformation,
+    output_power_linearization: LinearTransformation,
 }
 
 impl RfChannel {
@@ -273,6 +277,30 @@ impl RfChannel {
                     output_interlock_threshold: -100.0,
                     reflected_interlock_threshold: -100.0,
                     bias_voltage: -3.2,
+
+                    // When operating at 100MHz, the power detectors specify the following output
+                    // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
+                    // for different power levels and frequencies):
+                    //
+                    // dBm = V(Vout) / .035 V/dB - 35.6 dBm
+                    //
+                    // All of the power meters are preceded by attenuators which are incorporated in
+                    // the offset.
+                    output_power_linearization: LinearTransformation::new(
+                        1.0 / 0.035,
+                        &[-35.6, 19.8, 10.0],
+                    ),
+
+                    // The input power and reflected power detectors are then passed through an
+                    // op-amp with gain 1.5x - this modifies the slope from 35mV/dB to 52.5mV/dB
+                    input_power_linearization: LinearTransformation::new(
+                        1.5 / 0.035,
+                        &[-35.6, 8.9],
+                    ),
+                    reflected_power_linearization: LinearTransformation::new(
+                        1.5 / 0.035,
+                        &[-35.6, 19.8, 10.0],
+                    ),
                 };
 
                 channel.set_interlock_thresholds(0.0, 0.0).unwrap();
@@ -293,7 +321,11 @@ impl RfChannel {
                 channel
                     .i2c_devices
                     .power_monitor
-                    .set_thresholds(ads7924::Channel::Zero, 0.0, 0.500 * (100.0 / 0.100 / 4300.0))
+                    .set_thresholds(
+                        ads7924::Channel::Zero,
+                        0.0,
+                        0.500 * (100.0 / 0.100 / 4300.0),
+                    )
                     .unwrap();
 
                 // The P5V0 current rail has an equivalent equation of Isns = Vsns * 0.156.
@@ -315,50 +347,33 @@ impl RfChannel {
     /// Set the interlock thresholds for the channel.
     ///
     /// # Args
-    /// * `output` - The dBm interlock threshold to configure for the output power.
-    /// * `reflected` - The dBm interlock threshold to configure for reflected power.
-    pub fn set_interlock_thresholds(&mut self, output: f32, reflected: f32) -> Result<(), Error> {
-        // When operating at 100MHz, the power detectors specify the following output
-        // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
-        // for different power levels and frequencies):
-        //
-        // dBm = V(Vout) / .035 V/dB - 35.6 dBm
-        //
-        // Because we're comparing the output of the detector with an analog comparator, we need to
-        // scale the provided power thresholds into analog voltages comparable to the output of the
-        // detectors. To accomplish this, we invert the equation.
-        //
-        // Additionally, the output coupler has an additional 20dB attenuation followed by a 10dB
-        // attenuator before hitting the power monitor. This increases the y-intercept from -35.6
-        // dBm to -5.6 dBm.
-
-        // The reflected power detector is then passed through an op-amp with gain 1.5x - this
-        // modifies the slope from 35mV/dB to 52.5mV/dB
-        let voltage = (reflected + 5.6) * 0.0525;
-        match self
-            .i2c_devices
-            .interlock_thresholds_dac
-            .set_voltage(voltage, ad5627::Dac::A)
-        {
+    /// * `output_power` - The dBm interlock threshold to configure for the output power.
+    /// * `reflected_power` - The dBm interlock threshold to configure for reflected power.
+    pub fn set_interlock_thresholds(
+        &mut self,
+        output_power: f32,
+        reflected_power: f32,
+    ) -> Result<(), Error> {
+        match self.i2c_devices.interlock_thresholds_dac.set_voltage(
+            self.reflected_power_linearization.invert(reflected_power),
+            ad5627::Dac::A,
+        ) {
             Err(ad5627::Error::Range) => return Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
             Ok(voltage) => {
-                self.reflected_interlock_threshold = voltage / 0.0525 + 5.6;
+                self.reflected_interlock_threshold =
+                    self.reflected_power_linearization.map(voltage);
             }
         }
 
-        // The output power detector passes through an op-amp with unity gain (1.0x) - the power
-        // detector equation is not modified.
-        let voltage = (output + 5.6) * 0.035;
-        match self
-            .i2c_devices
-            .interlock_thresholds_dac
-            .set_voltage(voltage, ad5627::Dac::B)
-        {
+        match self.i2c_devices.interlock_thresholds_dac.set_voltage(
+            self.output_power_linearization.invert(output_power),
+            ad5627::Dac::B,
+        ) {
             Err(ad5627::Error::Range) => return Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
-            Ok(_) => {
-                self.output_interlock_threshold = voltage / 0.035 + 5.6;
+            Ok(voltage) => {
+                self.output_interlock_threshold = self.output_power_linearization.map(voltage);
             }
         }
 
@@ -394,9 +409,15 @@ impl RfChannel {
     /// Enable the channel and power it up.
     pub fn enable(&mut self) -> Result<(), Error> {
         // TODO: Power-up the channel.
-        self.i2c_devices.bias_dac.set_voltage(-3.2).expect("Failed to disable RF bias voltage");
+        self.i2c_devices
+            .bias_dac
+            .set_voltage(-3.2)
+            .expect("Failed to disable RF bias voltage");
         self.pins.enable_power.set_high().unwrap();
-        self.i2c_devices.bias_dac.set_voltage(self.bias_voltage).expect("Failed to configure RF bias voltage");
+        self.i2c_devices
+            .bias_dac
+            .set_voltage(self.bias_voltage)
+            .expect("Failed to configure RF bias voltage");
         self.pins.signal_on.set_high().unwrap();
 
         Ok(())
@@ -497,20 +518,9 @@ impl RfChannel {
     /// # Returns
     /// The input power in dBm.
     pub fn get_input_power(&mut self) -> f32 {
-        // When operating at 100MHz, the power detectors specify the following output
-        // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
-        // for different power levels and frequencies):
-        //
-        // dBm = V(Vout) / .035 V/dB - 35.6 dBm
-
-        // The input power detector is then passed through an op-amp with gain 1.5x - this
-        // modifies the slope from 35mV/dB to 52.5mV/dB
-        //
-        // Additionally, there is 10dB of input attenuation due to coupling from the input signal to
-        // the power detector. This adds to the input power signal.
         let voltage = self.i2c_devices.input_power_adc.get_voltage().unwrap();
 
-        voltage / 0.0525 - 25.6
+        self.input_power_linearization.map(voltage)
     }
 
     /// Get the current reflected power measurement.
@@ -528,18 +538,7 @@ impl RfChannel {
             .convert(&mut adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
-        // When operating at 100MHz, the power detectors specify the following output
-        // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
-        // for different power levels and frequencies):
-        //
-        // dBm = V(Vout) / .035 V/dB - 35.6 dBm
-
-        // The reflected power detector is then passed through an op-amp with gain 1.5x - this
-        // modifies the slope from 35mV/dB to 52.5mV/dB
-        //
-        // There is an additional 30dB of attenuation before the power monitor (20dB from the
-        // coupler and then a 10dB attenuator). This increases the power measurement.
-        voltage / 0.0525 - 5.6
+        self.reflected_power_linearization.map(voltage)
     }
 
     /// Get the current output power measurement.
@@ -557,15 +556,7 @@ impl RfChannel {
             .convert(&mut adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
-        // When operating at 100MHz, the power detectors specify the following output
-        // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
-        // for different power levels and frequencies):
-        //
-        // dBm = V(Vout) / .035 V/dB - 35.6 dBm
-        //
-        // There is an additional 30dB of attenuation before the power monitor (20dB from the
-        // coupler and then a 10dB attenuator). This increases the power measurement.
-        voltage / 0.035 - 5.6
+        self.output_power_linearization.map(voltage)
     }
 
     /// Get the current output power interlock threshold.
