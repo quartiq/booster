@@ -12,12 +12,11 @@ impl LinearTransformation {
     ///
     /// # Args
     /// * `slope` - The slope of the y = mx + b equation.
-    /// * `offsets` - A list of y-intercept offsets. The sum of these offsets equals the b portion
-    ///   of y = mx + b.
-    pub fn new(slope: f32, offsets: &[f32]) -> Self {
+    /// * `offset` - The slope of the y-intercept. Equals the b portion of y = mx + b.
+    pub fn new(slope: f32, offset: f32) -> Self {
         LinearTransformation {
             slope,
-            offset: offsets.iter().sum(),
+            offset
         }
     }
 

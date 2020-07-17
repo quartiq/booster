@@ -148,7 +148,7 @@ impl Devices {
         let mut dac7571 = Dac7571::default(manager.acquire());
 
         // Ensure the bias DAC is placing the RF amplifier in pinch off (disabled).
-        dac7571.set_voltage(3.3).expect("Bias DAC did not respond");
+        dac7571.set_voltage(3.2).expect("Bias DAC did not respond");
 
         // Verify we can communicate with the power monitor.
         let mut ads7924 =
@@ -250,9 +250,9 @@ pub struct RfChannel {
     output_interlock_threshold: f32,
     reflected_interlock_threshold: f32,
     bias_voltage: f32,
-    input_power_linearization: LinearTransformation,
-    reflected_power_linearization: LinearTransformation,
-    output_power_linearization: LinearTransformation,
+    input_power_transform: LinearTransformation,
+    reflected_power_transform: LinearTransformation,
+    output_power_transform: LinearTransformation,
 }
 
 impl RfChannel {
@@ -274,8 +274,8 @@ impl RfChannel {
                 let mut channel = Self {
                     i2c_devices: devices,
                     pins: control_pins,
-                    output_interlock_threshold: -100.0,
-                    reflected_interlock_threshold: -100.0,
+                    output_interlock_threshold: f32::NAN,
+                    reflected_interlock_threshold: f32::NAN,
                     bias_voltage: -3.2,
 
                     // When operating at 100MHz, the power detectors specify the following output
@@ -286,20 +286,20 @@ impl RfChannel {
                     //
                     // All of the power meters are preceded by attenuators which are incorporated in
                     // the offset.
-                    output_power_linearization: LinearTransformation::new(
+                    output_power_transform: LinearTransformation::new(
                         1.0 / 0.035,
-                        &[-35.6, 19.8, 10.0],
+                        -35.6 + 19.8 + 10.0,
                     ),
 
                     // The input power and reflected power detectors are then passed through an
                     // op-amp with gain 1.5x - this modifies the slope from 35mV/dB to 52.5mV/dB
-                    input_power_linearization: LinearTransformation::new(
+                    input_power_transform: LinearTransformation::new(
                         1.5 / 0.035,
-                        &[-35.6, 8.9],
+                        -35.6 + 8.9,
                     ),
-                    reflected_power_linearization: LinearTransformation::new(
+                    reflected_power_transform: LinearTransformation::new(
                         1.5 / 0.035,
-                        &[-35.6, 19.8, 10.0],
+                        -35.6 + 19.8 + 10.0,
                     ),
                 };
 
@@ -355,25 +355,25 @@ impl RfChannel {
         reflected_power: f32,
     ) -> Result<(), Error> {
         match self.i2c_devices.interlock_thresholds_dac.set_voltage(
-            self.reflected_power_linearization.invert(reflected_power),
+            self.reflected_power_transform.invert(reflected_power),
             ad5627::Dac::A,
         ) {
             Err(ad5627::Error::Range) => return Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
             Ok(voltage) => {
                 self.reflected_interlock_threshold =
-                    self.reflected_power_linearization.map(voltage);
+                    self.reflected_power_transform.map(voltage);
             }
         }
 
         match self.i2c_devices.interlock_thresholds_dac.set_voltage(
-            self.output_power_linearization.invert(output_power),
+            self.output_power_transform.invert(output_power),
             ad5627::Dac::B,
         ) {
             Err(ad5627::Error::Range) => return Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
             Ok(voltage) => {
-                self.output_interlock_threshold = self.output_power_linearization.map(voltage);
+                self.output_interlock_threshold = self.output_power_transform.map(voltage);
             }
         }
 
@@ -411,7 +411,7 @@ impl RfChannel {
         // TODO: Power-up the channel.
         self.i2c_devices
             .bias_dac
-            .set_voltage(-3.2)
+            .set_voltage(3.2)
             .expect("Failed to disable RF bias voltage");
         self.pins.enable_power.set_high().unwrap();
         self.i2c_devices
@@ -425,13 +425,15 @@ impl RfChannel {
 
     /// Disable the channel and power it off.
     pub fn disable(&mut self) -> Result<(), Error> {
-        self.pins.power_down_channel();
+        self.pins.signal_on.set_low().unwrap();
 
         // Set the bias DAC output into pinch-off.
         self.i2c_devices
             .bias_dac
-            .set_voltage(-3.2)
+            .set_voltage(3.2)
             .expect("Failed to disable RF bias voltage");
+
+        self.pins.enable_power.set_low().unwrap();
 
         Ok(())
     }
@@ -520,7 +522,7 @@ impl RfChannel {
     pub fn get_input_power(&mut self) -> f32 {
         let voltage = self.i2c_devices.input_power_adc.get_voltage().unwrap();
 
-        self.input_power_linearization.map(voltage)
+        self.input_power_transform.map(voltage)
     }
 
     /// Get the current reflected power measurement.
@@ -538,7 +540,7 @@ impl RfChannel {
             .convert(&mut adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
-        self.reflected_power_linearization.map(voltage)
+        self.reflected_power_transform.map(voltage)
     }
 
     /// Get the current output power measurement.
@@ -556,7 +558,7 @@ impl RfChannel {
             .convert(&mut adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
-        self.output_power_linearization.map(voltage)
+        self.output_power_transform.map(voltage)
     }
 
     /// Get the current output power interlock threshold.
