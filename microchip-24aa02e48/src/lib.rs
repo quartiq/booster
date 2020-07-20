@@ -34,6 +34,7 @@ where
 }
 
 /// Represents various errors that may be encountered by the EEPROM driver.
+#[derive(Debug)]
 pub enum Error {
     Interface,
     PageFault,
