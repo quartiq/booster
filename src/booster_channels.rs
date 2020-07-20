@@ -12,8 +12,7 @@ use tca9548::{self, Tca9548};
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 
-use super::{I2C};
-use shared_bus_rtic::SharedBus;
+use super::{BusManager, BusProxy, I2C};
 
 /// A EUI-48 identifier for a given channel.
 pub struct ChannelIdentifier {
@@ -28,7 +27,6 @@ impl ChannelIdentifier {
 }
 
 /// Contains channel status information in SI base units.
-#[derive(Debug)]
 pub struct ChannelStatus {
     pub input_overdrive: bool,
     pub output_overdrive: bool,
@@ -49,8 +47,7 @@ pub struct ChannelStatus {
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
     channels: [Option<RfChannel>; 8],
-    mux: Tca9548<SharedBus<I2C>>,
-    adc: core::cell::RefCell<hal::adc::Adc<hal::stm32::ADC3>>,
+    mux: Tca9548<BusProxy<I2C>>,
 }
 
 /// Indicates a booster RF channel.
@@ -89,16 +86,14 @@ impl BoosterChannels {
     ///
     /// # Args
     /// * `mux` - The I2C mux used for switching between channel communications.
-    /// * `adc` - The ADC to use for measuring channel power measurements.
     /// * `manager` - The I2C bus manager used for the shared I2C bus.
     /// * `pins` - An array of all RfChannel control/status pins.
     ///
     /// # Returns
     /// A `BoosterChannels` object that can be used to manage all available RF channels.
     pub fn new(
-        mut mux: Tca9548<SharedBus<I2C>>,
-        adc: hal::adc::Adc<hal::stm32::ADC3>,
-        manager: SharedBus<I2C>,
+        mut mux: Tca9548<BusProxy<I2C>>,
+        manager: &'static BusManager,
         mut pins: [Option<RfChannelPins>; 8],
     ) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
@@ -129,7 +124,6 @@ impl BoosterChannels {
         BoosterChannels {
             channels: rf_channels,
             mux: mux,
-            adc: core::cell::RefCell::new(adc),
         }
     }
 
@@ -210,8 +204,6 @@ impl BoosterChannels {
     /// # Returns
     /// True if a warning condition is present on the channel.
     pub fn warning_detected(&mut self, channel: Channel) -> Result<bool, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
         // TODO: Determine what other conditions may constitute a warning to the user.
         // Check if any alerts/alarms are present on the channel.
         match &self.channels[channel as usize] {
@@ -299,19 +291,20 @@ impl BoosterChannels {
     ///
     /// # Args
     /// * `channel` - The channel to get the status of.
+    /// * `adc` - The ADC to use for measuring channel power measurements.
     ///
     /// Returns
     /// A structure indicating all measurements on the channel.
     pub fn get_status(
         &mut self,
         channel: Channel,
+        mut adc: hal::adc::Adc<hal::stm32::ADC3>,
     ) -> Result<ChannelStatus, Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
             Some(rf_channel) => {
-                let power_measurements = rf_channel.get_power_measurements();
-                let mut adc = self.adc.borrow_mut();
+                let power_measurements = rf_channel.get_supply_measurements();
 
                 let status = ChannelStatus {
                     input_overdrive: rf_channel.pins.input_overdrive.is_high().unwrap(),

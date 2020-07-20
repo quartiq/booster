@@ -22,6 +22,7 @@ use hal::{
 
 mod booster_channels;
 mod error;
+mod linear_transformation;
 mod rf_channel;
 use error::Error;
 use booster_channels::{BoosterChannels, Channel};
