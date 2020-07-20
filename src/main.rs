@@ -10,7 +10,6 @@
 #[macro_use]
 extern crate log;
 
-use cortex_m::{asm, peripheral::SCB};
 use enum_iterator::IntoEnumIterator;
 use panic_halt as _;
 use rtic::cyccnt::{Duration, Instant};
@@ -26,7 +25,7 @@ mod user_interface;
 use booster_channels::{BoosterChannels, Channel};
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
-use user_interface::{ButtonEvent, UserButtons};
+use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 type I2C = hal::i2c::I2c<
@@ -95,6 +94,7 @@ const APP: () = {
         telemetry_timer: hal::timer::Timer<hal::stm32::TIM3>,
         channels: BoosterChannels,
         buttons: UserButtons,
+        leds: UserLeds,
     }
 
     #[init]
@@ -204,6 +204,31 @@ const APP: () = {
             UserButtons::new(button1, button2)
         };
 
+        let leds = {
+            let spi = {
+                let sck = gpiob.pb13.into_alternate_af5();
+                let mosi = gpiob.pb15.into_alternate_af5();
+
+                let mode = hal::spi::Mode {
+                    polarity: hal::spi::Polarity::IdleLow,
+                    phase: hal::spi::Phase::CaptureOnSecondTransition,
+                };
+
+                hal::spi::Spi::spi2(
+                    c.device.SPI2,
+                    (sck, hal::spi::NoMiso, mosi),
+                    mode,
+                    10.mhz().into(),
+                    clocks,
+                )
+            };
+
+            let csn = gpiob.pb12.into_push_pull_output();
+            let oen = gpiob.pb8.into_push_pull_output();
+
+            UserLeds::new(spi, csn, oen)
+        };
+
         info!("Startup complete");
 
         // Configure a timer to periodically monitor the output channels.
@@ -224,37 +249,51 @@ const APP: () = {
             monitor_timer: monitor_timer,
             telemetry_timer: telemetry_timer,
             buttons: buttons,
+            leds: leds,
             channels: channels,
         }
     }
 
-    #[task(binds=TIM2, priority=2, resources=[monitor_timer, channels])]
+    #[task(binds=TIM2, priority=2, resources=[monitor_timer, channels, leds])]
     fn channel_monitor(c: channel_monitor::Context) {
         c.resources.monitor_timer.clear_interrupt(Event::TimeOut);
 
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
-            let _error_detected = match c.resources.channels.error_detected(channel) {
+            let error_detected = match c.resources.channels.error_detected(channel) {
                 Err(Error::NotPresent) => {
-                    // TODO: Clear all LEDs for this channel.
+                    // Clear all LEDs for this channel.
+                    c.resources.leds.set_led(Color::Red, channel, false);
+                    c.resources.leds.set_led(Color::Yellow, channel, false);
+                    c.resources.leds.set_led(Color::Green, channel, false);
                     continue;
                 }
                 Ok(detected) => detected,
                 Err(error) => panic!("Encountered error: {:?}", error),
             };
 
-            let _warning_detected = match c.resources.channels.warning_detected(channel) {
+            let warning_detected = match c.resources.channels.warning_detected(channel) {
                 Ok(detected) => detected,
                 Err(error) => panic!("Encountered error: {:?}", error),
             };
 
-            let _enabled = match c.resources.channels.is_enabled(channel) {
+            let enabled = match c.resources.channels.is_enabled(channel) {
                 Ok(detected) => detected,
                 Err(error) => panic!("Encountered error: {:?}", error),
             };
 
-            // TODO: Echo the measured values to the LEDs on the user interface for this channel.
+            // Echo the measured values to the LEDs on the user interface for this channel.
+            c.resources
+                .leds
+                .set_led(Color::Red, channel, error_detected);
+            c.resources
+                .leds
+                .set_led(Color::Yellow, channel, warning_detected);
+            c.resources.leds.set_led(Color::Green, channel, enabled);
         }
+
+        // Propagate the updated LED values to the user interface.
+        c.resources.leds.update();
     }
 
     #[task(binds=TIM3, priority=1, resources=[telemetry_timer, channels])]
@@ -316,10 +355,9 @@ const APP: () = {
             // Check if the user is requested a reset of the device.
             c.resources.buttons.lock(|buttons| {
                 if buttons.check_reset(Instant::now()) {
-                    SCB::sys_reset();
+                    cortex_m::peripheral::SCB::sys_reset();
                 }
             });
-            asm::nop();
         }
     }
 

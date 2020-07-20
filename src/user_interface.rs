@@ -5,8 +5,12 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
-use super::hal;
-use embedded_hal::digital::v2::InputPin;
+use super::{hal, Channel};
+use bit_field::BitField;
+use embedded_hal::{
+    blocking::spi::Write,
+    digital::v2::{InputPin, OutputPin},
+};
 
 use super::{Duration, Instant};
 
@@ -141,5 +145,70 @@ where
             // Check if the button is being held for greater than the long-press duration.
             instant - start > Duration::from_cycles((168_000_000.0 * 2.0) as u32)
         })
+    }
+}
+
+pub enum Color {
+    Red,
+    Yellow,
+    Green,
+}
+
+type LedSpi = hal::spi::Spi<
+    hal::stm32::SPI2,
+    (
+        hal::gpio::gpiob::PB13<hal::gpio::Alternate<hal::gpio::AF5>>,
+        hal::spi::NoMiso,
+        hal::gpio::gpiob::PB15<hal::gpio::Alternate<hal::gpio::AF5>>,
+    ),
+>;
+
+pub struct UserLeds {
+    red: u8,
+    yellow: u8,
+    green: u8,
+    spi: LedSpi,
+    spi_csn: hal::gpio::gpiob::PB12<hal::gpio::Output<hal::gpio::PushPull>>,
+    spi_oen: hal::gpio::gpiob::PB8<hal::gpio::Output<hal::gpio::PushPull>>,
+}
+
+impl UserLeds {
+    pub fn new(
+        spi: LedSpi,
+        csn: hal::gpio::gpiob::PB12<hal::gpio::Output<hal::gpio::PushPull>>,
+        oen: hal::gpio::gpiob::PB8<hal::gpio::Output<hal::gpio::PushPull>>,
+    ) -> Self {
+        let mut leds = UserLeds {
+            red: 0u8,
+            yellow: 0u8,
+            green: 0u8,
+            spi: spi,
+            spi_oen: oen,
+            spi_csn: csn,
+        };
+
+        leds.update();
+
+        leds
+    }
+
+    pub fn update(&mut self) {
+        self.spi_oen.set_low().unwrap();
+
+        self.spi_csn.set_low().unwrap();
+        self.spi
+            .write(&[self.green, self.yellow, self.red])
+            .unwrap();
+        self.spi_csn.set_high().unwrap();
+
+        self.spi_oen.set_high().unwrap();
+    }
+
+    pub fn set_led(&mut self, color: Color, channel: Channel, enabled: bool) {
+        match color {
+            Color::Green => self.green.set_bit(channel as usize, enabled),
+            Color::Yellow => self.yellow.set_bit(channel as usize, enabled),
+            Color::Red => self.red.set_bit(channel as usize, enabled),
+        };
     }
 }
