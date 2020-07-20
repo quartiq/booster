@@ -268,7 +268,7 @@ impl RfChannel {
     ///
     /// # Returns
     /// An option containing an RfChannel if a channel was discovered on the bus. None otherwise.
-    pub fn new(manager: SharedBus<I2C>, control_pins: ChannelPins) -> Option<Self> {
+    pub fn new(manager: &SharedBus<I2C>, control_pins: ChannelPins) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
         match Devices::new(manager) {
             Some(devices) => {
