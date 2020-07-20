@@ -12,7 +12,6 @@ extern crate log;
 
 use enum_iterator::IntoEnumIterator;
 use panic_halt as _;
-use rtic::cyccnt::{Duration, Instant};
 use stm32f4xx_hal as hal;
 
 use hal::{gpio::ExtiPin, prelude::*, timer::Event};
@@ -22,6 +21,8 @@ mod error;
 mod linear_transformation;
 mod rf_channel;
 mod user_interface;
+mod monotonic;
+use monotonic::{Instant, Duration};
 use booster_channels::{BoosterChannels, Channel};
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
@@ -87,7 +88,7 @@ macro_rules! channel_pins {
     }};
 }
 
-#[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true)]
+#[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true, monotonic = monotonic::Tim5)]
 const APP: () = {
     struct Resources {
         monitor_timer: hal::timer::Timer<hal::stm32::TIM2>,
@@ -110,6 +111,7 @@ const APP: () = {
             .use_hse(8.mhz())
             .sysclk(168.mhz())
             .hclk(168.mhz())
+            .pclk1(42.mhz())
             .require_pll48clk()
             .freeze();
 
@@ -211,7 +213,7 @@ const APP: () = {
 
                 let mode = hal::spi::Mode {
                     polarity: hal::spi::Polarity::IdleLow,
-                    phase: hal::spi::Phase::CaptureOnSecondTransition,
+                    phase: hal::spi::Phase::CaptureOnFirstTransition,
                 };
 
                 hal::spi::Spi::spi2(
@@ -229,6 +231,8 @@ const APP: () = {
             UserLeds::new(spi, csn, oen)
         };
 
+        monotonic::Tim5::new(c.device.TIM5, clocks);
+
         info!("Startup complete");
 
         // Configure a timer to periodically monitor the output channels.
@@ -241,7 +245,8 @@ const APP: () = {
 
         // Enable the cycle counter.
         // TODO: Replace the cycle counter monotonic with something that rolls over less. This may
-        // cause errors with button press detections.
+        // cause errors with button press detections because the cycle counter will roll over every
+        // ~22s.
         let mut cp = cortex_m::Peripherals::take().unwrap();
         cp.DWT.enable_cycle_counter();
 
