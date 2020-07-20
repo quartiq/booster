@@ -10,7 +10,7 @@
 #[macro_use]
 extern crate log;
 
-use cortex_m::asm;
+use cortex_m::{asm, peripheral::SCB};
 use enum_iterator::IntoEnumIterator;
 use panic_halt as _;
 use rtic::cyccnt::{Duration, Instant};
@@ -310,9 +310,15 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[channels])]
-    fn idle(_: idle::Context) -> ! {
+    #[idle(resources=[buttons, channels])]
+    fn idle(mut c: idle::Context) -> ! {
         loop {
+            // Check if the user is requested a reset of the device.
+            c.resources.buttons.lock(|buttons| {
+                if buttons.check_reset(Instant::now()) {
+                    SCB::sys_reset();
+                }
+            });
             asm::nop();
         }
     }
