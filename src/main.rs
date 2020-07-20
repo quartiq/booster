@@ -13,17 +13,20 @@ extern crate log;
 use cortex_m::asm;
 use enum_iterator::IntoEnumIterator;
 use panic_halt as _;
+use rtic::cyccnt::{Duration, Instant};
 use stm32f4xx_hal as hal;
 
-use hal::{prelude::*, timer::Event};
+use hal::{gpio::ExtiPin, prelude::*, timer::Event};
 
 mod booster_channels;
 mod error;
 mod linear_transformation;
 mod rf_channel;
+mod user_interface;
 use booster_channels::{BoosterChannels, Channel};
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
+use user_interface::{ButtonEvent, UserButtons};
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 type I2C = hal::i2c::I2c<
@@ -91,10 +94,11 @@ const APP: () = {
         monitor_timer: hal::timer::Timer<hal::stm32::TIM2>,
         telemetry_timer: hal::timer::Timer<hal::stm32::TIM3>,
         channels: BoosterChannels,
+        buttons: UserButtons,
     }
 
     #[init]
-    fn init(c: init::Context) -> init::LateResources {
+    fn init(mut c: init::Context) -> init::LateResources {
         let cp = cortex_m::peripheral::Peripherals::take().unwrap();
 
         // Initialize the chip
@@ -183,6 +187,23 @@ const APP: () = {
             BoosterChannels::new(mux, adc, i2c_bus_manager, channel_pins)
         };
 
+        let buttons = {
+            let mut button1 = gpiof.pf14.into_floating_input();
+
+            button1.make_interrupt_source(&mut c.device.SYSCFG);
+            button1.trigger_on_edge(&mut c.device.EXTI, hal::gpio::Edge::RISING_FALLING);
+            button1.clear_interrupt_pending_bit();
+            button1.enable_interrupt(&mut c.device.EXTI);
+
+            let mut button2 = gpiof.pf15.into_floating_input();
+            button2.make_interrupt_source(&mut c.device.SYSCFG);
+            button2.trigger_on_edge(&mut c.device.EXTI, hal::gpio::Edge::RISING_FALLING);
+            button2.clear_interrupt_pending_bit();
+            button2.enable_interrupt(&mut c.device.EXTI);
+
+            UserButtons::new(button1, button2)
+        };
+
         info!("Startup complete");
 
         // Configure a timer to periodically monitor the output channels.
@@ -193,9 +214,16 @@ const APP: () = {
         let mut telemetry_timer = hal::timer::Timer::tim3(c.device.TIM3, 2.hz(), clocks);
         telemetry_timer.listen(Event::TimeOut);
 
+        // Enable the cycle counter.
+        // TODO: Replace the cycle counter monotonic with something that rolls over less. This may
+        // cause errors with button press detections.
+        let mut cp = cortex_m::Peripherals::take().unwrap();
+        cp.DWT.enable_cycle_counter();
+
         init::LateResources {
             monitor_timer: monitor_timer,
             telemetry_timer: telemetry_timer,
+            buttons: buttons,
             channels: channels,
         }
     }
@@ -245,10 +273,54 @@ const APP: () = {
         }
     }
 
+    #[task(resources=[channels])]
+    fn enable_channels(_c: enable_channels::Context) {
+        for _chan in Channel::into_enum_iter() {
+            //TODO: Enable all channels
+            //match channels.disable_channel(chan) {
+            //    Ok(_) | Err(Error::NotPresent) => {}
+            //    Err(e) => panic!("Enable failed on {:?}: {:?}", chan, e),
+            //}
+        }
+    }
+
+    #[task(resources=[channels])]
+    fn disable_channels(mut c: disable_channels::Context) {
+        for chan in Channel::into_enum_iter() {
+            c.resources
+                .channels
+                .lock(|channels| match channels.disable_channel(chan) {
+                    Ok(_) | Err(Error::NotPresent) => {}
+                    Err(e) => panic!("Disable failed on {:?}: {:?}", chan, e),
+                })
+        }
+    }
+
+    #[task(binds=EXTI4, spawn=[disable_channels, enable_channels], resources=[buttons])]
+    fn button(c: button::Context) {
+        if let Some(event) = c.resources.buttons.event(Instant::now()) {
+            match event {
+                ButtonEvent::EnableAllChannels => {
+                    c.spawn.enable_channels().unwrap();
+                }
+                ButtonEvent::DisableChannels => {
+                    c.spawn.disable_channels().unwrap();
+                }
+            }
+        }
+    }
+
     #[idle(resources=[channels])]
     fn idle(_: idle::Context) -> ! {
         loop {
             asm::nop();
         }
+    }
+
+    extern "C" {
+        fn EXTI0();
+        fn EXTI1();
+        fn EXTI2();
+        fn EXTI3();
     }
 };
