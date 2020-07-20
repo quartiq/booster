@@ -190,7 +190,7 @@ const APP: () = {
         monitor_timer.listen(Event::TimeOut);
 
         // Configure a timer to periodically gather telemetry.
-        let mut telemetry_timer = hal::timer::Timer::tim3(c.device.TIM3, 50.hz(), clocks);
+        let mut telemetry_timer = hal::timer::Timer::tim3(c.device.TIM3, 2.hz(), clocks);
         telemetry_timer.listen(Event::TimeOut);
 
         init::LateResources {

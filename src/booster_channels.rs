@@ -297,7 +297,6 @@ impl BoosterChannels {
     ///
     /// # Args
     /// * `channel` - The channel to get the status of.
-    /// * `adc` - The ADC to use for measuring channel power measurements.
     ///
     /// Returns
     /// A structure indicating all measurements on the channel.
