@@ -12,8 +12,8 @@ use tca9548::{self, Tca9548};
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 
-use shared_bus_rtic::{SharedBus};
 use super::I2C;
+use shared_bus_rtic::SharedBus;
 
 /// A EUI-48 identifier for a given channel.
 pub struct ChannelIdentifier {
@@ -301,10 +301,7 @@ impl BoosterChannels {
     ///
     /// Returns
     /// A structure indicating all measurements on the channel.
-    pub fn get_status(
-        &mut self,
-        channel: Channel,
-    ) -> Result<ChannelStatus, Error> {
+    pub fn get_status(&mut self, channel: Channel) -> Result<ChannelStatus, Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {

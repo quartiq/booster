@@ -11,21 +11,18 @@
 extern crate log;
 
 use cortex_m::asm;
+use enum_iterator::IntoEnumIterator;
 use panic_halt as _;
 use stm32f4xx_hal as hal;
-use enum_iterator::IntoEnumIterator;
 
-use hal::{
-    prelude::*,
-    timer::Event,
-};
+use hal::{prelude::*, timer::Event};
 
 mod booster_channels;
 mod error;
 mod linear_transformation;
 mod rf_channel;
-use error::Error;
 use booster_channels::{BoosterChannels, Channel};
+use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
 
 // Convenience type definition for the I2C bus used for booster RF channels.
@@ -180,7 +177,8 @@ const APP: () = {
                     .unwrap()
             };
 
-            let adc = hal::adc::Adc::adc3(c.device.ADC3, true, hal::adc::config::AdcConfig::default());
+            let adc =
+                hal::adc::Adc::adc3(c.device.ADC3, true, hal::adc::config::AdcConfig::default());
 
             BoosterChannels::new(mux, adc, i2c_bus_manager, channel_pins)
         };
@@ -212,7 +210,7 @@ const APP: () = {
                 Err(Error::NotPresent) => {
                     // TODO: Clear all LEDs for this channel.
                     continue;
-                },
+                }
                 Ok(detected) => detected,
                 Err(error) => panic!("Encountered error: {:?}", error),
             };
@@ -237,9 +235,10 @@ const APP: () = {
 
         // Gather telemetry for all of the channels.
         for channel in Channel::into_enum_iter() {
-            let measurements = c.resources.channels.lock(|booster_channels| {
-                booster_channels.get_status(channel)
-            });
+            let measurements = c
+                .resources
+                .channels
+                .lock(|booster_channels| booster_channels.get_status(channel));
 
             // TODO: Broadcast the measured data over the telemetry interface.
             info!("{:?}", measurements);

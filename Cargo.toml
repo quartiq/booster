@@ -14,7 +14,7 @@ embedded-hal = "0.2.4"
 enum-iterator = "0.6.0"
 cortex-m-log = { version = "0.6.1", features = ["log-integration"] }
 log = "0.4.8"
-shared-bus-rtic = { git = "https://github.com/ryan-summers/shared-bus-rtic" }
+shared-bus-rtic = "0.2.1"
 
 
 [dependencies.stm32f4xx-hal]
