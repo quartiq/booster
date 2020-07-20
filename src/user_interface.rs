@@ -12,7 +12,8 @@ use embedded_hal::{
     digital::v2::{InputPin, OutputPin},
 };
 
-use super::{Duration, Instant};
+use crate::monotonic::U32Ext;
+use super::Instant;
 
 /// Represents an event indicated through the GPIO buttons.
 pub enum ButtonEvent {
@@ -131,7 +132,7 @@ where
     /// Check if the button event is debounced from the start.
     fn debounce(&mut self, instant: Instant) -> bool {
         self.press_start.map_or(true, |start| {
-            instant - start > Duration::from_cycles((168_000_000.0 * 0.08) as u32)
+            instant - start > 80.millis()
         })
     }
 
@@ -143,7 +144,7 @@ where
 
         self.press_start.map_or(false, |start| {
             // Check if the button is being held for greater than the long-press duration.
-            instant - start > Duration::from_cycles((168_000_000.0 * 2.0) as u32)
+            instant - start > 2.secs()
         })
     }
 }

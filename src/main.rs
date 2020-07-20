@@ -22,7 +22,7 @@ mod linear_transformation;
 mod rf_channel;
 mod user_interface;
 mod monotonic;
-use monotonic::{Instant, Duration};
+use monotonic::Instant;
 use booster_channels::{BoosterChannels, Channel};
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
