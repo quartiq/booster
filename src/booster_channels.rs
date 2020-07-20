@@ -13,7 +13,7 @@ use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 
 use super::I2C;
-use shared_bus_rtic::SharedBus;
+use shared_bus_rtic::{CommonBus, SharedBus};
 
 /// A EUI-48 identifier for a given channel.
 pub struct ChannelIdentifier {
@@ -98,7 +98,7 @@ impl BoosterChannels {
     pub fn new(
         mut mux: Tca9548<SharedBus<I2C>>,
         adc: hal::adc::Adc<hal::stm32::ADC3>,
-        manager: SharedBus<I2C>,
+        manager: &'static CommonBus<I2C>,
         mut pins: [Option<RfChannelPins>; 8],
     ) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
