@@ -119,7 +119,12 @@ where
         }
     }
 
-    pub fn selected_buses(&mut self) -> Result<u8, Error> {
+    /// Get a bit-field of all the selected buses.
+    ///
+    /// # Returns
+    /// A bitfield where the bit index corresponds with the bus index. A 1 in the field indicates
+    /// the bus is selected.
+    pub fn get_selected_buses(&mut self) -> Result<u8, Error> {
         let mut bus: [u8; 1] = [0];
         self.i2c
             .read(self.address, &mut bus)
@@ -128,11 +133,15 @@ where
         Ok(bus[0])
     }
 
+    /// Run a self-test of the device.
+    ///
+    /// # Returns
+    /// True if the self test was successful.
     pub fn self_test(&mut self) -> Result<bool, Error> {
         let mut passed = true;
         for i in 0..8 {
             self.enable(1u8 << i)?;
-            let selected_bus = self.selected_buses()?;
+            let selected_bus = self.get_selected_buses()?;
             if selected_bus != 1u8 << i {
                 passed = false;
             }
