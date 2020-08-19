@@ -22,6 +22,8 @@ use stm32f4xx_hal::{
     prelude::*,
 };
 
+use rtic::cyccnt::{Instant, Duration};
+
 // Convenience type definition for all I2C devices on the bus.
 type I2cDevice = BusProxy<I2C>;
 
@@ -30,6 +32,12 @@ pub struct SupplyMeasurements {
     pub v_p5v0mp: f32,
     pub i_p5v0ch: f32,
     pub i_p28v0ch: f32,
+}
+
+pub enum ChannelState {
+    Disabled,
+    Enabling(Instant),
+    Active,
 }
 
 // Macro magic to generate an enum that looks like:
@@ -263,6 +271,7 @@ pub struct RfChannel {
     input_power_transform: LinearTransformation,
     reflected_power_transform: LinearTransformation,
     output_power_transform: LinearTransformation,
+    state: ChannelState,
 }
 
 impl RfChannel {
@@ -313,6 +322,7 @@ impl RfChannel {
                         1.5 / 0.035,
                         -35.6 + 19.8 + 10.0,
                     ),
+                    state: ChannelState::Disabled,
                 };
 
                 channel.set_interlock_thresholds(0.0, 0.0).unwrap();
@@ -417,7 +427,7 @@ impl RfChannel {
         self.pins.alert.is_low().unwrap()
     }
 
-    /// Enable the channel and power it up.
+    /// Start the enable process for channel and power it up.
     pub fn enable(&mut self) -> Result<(), Error> {
         // TODO: Power-up the channel.
         self.i2c_devices
@@ -425,11 +435,24 @@ impl RfChannel {
             .set_voltage(3.2)
             .expect("Failed to disable RF bias voltage");
         self.pins.enable_power.set_high().unwrap();
+
+        // We have just started the supply sequencer for the RF channel power rail. This may take
+        // some time. We can't set the bias DAC until those supplies have stabilized.
+        self.state  = ChannelState::Enabling(Instant::now());
+
+        Ok(())
+    }
+
+    /// Finalize the enable process once all RF channel supplies have enabled.
+    fn finalize_enable(&mut self) -> Result<(), Error> {
         self.i2c_devices
             .bias_dac
-            .set_voltage(self.bias_voltage)
+            .set_voltage(-1.0 * self.bias_voltage)
             .expect("Failed to configure RF bias voltage");
+
         self.pins.signal_on.set_high().unwrap();
+
+        self.state = ChannelState::Active;
 
         Ok(())
     }
@@ -445,6 +468,8 @@ impl RfChannel {
             .expect("Failed to disable RF bias voltage");
 
         self.pins.enable_power.set_low().unwrap();
+
+        self.state = ChannelState::Disabled;
 
         Ok(())
     }

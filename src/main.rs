@@ -97,7 +97,8 @@ const APP: () = {
 
     #[init]
     fn init(c: init::Context) -> init::LateResources {
-        let cp = cortex_m::peripheral::Peripherals::take().unwrap();
+        let mut cp = cortex_m::peripheral::Peripherals::take().unwrap();
+        cp.DWT.enable_cycle_counter();
 
         // Initialize the chip
         let rcc = c.device.RCC.constrain();
@@ -217,6 +218,8 @@ const APP: () = {
     #[idle(resources=[channels])]
     fn idle(_: idle::Context) -> ! {
         loop {
+            // TODO: Only need to call this periodically (e.g. every 60-200ms or so).
+            c.resources.channels.update();
             asm::nop();
         }
     }

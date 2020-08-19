@@ -331,4 +331,15 @@ impl BoosterChannels {
             None => Err(Error::NotPresent),
         }
     }
+
+    /// Update the states of RF channels as necessary.
+    pub fn update(&mut self) {
+        for channel in Channel::into_enum_iter() {
+            self.mux.select_bus(Some(channel.into())).unwrap();
+
+            if let Some(rf_channel) = &mut self.channels[channel as usize] {
+                rf_channel.process_state().unwrap();
+            }
+        }
+    }
 }
