@@ -118,7 +118,7 @@ where
         let start_page = (address >> 3) as usize;
         let next_page_address = ((start_page + 1) << 3) as usize;
 
-        let mut bytes_in_first_page = address as usize - next_page_address;
+        let mut bytes_in_first_page = next_page_address - address as usize;
         if bytes_in_first_page > data.len() {
             bytes_in_first_page = data.len();
         }
@@ -158,11 +158,7 @@ where
     ///
     /// # Args
     /// * `data` - An array of 6 bytes to store the EUI-48 into.
-    pub fn read_eui48(&mut self, data: &mut [u8]) -> Result<(), Error> {
-        if data.len() != 6 {
-            return Err(Error::Size);
-        }
-
+    pub fn read_eui48(&mut self, data: &mut [u8; 6]) -> Result<(), Error> {
         self.read(0xFA, data)?;
 
         Ok(())
