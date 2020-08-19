@@ -1,4 +1,4 @@
-//! Booster NGFW Application
+//! Booster NGFW Applicatio
 //!
 //! # Copyright
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
@@ -21,6 +21,8 @@ mod booster_channels;
 mod error;
 mod linear_transformation;
 mod rf_channel;
+mod chassis_fans;
+use chassis_fans::ChassisFans;
 use booster_channels::BoosterChannels;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
 
@@ -174,14 +176,39 @@ const APP: () = {
                 ]
             };
 
-            let mux = {
+            let mut mux = {
                 let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
                 tca9548::Tca9548::default(i2c_bus_manager.acquire(), &mut i2c_mux_reset, &mut delay)
                     .unwrap()
             };
 
+            // Test scanning and reading back MUX channels.
+            assert!(mux.self_test().unwrap() == true);
+
             BoosterChannels::new(mux, &i2c_bus_manager, channel_pins, &mut delay)
         };
+
+        let i2c2 = {
+            let scl = gpiob.pb10.into_alternate_af4_open_drain();
+            let sda = gpiob.pb11.into_alternate_af4_open_drain();
+            hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
+        };
+
+        // Selftest: Read the EUI48 identifier.
+        let mut eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
+        let mut eui48: [u8; 6] = [0; 6];
+        eui.read_eui48(&mut eui48).unwrap();
+
+        let fan1 =
+            max6639::Max6639::new(i2c_bus_manager.acquire(), max6639::AddressPin::Pulldown)
+                .unwrap();
+        let fan2 =
+            max6639::Max6639::new(i2c_bus_manager.acquire(), max6639::AddressPin::Float).unwrap();
+        let fan3 =
+            max6639::Max6639::new(i2c_bus_manager.acquire(), max6639::AddressPin::Pullup).unwrap();
+
+        let mut fans = ChassisFans::new([fan1, fan2, fan3]);
+        assert!(fans.self_test(&mut delay));
 
         info!("Startup complete");
 
