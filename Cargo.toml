@@ -18,7 +18,7 @@ shared-bus-rtic = "0.1.2"
 
 
 [dependencies.stm32f4xx-hal]
-version = "0.8.3"
+git = "https://github.com/quartiq/stm32f4xx-hal"
 features = ["stm32f407", "rt"]
 
 [dependencies.ad5627]
