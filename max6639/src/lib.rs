@@ -32,6 +32,7 @@ pub enum AddressPin {
 
 #[doc(hidden)]
 #[allow(dead_code)]
+#[derive(Copy, Clone, Debug)]
 /// Represents various registers that can be read or written on the controller.
 enum Register {
     Status = 0x02,
@@ -45,6 +46,9 @@ enum Register {
     Fan2Config2b = 0x16,
     Fan2Config3 = 0x17,
 
+    Fan1TachCount = 0x20,
+    Fan2TachCount = 0x21,
+
     // Note: The duty cycle register can be written to the target duty cycle, but will read out the
     // current duty cycle.
     Fan1DutyCycle = 0x26,
@@ -56,6 +60,7 @@ enum Register {
 }
 
 /// An error that the fan controller driver may encounter.
+#[derive(Copy, Clone, Debug)]
 pub enum Error {
     Interface,
     FanFail,
@@ -63,6 +68,7 @@ pub enum Error {
 }
 
 /// An indication of which fan to operate on.
+#[derive(Copy, Clone, Debug)]
 pub enum Fan {
     Fan1,
     Fan2,
@@ -89,8 +95,8 @@ where
         // Configure both fans for PWM control mode with the fan off.
         device.write(Register::Fan1DutyCycle, 0)?;
         device.write(Register::Fan2DutyCycle, 0)?;
-        device.write(Register::Fan1Config1, 1 << 7)?;
-        device.write(Register::Fan2Config1, 1 << 7)?;
+        device.write(Register::Fan1Config1, 1 << 7 | 0b10)?;
+        device.write(Register::Fan2Config1, 1 << 7 | 0b10)?;
 
         Ok(device)
     }
@@ -164,6 +170,24 @@ where
         match fan {
             Fan::Fan1 => Ok(status_register.get_bit(1)),
             Fan::Fan2 => Ok(status_register.get_bit(0)),
+        }
+    }
+
+    pub fn current_rpms(&mut self, fan: Fan) -> Result<u16, Error> {
+        let tach_reg = match fan {
+            Fan::Fan1 => Register::Fan1TachCount,
+            Fan::Fan2 => Register::Fan2TachCount,
+        };
+
+        let tach_count = self.read(tach_reg)?;
+
+        // If the tachometer registers 0xFF, we can't measure the RPMs. Assume the fan is stopped.
+        if tach_count == 0xFF {
+            Ok(0)
+        } else {
+            // The tachometer clock is configured for 4KHz. The RPMs are calculated as follows:
+            // RPM = (Tach_Clk * 60) / tach_count
+            Ok(((60 * 4000) as f32 / tach_count as f32) as u16)
         }
     }
 }

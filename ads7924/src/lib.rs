@@ -238,7 +238,7 @@ where
     /// # Returns
     /// A bit mask of which channel caused the alarm. The position of the bit corresponds with the
     /// channel number.
-    pub fn clear_alarm(&mut self) -> Result<u8, Error> {
+    pub fn check_alarm(&mut self) -> Result<u8, Error> {
         // Clearing the alarm is completed by reading the interrupt control register.
         let mut alarm_status: [u8; 1] = [0];
         self.read(Register::IntCntrl, &mut alarm_status)?;

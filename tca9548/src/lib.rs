@@ -12,17 +12,22 @@
 #![deny(warnings)]
 
 use embedded_hal::{
-    blocking::{delay::DelayUs, i2c::Write},
+    blocking::{delay::DelayUs, i2c::{Write, Read}},
     digital::v2::OutputPin,
 };
 
 /// The driver for the TCA9548 I2C bus multiplexer.
 pub struct Tca9548<I2C>
 where
-    I2C: Write,
+    I2C: Write + Read,
 {
     i2c: I2C,
     address: u8,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Error {
+    Interface,
 }
 
 /// Represents a bus connection on the I2C fanout.
@@ -39,7 +44,7 @@ pub enum Bus {
 
 impl<I2C> Tca9548<I2C>
 where
-    I2C: Write,
+    I2C: Write + Read,
 {
     /// Construct a new I2C bus mux.
     ///
@@ -53,7 +58,7 @@ where
         address: u8,
         reset: &mut RST,
         delay: &mut DELAY,
-    ) -> Result<Self, I2C::Error>
+    ) -> Result<Self, Error>
     where
         RST: OutputPin,
         DELAY: DelayUs<u8>,
@@ -82,7 +87,7 @@ where
         i2c: I2C,
         reset: &mut RST,
         delay: &mut DELAY,
-    ) -> Result<Self, I2C::Error>
+    ) -> Result<Self, Error>
     where
         RST: OutputPin,
         DELAY: DelayUs<u8>,
@@ -95,8 +100,8 @@ where
     ///
     /// # Args
     /// * `bus` - A bitmap indicating which buses to connect.
-    pub fn enable(&mut self, bus: u8) -> Result<(), I2C::Error> {
-        self.i2c.write(self.address, &[bus])?;
+    pub fn enable(&mut self, bus: u8) -> Result<(), Error> {
+        self.i2c.write(self.address, &[bus]).map_err(|_| Error::Interface)?;
 
         Ok(())
     }
@@ -105,11 +110,33 @@ where
     ///
     /// # Args
     /// * `bus` - An optional bus to connect. If None, all buses will be disconnected.
-    pub fn select_bus(&mut self, bus: Option<Bus>) -> Result<(), I2C::Error> {
+    pub fn select_bus(&mut self, bus: Option<Bus>) -> Result<(), Error> {
         if let Some(bus) = bus {
             self.enable(bus as u8)
         } else {
             self.enable(0u8)
         }
+    }
+
+
+    pub fn selected_buses(&mut self) -> Result<u8, Error> {
+        let mut bus: [u8; 1] = [0];
+        self.i2c.read(self.address, &mut bus).map_err(|_| Error::Interface)?;
+
+        Ok(bus[0])
+    }
+
+    pub fn self_test(&mut self) -> Result<bool, Error> {
+
+        let mut passed = true;
+        for i in 0..8 {
+            self.enable(1u8 << i)?;
+            let selected_bus = self.selected_buses()?;
+            if selected_bus != 1u8 << i {
+                passed = false;
+            }
+        }
+
+        Ok(passed)
     }
 }
