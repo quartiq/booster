@@ -407,6 +407,22 @@ impl RfChannel {
         Ok(())
     }
 
+    /// Update the current state of the RF channel.
+    ///
+    /// # Note
+    /// This must be called periodically to facilitate enabling a channel.
+    pub fn process_state(&mut self) -> Result<(), Error> {
+        if let ChannelState::Enabling(start_time) = self.state {
+            // TODO: Replace constant definition of CPU frequency here.
+            if start_time.elapsed() > Duration::from_cycles(200 * (168_000_000 / 1000)) {
+                self.finalize_enable()?;
+            }
+        }
+
+        Ok(())
+    }
+
+
     /// Check if the channel is indicating an interlock has tripped.
     pub fn is_overdriven(&self) -> bool {
         let input_overdrive = self.pins.input_overdrive.is_low().unwrap();
