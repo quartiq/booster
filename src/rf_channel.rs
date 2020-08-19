@@ -22,7 +22,7 @@ use stm32f4xx_hal::{
     prelude::*,
 };
 
-use rtic::cyccnt::{Instant, Duration};
+use rtic::cyccnt::{Duration, Instant};
 
 // Convenience type definition for all I2C devices on the bus.
 type I2cDevice = BusProxy<I2C>;
@@ -422,7 +422,6 @@ impl RfChannel {
         Ok(())
     }
 
-
     /// Check if the channel is indicating an interlock has tripped.
     pub fn is_overdriven(&self) -> bool {
         let input_overdrive = self.pins.input_overdrive.is_low().unwrap();
@@ -460,7 +459,7 @@ impl RfChannel {
 
         // We have just started the supply sequencer for the RF channel power rail. This may take
         // some time. We can't set the bias DAC until those supplies have stabilized.
-        self.state  = ChannelState::Enabling(Instant::now());
+        self.state = ChannelState::Enabling(Instant::now());
 
         Ok(())
     }
