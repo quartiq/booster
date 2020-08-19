@@ -95,6 +95,8 @@ where
         // Configure both fans for PWM control mode with the fan off.
         device.write(Register::Fan1DutyCycle, 0)?;
         device.write(Register::Fan2DutyCycle, 0)?;
+
+        // Run the tachometer clocks at 4KHz and select PWM control mode.
         device.write(Register::Fan1Config1, 1 << 7 | 0b10)?;
         device.write(Register::Fan2Config1, 1 << 7 | 0b10)?;
 
@@ -173,6 +175,13 @@ where
         }
     }
 
+    /// Get the current RPMs of the fan.
+    ///
+    /// # Args
+    /// * `fan` - The fan to get the RPM count of.
+    ///
+    /// # Returns
+    /// The current fan speed in RPMs (revolutions per minute).
     pub fn current_rpms(&mut self, fan: Fan) -> Result<u16, Error> {
         let tach_reg = match fan {
             Fan::Fan1 => Register::Fan1TachCount,

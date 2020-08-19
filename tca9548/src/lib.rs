@@ -12,7 +12,10 @@
 #![deny(warnings)]
 
 use embedded_hal::{
-    blocking::{delay::DelayUs, i2c::{Write, Read}},
+    blocking::{
+        delay::DelayUs,
+        i2c::{Read, Write},
+    },
     digital::v2::OutputPin,
 };
 
@@ -83,11 +86,7 @@ where
     /// * `i2c` - The I2C bus to use for communication with the MUX.
     /// * `reset` - A pin connected to the RST input of the device.
     /// * `delay` - A means of delaying for a specific amount of time.
-    pub fn default<RST, DELAY>(
-        i2c: I2C,
-        reset: &mut RST,
-        delay: &mut DELAY,
-    ) -> Result<Self, Error>
+    pub fn default<RST, DELAY>(i2c: I2C, reset: &mut RST, delay: &mut DELAY) -> Result<Self, Error>
     where
         RST: OutputPin,
         DELAY: DelayUs<u8>,
@@ -101,7 +100,9 @@ where
     /// # Args
     /// * `bus` - A bitmap indicating which buses to connect.
     pub fn enable(&mut self, bus: u8) -> Result<(), Error> {
-        self.i2c.write(self.address, &[bus]).map_err(|_| Error::Interface)?;
+        self.i2c
+            .write(self.address, &[bus])
+            .map_err(|_| Error::Interface)?;
 
         Ok(())
     }
@@ -118,16 +119,16 @@ where
         }
     }
 
-
     pub fn selected_buses(&mut self) -> Result<u8, Error> {
         let mut bus: [u8; 1] = [0];
-        self.i2c.read(self.address, &mut bus).map_err(|_| Error::Interface)?;
+        self.i2c
+            .read(self.address, &mut bus)
+            .map_err(|_| Error::Interface)?;
 
         Ok(bus[0])
     }
 
     pub fn self_test(&mut self) -> Result<bool, Error> {
-
         let mut passed = true;
         for i in 0..8 {
             self.enable(1u8 << i)?;

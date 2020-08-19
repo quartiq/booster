@@ -18,12 +18,12 @@ use stm32f4xx_hal as hal;
 use hal::prelude::*;
 
 mod booster_channels;
+mod chassis_fans;
 mod error;
 mod linear_transformation;
 mod rf_channel;
-mod chassis_fans;
-use chassis_fans::ChassisFans;
 use booster_channels::BoosterChannels;
+use chassis_fans::ChassisFans;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
 
 // Convenience type definition for the I2C bus used for booster RF channels.
@@ -199,9 +199,8 @@ const APP: () = {
         let mut eui48: [u8; 6] = [0; 6];
         eui.read_eui48(&mut eui48).unwrap();
 
-        let fan1 =
-            max6639::Max6639::new(i2c_bus_manager.acquire(), max6639::AddressPin::Pulldown)
-                .unwrap();
+        let fan1 = max6639::Max6639::new(i2c_bus_manager.acquire(), max6639::AddressPin::Pulldown)
+            .unwrap();
         let fan2 =
             max6639::Max6639::new(i2c_bus_manager.acquire(), max6639::AddressPin::Float).unwrap();
         let fan3 =
