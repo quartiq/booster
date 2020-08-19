@@ -147,6 +147,8 @@ where
             }
         }
 
+        self.enable(0u8)?;
+
         Ok(passed)
     }
 }

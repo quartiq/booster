@@ -49,7 +49,7 @@ impl ChassisFans {
     /// * `delay` - An object to implement delays during the test.
     ///
     /// # Returns
-    /// True if 5 of the six fans properly spun up to a high-speed RPM, all 6 were below a specific
+    /// True if 5 of the six fans properly spun up to a high-speed RPM, 5 were below a specific
     /// RPM at 10% duty cycle, and all fans had no speed when disabled.
     pub fn self_test(
         &mut self,
@@ -69,39 +69,20 @@ impl ChassisFans {
         self.set_duty_cycles(0.0);
 
         // Check that all dead RPMS are zero.
-        let fans_powered_down =
-            dead_rpms
-                .iter()
-                .fold(0, |count, rpms| if *rpms == 0 { count + 1 } else { count });
+        let fans_powered_down = dead_rpms.iter().filter(|rpms| **rpms == 0).count();
 
         // Check all the low RPMs are lower than 3200 RPMs.
-        let fans_spun_low = low_rpms.iter().fold(
-            0,
-            |count, rpms| {
-                if *rpms <= 3200 {
-                    count + 1
-                } else {
-                    count
-                }
-            },
-        );
+        let fans_spun_low = low_rpms
+            .iter()
+            .filter(|rpms| **rpms <= 3200 && **rpms > 0)
+            .count();
 
         // Check all the high RPMs are higher than 4800 RPMs.
-        let fans_spun_high =
-            high_rpms.iter().fold(
-                0,
-                |count, rpms| {
-                    if *rpms >= 4800 {
-                        count + 1
-                    } else {
-                        count
-                    }
-                },
-            );
+        let fans_spun_high = high_rpms.iter().filter(|rpms| **rpms >= 4800).count();
 
-        // If 5 fans (the count mounted on the chassis) spun up to a nominal high speed RPM, 5-6
+        // If 5 fans (the count mounted on the chassis) spun up to a nominal high speed RPM, 5
         // fans were at a nominal low RPM, and 6 fans were not spinning when powered down, fans are
         // operating nominally.
-        (fans_spun_high == 5) && (fans_spun_low >= 6) && (fans_powered_down == 6)
+        (fans_spun_high == 5) && (fans_spun_low == 5) && (fans_powered_down == 6)
     }
 }
