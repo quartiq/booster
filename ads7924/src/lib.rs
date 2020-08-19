@@ -21,6 +21,13 @@ where
     volts_per_lsb: f32,
 }
 
+#[derive(Copy, Clone, PartialEq)]
+#[doc(hidden)]
+enum OperationMode {
+    Active = 0b100000,
+    AutoscanWithSleep = 0b111011,
+}
+
 #[doc(hidden)]
 #[allow(dead_code)]
 enum Register {
@@ -88,9 +95,8 @@ where
         let interrupt_config = *0u8.set_bits(5..8, 0b1);
         ads7924.write(Register::IntConfig, &[interrupt_config])?;
 
-        // Configure the ADC to operate in auto-scan mode.
-        let mode_control = *0u8.set_bits(2..8, 0b110011);
-        ads7924.write(Register::ModeCntrl, &[mode_control])?;
+        // Configure the ADC to operate in auto-scan (with sleep) mode.
+        ads7924.set_mode(OperationMode::AutoscanWithSleep)?;
 
         Ok(ads7924)
     }
@@ -98,16 +104,33 @@ where
     /// Create a default ADC driver.
     ///
     /// # Note
-    /// A default driver assumes a 3.3V power supply and the A0 pin pulled high.
+    /// A default driver assumes a 3.434V power supply and the A0 pin pulled high.
     ///
     /// # Args
     /// * `i2c` - The I2C interface to use to communicate with the device.
     pub fn default(i2c: I2C) -> Result<Self, Error> {
-        Ads7924::new(i2c, 0x49, 3.3)
+        Ads7924::new(i2c, 0x49, 3.434)
+    }
+
+    fn set_mode(&mut self, mode: OperationMode) -> Result<(), Error> {
+        let mut mode_control: [u8; 1] = [0];
+        self.read(Register::ModeCntrl, &mut mode_control)?;
+
+        // The datasheet indicates that the device should always transition to active when switching
+        // operational modes to ensure internal logic is synchronized.
+        if mode != OperationMode::Active {
+            mode_control[0].set_bits(2..8, OperationMode::Active as u8);
+            self.write(Register::ModeCntrl, &mode_control)?;
+        }
+
+        mode_control[0].set_bits(2..8, mode as u8);
+        self.write(Register::ModeCntrl, &mode_control)?;
+
+        Ok(())
     }
 
     fn reset(&mut self) -> Result<(), Error> {
-        self.write(Register::Reset, &[0xAA])?;
+        //self.write(Register::Reset, &[0xAA])?;
         Ok(())
     }
 
