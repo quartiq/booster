@@ -69,16 +69,16 @@ impl ChassisFans {
         self.set_duty_cycles(0.0);
 
         // Check that all dead RPMS are zero.
-        let fans_powered_down = dead_rpms.iter().filter(|rpms| **rpms == 0).count();
+        let fans_powered_down = dead_rpms.iter().filter(|&rpms| *rpms == 0).count();
 
         // Check all the low RPMs are lower than 3200 RPMs.
         let fans_spun_low = low_rpms
             .iter()
-            .filter(|rpms| **rpms <= 3200 && **rpms > 0)
+            .filter(|&rpms| *rpms <= 3200 && *rpms > 0)
             .count();
 
         // Check all the high RPMs are higher than 4800 RPMs.
-        let fans_spun_high = high_rpms.iter().filter(|rpms| **rpms >= 4800).count();
+        let fans_spun_high = high_rpms.iter().filter(|&rpms| *rpms >= 4800).count();
 
         // If 5 fans (the count mounted on the chassis) spun up to a nominal high speed RPM, 5
         // fans were at a nominal low RPM, and 6 fans were not spinning when powered down, fans are
