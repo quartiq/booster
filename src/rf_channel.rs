@@ -159,6 +159,14 @@ impl Devices {
             .get_voltage(ads7924::Channel::Three)
             .expect("Power monitor did not respond");
 
+        // Configure alarm thresholds for the P5V0_MP signal.
+        ads7924
+            .set_thresholds(ads7924::Channel::Three, 0.0, 5.5 / 2.5)
+            .expect("Power monitor failed to set thresholds");
+
+        // Verify that there is no active alarm condition.
+        assert!(ads7924.clear_alarm().expect("Failed to clear alarm") == 0);
+
         if let Ok(ad5627) = Ad5627::default(manager.acquire()) {
             if let Ok(eui48) = Microchip24AA02E48::new(manager.acquire()) {
                 // Query devices on the RF module to verify they are present.
