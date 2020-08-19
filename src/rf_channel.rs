@@ -139,7 +139,7 @@ impl Devices {
     /// # Args
     /// * `manager` - The I2C bus manager used interfacing with devices on the I2C bus.
     /// * `control_pins` - The pins used for interacting with the RF channel.
-    /// * `delay` - A means of delayin during initialization.
+    /// * `delay` - A means of delaying during initialization.
     ///
     /// # Returns
     /// An option containing the devices if they were discovered on the bus. If any device did not
