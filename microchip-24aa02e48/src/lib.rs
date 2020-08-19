@@ -39,7 +39,6 @@ pub enum Error {
     Interface,
     PageFault,
     Bounds,
-    Size,
 }
 
 impl<I2C> Microchip24AA02E48<I2C>
@@ -172,13 +171,9 @@ where
     ///
     /// # Args
     /// * `data` - An array of 8 bytes to store the EUI-64 into.
-    pub fn read_eui64(&mut self, data: &mut [u8]) -> Result<(), Error> {
+    pub fn read_eui64(&mut self, data: &mut [u8; 8]) -> Result<(), Error> {
         // To support a 64-bit EUI, the OUI (Organizationally unique identifier) and the 24-bit EI
         // (extension identifier) have 0xFFFE placed between them.
-        if data.len() != 8 {
-            return Err(Error::Size);
-        }
-
         self.read(0xFA, &mut data[..3])?;
         data[3] = 0xFF;
         data[4] = 0xFE;
