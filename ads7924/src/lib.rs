@@ -9,7 +9,10 @@
 
 use bit_field::BitField;
 
-use embedded_hal::blocking::i2c::{Write, WriteRead};
+use embedded_hal::blocking::{
+    delay::DelayUs,
+    i2c::{Write, WriteRead},
+};
 
 /// A driver for the ADS7924 4-channel analog-to-digital converter.
 pub struct Ads7924<I2C>
@@ -82,14 +85,20 @@ where
     /// * `i2c` - The I2C interface to use to communicate with the device.
     /// * `address` - the I2C address of the device.
     /// * `avdd` - The voltage connected to the AVDD terminal.
-    pub fn new(i2c: I2C, address: u8, avdd: f32) -> Result<Self, Error> {
+    /// * `delay` - A means of delaying during initialization.
+    pub fn new(
+        i2c: I2C,
+        address: u8,
+        avdd: f32,
+        delay: &mut impl DelayUs<u8>,
+    ) -> Result<Self, Error> {
         let mut ads7924 = Ads7924 {
             i2c: i2c,
             address: address,
             volts_per_lsb: avdd / 0x1000 as f32,
         };
 
-        ads7924.reset()?;
+        ads7924.reset(delay)?;
 
         // Configure the interrupt pin to operate in alarm mode when thresholds are exceeded once.
         let interrupt_config = *0u8.set_bits(5..8, 0b1);
@@ -108,8 +117,9 @@ where
     ///
     /// # Args
     /// * `i2c` - The I2C interface to use to communicate with the device.
-    pub fn default(i2c: I2C) -> Result<Self, Error> {
-        Ads7924::new(i2c, 0x49, 3.434)
+    /// * `delay` - A means of delaying during initialization.
+    pub fn default(i2c: I2C, delay: &mut impl DelayUs<u8>) -> Result<Self, Error> {
+        Ads7924::new(i2c, 0x49, 3.434, delay)
     }
 
     fn set_mode(&mut self, mode: OperationMode) -> Result<(), Error> {
@@ -129,8 +139,11 @@ where
         Ok(())
     }
 
-    fn reset(&mut self) -> Result<(), Error> {
-        //self.write(Register::Reset, &[0xAA])?;
+    fn reset(&mut self, delay: &mut impl DelayUs<u8>) -> Result<(), Error> {
+        self.write(Register::Reset, &[0xAA])?;
+        // The datasheet does not specify any required delay, but experimentally 100uS has been
+        // chosen and observed to behave nominally.
+        delay.delay_us(100u8);
         Ok(())
     }
 
