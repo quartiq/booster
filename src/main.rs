@@ -119,6 +119,9 @@ const APP: () = {
         let gpiof = c.device.GPIOF.split();
         let gpiog = c.device.GPIOG.split();
 
+        let mut pa_ch_reset_n = gpiob.pb9.into_push_pull_output();
+        pa_ch_reset_n.set_high().unwrap();
+
         let i2c_bus_manager = {
             let i2c = {
                 let scl = gpiob.pb6.into_alternate_af4_open_drain();
@@ -177,7 +180,7 @@ const APP: () = {
                     .unwrap()
             };
 
-            BoosterChannels::new(mux, &i2c_bus_manager, channel_pins)
+            BoosterChannels::new(mux, &i2c_bus_manager, channel_pins, &mut delay)
         };
 
         info!("Startup complete");

@@ -14,6 +14,7 @@ use microchip_24aa02e48::Microchip24AA02E48;
 
 use super::{BusManager, BusProxy, I2C};
 use crate::error::Error;
+use embedded_hal::blocking::delay::DelayUs;
 use stm32f4xx_hal::{
     self as hal,
     adc::config::SampleTime,
@@ -138,11 +139,12 @@ impl Devices {
     /// # Args
     /// * `manager` - The I2C bus manager used interfacing with devices on the I2C bus.
     /// * `control_pins` - The pins used for interacting with the RF channel.
+    /// * `delay` - A means of delaying during initialization.
     ///
     /// # Returns
     /// An option containing the devices if they were discovered on the bus. If any device did not
     /// properly enumerate, the option will be empty.
-    fn new(manager: &'static BusManager) -> Option<Self> {
+    fn new(manager: &'static BusManager, delay: &mut impl DelayUs<u8>) -> Option<Self> {
         // The ADS7924 and DAC7571 are present on the booster mainboard, so instantiation
         // and communication should never fail.
         let mut dac7571 = Dac7571::default(manager.acquire());
@@ -152,7 +154,7 @@ impl Devices {
 
         // Verify we can communicate with the power monitor.
         let mut ads7924 =
-            Ads7924::default(manager.acquire()).expect("Power monitor did not enumerate");
+            Ads7924::default(manager.acquire(), delay).expect("Power monitor did not enumerate");
         ads7924
             .get_voltage(ads7924::Channel::Three)
             .expect("Power monitor did not respond");
@@ -264,12 +266,17 @@ impl RfChannel {
     /// # Args
     /// * `manager` - The manager that controls the shared I2C bus used for RF module devices.
     /// * `control_pins` - The control and status pins associated with the channel.
+    /// * `delay` - A means of delaying during setup.
     ///
     /// # Returns
     /// An option containing an RfChannel if a channel was discovered on the bus. None otherwise.
-    pub fn new(manager: &'static BusManager, control_pins: ChannelPins) -> Option<Self> {
+    pub fn new(
+        manager: &'static BusManager,
+        control_pins: ChannelPins,
+        delay: &mut impl DelayUs<u8>,
+    ) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
-        match Devices::new(manager) {
+        match Devices::new(manager, delay) {
             Some(devices) => {
                 let mut channel = Self {
                     i2c_devices: devices,

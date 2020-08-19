@@ -11,6 +11,7 @@ use tca9548::{self, Tca9548};
 
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
+use embedded_hal::blocking::delay::DelayUs;
 
 use super::{BusManager, BusProxy, I2C};
 
@@ -88,6 +89,7 @@ impl BoosterChannels {
     /// * `mux` - The I2C mux used for switching between channel communications.
     /// * `manager` - The I2C bus manager used for the shared I2C bus.
     /// * `pins` - An array of all RfChannel control/status pins.
+    /// * `delay` - A means of delaying during setup.
     ///
     /// # Returns
     /// A `BoosterChannels` object that can be used to manage all available RF channels.
@@ -95,6 +97,7 @@ impl BoosterChannels {
         mut mux: Tca9548<BusProxy<I2C>>,
         manager: &'static BusManager,
         mut pins: [Option<RfChannelPins>; 8],
+        delay: &mut impl DelayUs<u8>,
     ) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
             [None, None, None, None, None, None, None, None];
@@ -108,7 +111,7 @@ impl BoosterChannels {
                 .take()
                 .expect("Channel pins not available");
 
-            match RfChannel::new(manager, control_pins) {
+            match RfChannel::new(manager, control_pins, delay) {
                 Some(mut rf_channel) => {
                     // Setting interlock thresholds should not fail here as we have verified the
                     // device is on the bus.
