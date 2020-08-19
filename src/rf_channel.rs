@@ -34,9 +34,15 @@ pub struct SupplyMeasurements {
     pub i_p28v0ch: f32,
 }
 
+/// The current state of an RF channel.
 pub enum ChannelState {
+    /// The channel output is disabled.
     Disabled,
+
+    /// The channel is in the enabling process.
     Enabling(Instant),
+
+    /// The channel is actively outputting.
     Active,
 }
 

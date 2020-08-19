@@ -216,7 +216,7 @@ const APP: () = {
     }
 
     #[idle(resources=[channels])]
-    fn idle(_: idle::Context) -> ! {
+    fn idle(c: idle::Context) -> ! {
         loop {
             // TODO: Only need to call this periodically (e.g. every 60-200ms or so).
             c.resources.channels.update();
