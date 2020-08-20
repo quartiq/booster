@@ -11,6 +11,7 @@ use tca9548::{self, Tca9548};
 
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
+use embedded_hal::blocking::delay::DelayUs;
 
 use super::I2C;
 use shared_bus_rtic::{CommonBus, SharedBus};
@@ -92,6 +93,7 @@ impl BoosterChannels {
     /// * `adc` - The ADC used to measure analog channels.
     /// * `manager` - The I2C bus manager used for the shared I2C bus.
     /// * `pins` - An array of all RfChannel control/status pins.
+    /// * `delay` - A means of delaying during setup.
     ///
     /// # Returns
     /// A `BoosterChannels` object that can be used to manage all available RF channels.
@@ -100,6 +102,7 @@ impl BoosterChannels {
         adc: hal::adc::Adc<hal::stm32::ADC3>,
         manager: &'static CommonBus<I2C>,
         mut pins: [Option<RfChannelPins>; 8],
+        delay: &mut impl DelayUs<u8>,
     ) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
             [None, None, None, None, None, None, None, None];
@@ -113,7 +116,7 @@ impl BoosterChannels {
                 .take()
                 .expect("Channel pins not available");
 
-            match RfChannel::new(&manager, control_pins) {
+            match RfChannel::new(&manager, control_pins, delay) {
                 Some(mut rf_channel) => {
                     // Setting interlock thresholds should not fail here as we have verified the
                     // device is on the bus.
@@ -242,7 +245,7 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.enable(),
+            Some(rf_channel) => rf_channel.start_enable(),
             None => Err(Error::NotPresent),
         }
     }
@@ -255,7 +258,7 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.disable(),
+            Some(rf_channel) => rf_channel.start_disable(),
             None => Err(Error::NotPresent),
         }
     }
@@ -329,6 +332,17 @@ impl BoosterChannels {
                 Ok(status)
             }
             None => Err(Error::NotPresent),
+        }
+    }
+
+    /// Update the states of RF channels as necessary.
+    pub fn update(&mut self) {
+        for channel in Channel::into_enum_iter() {
+            self.mux.select_bus(Some(channel.into())).unwrap();
+
+            if let Some(rf_channel) = &mut self.channels[channel as usize] {
+                rf_channel.update().unwrap();
+            }
         }
     }
 }
