@@ -512,6 +512,18 @@ impl RfChannel {
     fn finalize_enable(&mut self) -> Result<(), Error> {
         // It is only valid to finish the enable process if we have previously started enabling.
         if let ChannelState::Enabling(_) = self.state {
+            // It is not valid to enable the channel while the interlock thresholds are low. Due to
+            // hardware configurations, it is possible that this would result in a condition where the
+            // interlock is never tripped even though the output is exceeding the interlock threshold.
+            // As a workaround, we need to ensure that the interlock level is above the output power
+            // detector level. When RF is disabled, the power detectors output a near-zero value, so
+            // 100mV should be a sufficient level.
+            if (self.reflected_power_interlock_threshold < self.reflected_power_transform.map(0.100)) ||
+                    (self.output_power_interlock_threshold < self.output_power_transform.map(0.100)) {
+                self.start_disable()?;
+                return Err(Error::Invalid);
+            }
+
             self.i2c_devices
                 .bias_dac
                 .set_voltage(-1.0 * self.bias_voltage)
