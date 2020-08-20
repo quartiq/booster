@@ -22,6 +22,8 @@ use stm32f4xx_hal::{
     prelude::*,
 };
 
+use rtic::cyccnt::{Duration, Instant};
+
 // Convenience type definition for all I2C devices on the bus.
 type I2cDevice = BusProxy<I2C>;
 
@@ -30,6 +32,24 @@ pub struct SupplyMeasurements {
     pub v_p5v0mp: f32,
     pub i_p5v0ch: f32,
     pub i_p28v0ch: f32,
+}
+
+/// The current state of an RF channel.
+pub enum ChannelState {
+    /// The channel output is disabled.
+    Disabled,
+
+    /// The channel is in the enabling process.
+    Enabling(Instant),
+
+    /// The channel is actively outputting.
+    Active,
+
+    /// The channel has tripped an interlock threshold.
+    Tripped,
+
+    /// The channel is in the process of shutting down.
+    Disabling(Instant),
 }
 
 // Macro magic to generate an enum that looks like:
@@ -263,6 +283,7 @@ pub struct RfChannel {
     input_power_transform: LinearTransformation,
     reflected_power_transform: LinearTransformation,
     output_power_transform: LinearTransformation,
+    state: ChannelState,
 }
 
 impl RfChannel {
@@ -313,6 +334,7 @@ impl RfChannel {
                         1.5 / 0.035,
                         -35.6 + 19.8 + 10.0,
                     ),
+                    state: ChannelState::Disabled,
                 };
 
                 channel.set_interlock_thresholds(0.0, 0.0).unwrap();
@@ -391,6 +413,50 @@ impl RfChannel {
         Ok(())
     }
 
+    /// Update the current state of the RF channel.
+    ///
+    /// # Note
+    /// This must be called periodically to facilitate enabling a channel.
+    pub fn update(&mut self) -> Result<(), Error> {
+        match self.state {
+            ChannelState::Enabling(start_time) => {
+                // The LM3880 requires 180ms to power up all supplies on the channel. We add an
+                // additional 20ms margin.
+
+                // TODO: Replace constant definition of CPU frequency here.
+                if start_time.elapsed() > Duration::from_cycles(200 * (168_000_000 / 1000)) {
+                    self.finalize_enable()?;
+                }
+            }
+
+            ChannelState::Disabling(start_time) => {
+                // Note that we use 500ms here due to the worst-case power-sequencing operation of
+                // the LM3880 that occurs when a channel is disabled immediately after enable. In
+                // this case, the LM3880 will require 180ms to power up the channel, 120ms to
+                // stabilize, and then 180ms to power down the channel.
+
+                // TODO: Replace constant definition of CPU frequency here.
+                if start_time.elapsed() > Duration::from_cycles(500 * (168_000_000 / 1000)) {
+                    self.state = ChannelState::Disabled;
+                }
+            }
+
+            ChannelState::Active => {
+                // We explicitly only check for overdrive conditions once the channel has been
+                // fully enabled.
+                if self.is_overdriven() || self.is_alarmed() {
+                    self.state = ChannelState::Tripped;
+                }
+            }
+
+            // There's nothing to do if the channel is disabled or tripped.
+            ChannelState::Disabled => {}
+            ChannelState::Tripped => {}
+        }
+
+        Ok(())
+    }
+
     /// Check if the channel is indicating an interlock has tripped.
     pub fn is_overdriven(&self) -> bool {
         let input_overdrive = self.pins.input_overdrive.is_low().unwrap();
@@ -417,25 +483,55 @@ impl RfChannel {
         self.pins.alert.is_low().unwrap()
     }
 
-    /// Enable the channel and power it up.
-    pub fn enable(&mut self) -> Result<(), Error> {
-        // TODO: Power-up the channel.
+    /// Start the enable process for channel and power it up.
+    pub fn start_enable(&mut self) -> Result<(), Error> {
+        // It is explicitly not permitted to enable the channel while the channel is in the process
+        // of disabling because we would not be guaranteed that the channel would be powered up
+        // within 200ms.
+        if let ChannelState::Disabling(_) = self.state {
+            return Err(Error::InvalidState);
+        }
+
+        // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
         self.i2c_devices
             .bias_dac
             .set_voltage(3.2)
             .expect("Failed to disable RF bias voltage");
+
+        // Start the LM3880 power supply sequencer.
         self.pins.enable_power.set_high().unwrap();
-        self.i2c_devices
-            .bias_dac
-            .set_voltage(self.bias_voltage)
-            .expect("Failed to configure RF bias voltage");
-        self.pins.signal_on.set_high().unwrap();
+
+        // We have just started the supply sequencer for the RF channel power rail. This will take
+        // some time. We can't set the bias DAC until those supplies have stabilized.
+        self.state = ChannelState::Enabling(Instant::now());
 
         Ok(())
     }
 
+    /// Finalize the enable process once all RF channel supplies have enabled.
+    fn finalize_enable(&mut self) -> Result<(), Error> {
+        // It is only valid to finish the enable process if we have previously started enabling.
+        if let ChannelState::Enabling(_) = self.state {
+            self.i2c_devices
+                .bias_dac
+                .set_voltage(-1.0 * self.bias_voltage)
+                .expect("Failed to configure RF bias voltage");
+
+            self.pins.signal_on.set_high().unwrap();
+
+            self.state = ChannelState::Active;
+
+            Ok(())
+        } else {
+            Err(Error::InvalidState)
+        }
+    }
+
     /// Disable the channel and power it off.
-    pub fn disable(&mut self) -> Result<(), Error> {
+    pub fn start_disable(&mut self) -> Result<(), Error> {
+        // The RF channel may be unconditionally disabled at any point to aid in preventing damage.
+        // The effect of this is that we must assume worst-case power-down timing, which increases
+        // the time until we can enable a channel after a power-down.
         self.pins.signal_on.set_low().unwrap();
 
         // Set the bias DAC output into pinch-off.
@@ -445,6 +541,8 @@ impl RfChannel {
             .expect("Failed to disable RF bias voltage");
 
         self.pins.enable_power.set_low().unwrap();
+
+        self.state = ChannelState::Disabling(Instant::now());
 
         Ok(())
     }

@@ -9,6 +9,7 @@
 #[derive(Debug, Copy, Clone)]
 pub enum Error {
     Invalid,
+    InvalidState,
     NotPresent,
     Interface,
     Bounds,
