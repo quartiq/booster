@@ -123,7 +123,7 @@ where
         // Write the dac level to the output.
         self.write(Command::WriteInput, dac, code.to_be_bytes())?;
 
-        let programmed_voltage = (code as f32) / (0x1000 as f32) * 2.5;
+        let programmed_voltage = ((code >> 4) as f32) / (0x1000 as f32) * 2.5;
         Ok(programmed_voltage)
     }
 }
