@@ -239,7 +239,7 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.enable(),
+            Some(rf_channel) => rf_channel.start_enable(),
             None => Err(Error::NotPresent),
         }
     }
@@ -252,7 +252,7 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.disable(),
+            Some(rf_channel) => rf_channel.start_disable(),
             None => Err(Error::NotPresent),
         }
     }
@@ -338,7 +338,7 @@ impl BoosterChannels {
             self.mux.select_bus(Some(channel.into())).unwrap();
 
             if let Some(rf_channel) = &mut self.channels[channel as usize] {
-                rf_channel.process_state().unwrap();
+                rf_channel.update().unwrap();
             }
         }
     }
