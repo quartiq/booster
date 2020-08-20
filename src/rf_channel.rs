@@ -518,8 +518,10 @@ impl RfChannel {
             // As a workaround, we need to ensure that the interlock level is above the output power
             // detector level. When RF is disabled, the power detectors output a near-zero value, so
             // 100mV should be a sufficient level.
-            if (self.reflected_power_interlock_threshold < self.reflected_power_transform.map(0.100)) ||
-                    (self.output_power_interlock_threshold < self.output_power_transform.map(0.100)) {
+            if (self.reflected_power_interlock_threshold
+                < self.reflected_power_transform.map(0.100))
+                || (self.output_power_interlock_threshold < self.output_power_transform.map(0.100))
+            {
                 self.start_disable()?;
                 return Err(Error::Invalid);
             }

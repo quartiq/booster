@@ -29,7 +29,7 @@ impl ChannelIdentifier {
 
 /// Contains channel status information in SI base units.
 pub struct ChannelStatus {
-    pub input_overdrive: bool,
+    pub reflected_overdrive: bool,
     pub output_overdrive: bool,
     pub alert: bool,
     pub enabled: bool,
@@ -40,7 +40,7 @@ pub struct ChannelStatus {
     pub input_power: f32,
     pub reflected_power: f32,
     pub output_power: f32,
-    pub input_overdrive_threshold: f32,
+    pub reflected_overdrive_threshold: f32,
     pub output_overdrive_threshold: f32,
     pub bias_voltage: f32,
 }
@@ -310,7 +310,7 @@ impl BoosterChannels {
                 let power_measurements = rf_channel.get_supply_measurements();
 
                 let status = ChannelStatus {
-                    input_overdrive: rf_channel.pins.input_overdrive.is_high().unwrap(),
+                    reflected_overdrive: rf_channel.pins.input_overdrive.is_high().unwrap(),
                     output_overdrive: rf_channel.pins.output_overdrive.is_high().unwrap(),
                     alert: rf_channel.is_alarmed(),
                     enabled: rf_channel.is_enabled(),
@@ -321,7 +321,7 @@ impl BoosterChannels {
                     input_power: rf_channel.get_input_power(),
                     output_power: rf_channel.get_output_power(&mut adc),
                     reflected_power: rf_channel.get_reflected_power(&mut adc),
-                    input_overdrive_threshold: rf_channel.get_reflected_interlock_threshold(),
+                    reflected_overdrive_threshold: rf_channel.get_reflected_interlock_threshold(),
                     output_overdrive_threshold: rf_channel.get_output_interlock_threshold(),
                     bias_voltage: rf_channel.get_bias_voltage(),
                 };
