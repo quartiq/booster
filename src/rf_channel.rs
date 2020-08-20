@@ -14,8 +14,8 @@ use microchip_24aa02e48::Microchip24AA02E48;
 
 use super::I2C;
 use crate::error::Error;
-use shared_bus_rtic::SharedBus;
 use embedded_hal::blocking::delay::DelayUs;
+use shared_bus_rtic::SharedBus;
 use stm32f4xx_hal::{
     self as hal,
     adc::config::SampleTime,

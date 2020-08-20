@@ -23,8 +23,8 @@ mod error;
 mod linear_transformation;
 mod rf_channel;
 use booster_channels::{BoosterChannels, Channel};
-use error::Error;
 use chassis_fans::ChassisFans;
+use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
 
 // Convenience type definition for the I2C bus used for booster RF channels.
