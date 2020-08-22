@@ -15,7 +15,7 @@ use enum_iterator::IntoEnumIterator;
 use panic_halt as _;
 use stm32f4xx_hal as hal;
 
-use hal::{prelude::*, timer::Event};
+use hal::prelude::*;
 
 mod booster_channels;
 mod chassis_fans;
@@ -27,6 +27,8 @@ use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
+
+use rtic::cyccnt::Duration;
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 type I2C = hal::i2c::I2c<
@@ -91,18 +93,16 @@ macro_rules! channel_pins {
     }};
 }
 
-#[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true)]
+#[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        monitor_timer: hal::timer::Timer<hal::stm32::TIM2>,
-        telemetry_timer: hal::timer::Timer<hal::stm32::TIM3>,
         channels: BoosterChannels,
     }
 
-    #[init]
-    fn init(c: init::Context) -> init::LateResources {
-        let mut cp = cortex_m::peripheral::Peripherals::take().unwrap();
-        cp.DWT.enable_cycle_counter();
+    #[init(schedule = [telemetry, channel_monitor])]
+    fn init(mut c: init::Context) -> init::LateResources {
+        c.core.DWT.enable_cycle_counter();
+        c.core.DCB.enable_trace();
 
         // Initialize the chip
         let rcc = c.device.RCC.constrain();
@@ -116,7 +116,10 @@ const APP: () = {
             .require_pll48clk()
             .freeze();
 
-        let mut delay = hal::delay::Delay::new(cp.SYST, clocks);
+        // For some reason, asm_delay divides the frequency by 2. To work around this, provide it a
+        // rate that is 2x the CPU rate.
+        // TODO: Replace usage of asm_delay.
+        let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(168_000_000 * 2));
 
         let gpioa = c.device.GPIOA.split();
         let gpiob = c.device.GPIOB.split();
@@ -197,6 +200,7 @@ const APP: () = {
             let adc = hal::adc::Adc::adc3(
                 c.device.ADC3,
                 true,
+                2500,
                 hal::adc::config::AdcConfig::default(),
             );
 
@@ -228,27 +232,16 @@ const APP: () = {
 
         info!("Startup complete");
 
-        // Configure a timer to periodically monitor the output channels.
-        let mut monitor_timer = hal::timer::Timer::tim2(c.device.TIM2, 50.hz(), clocks);
-        monitor_timer.listen(Event::TimeOut);
+        // Kick-start the monitor and telemetry tasks.
+        c.schedule.channel_monitor(c.start).unwrap();
+        c.schedule.telemetry(c.start).unwrap();
 
-        // Configure a timer to periodically gather telemetry.
-        let mut telemetry_timer = hal::timer::Timer::tim3(c.device.TIM3, 2.hz(), clocks);
-        telemetry_timer.listen(Event::TimeOut);
-
-        init::LateResources {
-            monitor_timer: monitor_timer,
-            telemetry_timer: telemetry_timer,
-            channels: channels,
-        }
+        init::LateResources { channels: channels }
     }
 
-    #[task(binds=TIM2, priority=2, resources=[monitor_timer, channels])]
+    #[task(priority = 2, schedule = [channel_monitor], resources=[channels])]
     fn channel_monitor(c: channel_monitor::Context) {
-        c.resources.monitor_timer.clear_interrupt(Event::TimeOut);
-
-        // Update the state of any channels.
-        // TODO: Only need to call this periodically (e.g. every 60-200ms or so).
+        // Potentially update the state of any channels.
         c.resources.channels.update();
 
         // Check all of the timer channels.
@@ -274,12 +267,16 @@ const APP: () = {
 
             // TODO: Echo the measured values to the LEDs on the user interface for this channel.
         }
+
+        // TODO: Replace hard-coded CPU cycles here.
+        // Schedule to run this task periodically at 50Hz.
+        c.schedule
+            .channel_monitor(c.scheduled + Duration::from_cycles(168_000_000 / 50))
+            .unwrap();
     }
 
-    #[task(binds=TIM3, priority=1, resources=[telemetry_timer, channels])]
+    #[task(priority = 1, schedule = [telemetry], resources=[channels])]
     fn telemetry(mut c: telemetry::Context) {
-        c.resources.telemetry_timer.clear_interrupt(Event::TimeOut);
-
         // Gather telemetry for all of the channels.
         for channel in Channel::into_enum_iter() {
             let measurements = c
@@ -290,6 +287,12 @@ const APP: () = {
             // TODO: Broadcast the measured data over the telemetry interface.
             info!("{:?}", measurements);
         }
+
+        // TODO: Replace hard-coded CPU cycles here.
+        // Schedule to run this task periodically at 2Hz.
+        c.schedule
+            .telemetry(c.scheduled + Duration::from_cycles(168_000_000 / 2))
+            .unwrap();
     }
 
     #[idle(resources=[channels])]
@@ -297,5 +300,10 @@ const APP: () = {
         loop {
             asm::nop();
         }
+    }
+
+    extern "C" {
+        fn USART1();
+        fn USART2();
     }
 };
