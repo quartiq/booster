@@ -9,12 +9,10 @@ use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal::{self as hal, prelude::*};
 use tca9548::{self, Tca9548};
 
+use super::{I2cBusManager, I2cProxy};
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 use embedded_hal::blocking::delay::DelayUs;
-
-use super::I2C;
-use shared_bus_rtic::{CommonBus, SharedBus};
 
 /// A EUI-48 identifier for a given channel.
 pub struct ChannelIdentifier {
@@ -51,7 +49,7 @@ pub struct ChannelStatus {
 pub struct BoosterChannels {
     channels: [Option<RfChannel>; 8],
     adc: core::cell::RefCell<hal::adc::Adc<hal::stm32::ADC3>>,
-    mux: Tca9548<SharedBus<I2C>>,
+    mux: Tca9548<I2cProxy>,
 }
 
 /// Indicates a booster RF channel.
@@ -98,9 +96,9 @@ impl BoosterChannels {
     /// # Returns
     /// A `BoosterChannels` object that can be used to manage all available RF channels.
     pub fn new(
-        mut mux: Tca9548<SharedBus<I2C>>,
+        mut mux: Tca9548<I2cProxy>,
         adc: hal::adc::Adc<hal::stm32::ADC3>,
-        manager: &'static CommonBus<I2C>,
+        manager: &'static I2cBusManager,
         mut pins: [Option<RfChannelPins>; 8],
         delay: &mut impl DelayUs<u8>,
     ) -> Self {

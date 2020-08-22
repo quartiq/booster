@@ -21,6 +21,7 @@ mod booster_channels;
 mod chassis_fans;
 mod error;
 mod linear_transformation;
+mod mutex;
 mod rf_channel;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
@@ -35,6 +36,9 @@ type I2C = hal::i2c::I2c<
         hal::gpio::gpiob::PB7<hal::gpio::AlternateOD<hal::gpio::AF4>>,
     ),
 >;
+
+type I2cBusManager = mutex::AtomicCheckManager<I2C>;
+type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
 
 /// Construct ADC pins associated with an RF channel.
 ///
@@ -125,14 +129,14 @@ const APP: () = {
         let mut pa_ch_reset_n = gpiob.pb9.into_push_pull_output();
         pa_ch_reset_n.set_high().unwrap();
 
-        let i2c_bus_manager = {
+        let i2c_bus_manager: &'static _ = {
             let i2c = {
                 let scl = gpiob.pb6.into_alternate_af4_open_drain();
                 let sda = gpiob.pb7.into_alternate_af4_open_drain();
                 hal::i2c::I2c::i2c1(c.device.I2C1, (scl, sda), 100.khz(), clocks)
             };
 
-            shared_bus_rtic::new!(i2c, I2C)
+            new_atomic_check_manager!(I2C = i2c).unwrap()
         };
 
         // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
@@ -179,15 +183,23 @@ const APP: () = {
 
             let mut mux = {
                 let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
-                tca9548::Tca9548::default(i2c_bus_manager.acquire(), &mut i2c_mux_reset, &mut delay)
-                    .unwrap()
+                tca9548::Tca9548::default(
+                    i2c_bus_manager.acquire_i2c(),
+                    &mut i2c_mux_reset,
+                    &mut delay,
+                )
+                .unwrap()
             };
 
             // Test scanning and reading back MUX channels.
             assert!(mux.self_test().unwrap() == true);
 
-            let adc =
-                hal::adc::Adc::adc3(c.device.ADC3, true, hal::adc::config::AdcConfig::default());
+            let adc = hal::adc::Adc::adc3(
+                c.device.ADC3,
+                true,
+                2500,
+                hal::adc::config::AdcConfig::default(),
+            );
 
             BoosterChannels::new(mux, adc, i2c_bus_manager, channel_pins, &mut delay)
         };
@@ -203,12 +215,14 @@ const APP: () = {
         let mut eui48: [u8; 6] = [0; 6];
         eui.read_eui48(&mut eui48).unwrap();
 
-        let fan1 = max6639::Max6639::new(i2c_bus_manager.acquire(), max6639::AddressPin::Pulldown)
+        let fan1 =
+            max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pulldown)
+                .unwrap();
+        let fan2 = max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Float)
             .unwrap();
-        let fan2 =
-            max6639::Max6639::new(i2c_bus_manager.acquire(), max6639::AddressPin::Float).unwrap();
         let fan3 =
-            max6639::Max6639::new(i2c_bus_manager.acquire(), max6639::AddressPin::Pullup).unwrap();
+            max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pullup)
+                .unwrap();
 
         let mut fans = ChassisFans::new([fan1, fan2, fan3]);
         assert!(fans.self_test(&mut delay));

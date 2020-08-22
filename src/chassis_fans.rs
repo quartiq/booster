@@ -4,13 +4,12 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::I2C;
+use super::I2cProxy;
 use max6639::Max6639;
-use shared_bus_rtic::SharedBus;
 
 /// Provides control of the chassis-mounted cooling fans.
 pub struct ChassisFans {
-    fans: [Max6639<SharedBus<I2C>>; 3],
+    fans: [Max6639<I2cProxy>; 3],
 }
 
 impl ChassisFans {
@@ -21,7 +20,7 @@ impl ChassisFans {
     ///
     /// # Returns
     /// A new fan controller.
-    pub fn new(fans: [Max6639<SharedBus<I2C>>; 3]) -> Self {
+    pub fn new(fans: [Max6639<I2cProxy>; 3]) -> Self {
         ChassisFans { fans }
     }
 

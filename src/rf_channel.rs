@@ -12,10 +12,9 @@ use max6642::Max6642;
 use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
 
-use super::I2C;
+use super::{I2cBusManager, I2cProxy};
 use crate::error::Error;
 use embedded_hal::blocking::delay::DelayUs;
-use shared_bus_rtic::SharedBus;
 use stm32f4xx_hal::{
     self as hal,
     adc::config::SampleTime,
@@ -24,9 +23,6 @@ use stm32f4xx_hal::{
 };
 
 use rtic::cyccnt::{Duration, Instant};
-
-// Convenience type definition for all I2C devices on the bus.
-type I2cDevice = SharedBus<I2C>;
 
 /// A structure representing power supply measurements of a channel.
 pub struct SupplyMeasurements {
@@ -143,12 +139,12 @@ impl AnalogPins {
 
 /// Represents all of the I2C devices on the bus for a single RF channel.
 pub struct Devices {
-    interlock_thresholds_dac: Ad5627<I2cDevice>,
-    input_power_adc: Mcp3221<I2cDevice>,
-    temperature_monitor: Max6642<I2cDevice>,
-    bias_dac: Dac7571<I2cDevice>,
-    power_monitor: Ads7924<I2cDevice>,
-    pub eui48: Microchip24AA02E48<I2cDevice>,
+    interlock_thresholds_dac: Ad5627<I2cProxy>,
+    input_power_adc: Mcp3221<I2cProxy>,
+    temperature_monitor: Max6642<I2cProxy>,
+    bias_dac: Dac7571<I2cProxy>,
+    power_monitor: Ads7924<I2cProxy>,
+    pub eui48: Microchip24AA02E48<I2cProxy>,
 }
 
 impl Devices {
@@ -165,17 +161,17 @@ impl Devices {
     /// # Returns
     /// An option containing the devices if they were discovered on the bus. If any device did not
     /// properly enumerate, the option will be empty.
-    fn new(manager: SharedBus<I2C>, delay: &mut impl DelayUs<u8>) -> Option<Self> {
+    fn new(manager: &'static I2cBusManager, delay: &mut impl DelayUs<u8>) -> Option<Self> {
         // The ADS7924 and DAC7571 are present on the booster mainboard, so instantiation
         // and communication should never fail.
-        let mut dac7571 = Dac7571::default(manager.acquire());
+        let mut dac7571 = Dac7571::default(manager.acquire_i2c());
 
         // Ensure the bias DAC is placing the RF amplifier in pinch off (disabled).
         dac7571.set_voltage(3.2).expect("Bias DAC did not respond");
 
         // Verify we can communicate with the power monitor.
-        let mut ads7924 =
-            Ads7924::default(manager.acquire(), delay).expect("Power monitor did not enumerate");
+        let mut ads7924 = Ads7924::default(manager.acquire_i2c(), delay)
+            .expect("Power monitor did not enumerate");
         ads7924
             .get_voltage(ads7924::Channel::Three)
             .expect("Power monitor did not respond");
@@ -188,15 +184,15 @@ impl Devices {
         // Verify that there is no active alarm condition.
         assert!(ads7924.clear_alarm().expect("Failed to clear alarm") == 0);
 
-        if let Ok(ad5627) = Ad5627::default(manager.acquire()) {
-            if let Ok(eui48) = Microchip24AA02E48::new(manager.acquire()) {
+        if let Ok(ad5627) = Ad5627::default(manager.acquire_i2c()) {
+            if let Ok(eui48) = Microchip24AA02E48::new(manager.acquire_i2c()) {
                 // Query devices on the RF module to verify they are present.
-                let mut max6642 = Max6642::att94(manager.acquire());
+                let mut max6642 = Max6642::att94(manager.acquire_i2c());
                 if let Err(_) = max6642.get_remote_temperature() {
                     return None;
                 }
 
-                let mut mcp3221 = Mcp3221::default(manager.acquire());
+                let mut mcp3221 = Mcp3221::default(manager.acquire_i2c());
                 if let Err(_) = mcp3221.get_voltage() {
                     return None;
                 }
@@ -301,7 +297,7 @@ impl RfChannel {
     /// # Returns
     /// An option containing an RfChannel if a channel was discovered on the bus. None otherwise.
     pub fn new(
-        manager: &SharedBus<I2C>,
+        manager: &'static I2cBusManager,
         control_pins: ChannelPins,
         delay: &mut impl DelayUs<u8>,
     ) -> Option<Self> {
