@@ -197,7 +197,6 @@ const APP: () = {
             let adc = hal::adc::Adc::adc3(
                 c.device.ADC3,
                 true,
-                2500,
                 hal::adc::config::AdcConfig::default(),
             );
 
