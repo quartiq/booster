@@ -9,7 +9,10 @@
 
 use bit_field::BitField;
 
-use embedded_hal::blocking::i2c::{Write, WriteRead};
+use embedded_hal::blocking::{
+    delay::DelayUs,
+    i2c::{Write, WriteRead},
+};
 
 /// A driver for the ADS7924 4-channel analog-to-digital converter.
 pub struct Ads7924<I2C>
@@ -19,6 +22,13 @@ where
     i2c: I2C,
     address: u8,
     volts_per_lsb: f32,
+}
+
+#[derive(Copy, Clone, PartialEq)]
+#[doc(hidden)]
+enum OperationMode {
+    Active = 0b100000,
+    AutoscanWithSleep = 0b111011,
 }
 
 #[doc(hidden)]
@@ -75,22 +85,27 @@ where
     /// * `i2c` - The I2C interface to use to communicate with the device.
     /// * `address` - the I2C address of the device.
     /// * `avdd` - The voltage connected to the AVDD terminal.
-    pub fn new(i2c: I2C, address: u8, avdd: f32) -> Result<Self, Error> {
+    /// * `delay` - A means of delaying during initialization.
+    pub fn new(
+        i2c: I2C,
+        address: u8,
+        avdd: f32,
+        delay: &mut impl DelayUs<u8>,
+    ) -> Result<Self, Error> {
         let mut ads7924 = Ads7924 {
             i2c: i2c,
             address: address,
             volts_per_lsb: avdd / 0x1000 as f32,
         };
 
-        ads7924.reset()?;
+        ads7924.reset(delay)?;
 
         // Configure the interrupt pin to operate in alarm mode when thresholds are exceeded once.
         let interrupt_config = *0u8.set_bits(5..8, 0b1);
         ads7924.write(Register::IntConfig, &[interrupt_config])?;
 
-        // Configure the ADC to operate in auto-scan mode.
-        let mode_control = *0u8.set_bits(2..8, 0b110011);
-        ads7924.write(Register::ModeCntrl, &[mode_control])?;
+        // Configure the ADC to operate in auto-scan (with sleep) mode.
+        ads7924.set_mode(OperationMode::AutoscanWithSleep)?;
 
         Ok(ads7924)
     }
@@ -98,16 +113,37 @@ where
     /// Create a default ADC driver.
     ///
     /// # Note
-    /// A default driver assumes a 3.3V power supply and the A0 pin pulled high.
+    /// A default driver assumes a 3.434V power supply and the A0 pin pulled high.
     ///
     /// # Args
     /// * `i2c` - The I2C interface to use to communicate with the device.
-    pub fn default(i2c: I2C) -> Result<Self, Error> {
-        Ads7924::new(i2c, 0x49, 3.3)
+    /// * `delay` - A means of delaying during initialization.
+    pub fn default(i2c: I2C, delay: &mut impl DelayUs<u8>) -> Result<Self, Error> {
+        Ads7924::new(i2c, 0x49, 3.434, delay)
     }
 
-    fn reset(&mut self) -> Result<(), Error> {
+    fn set_mode(&mut self, mode: OperationMode) -> Result<(), Error> {
+        let mut mode_control: [u8; 1] = [0];
+        self.read(Register::ModeCntrl, &mut mode_control)?;
+
+        // The datasheet indicates that the device should always transition to active when switching
+        // operational modes to ensure internal logic is synchronized.
+        if mode != OperationMode::Active {
+            mode_control[0].set_bits(2..8, OperationMode::Active as u8);
+            self.write(Register::ModeCntrl, &mode_control)?;
+        }
+
+        mode_control[0].set_bits(2..8, mode as u8);
+        self.write(Register::ModeCntrl, &mode_control)?;
+
+        Ok(())
+    }
+
+    fn reset(&mut self, delay: &mut impl DelayUs<u8>) -> Result<(), Error> {
         self.write(Register::Reset, &[0xAA])?;
+        // The datasheet does not specify any required delay, but experimentally 100uS has been
+        // chosen and observed to behave nominally.
+        delay.delay_us(100u8);
         Ok(())
     }
 
@@ -142,6 +178,22 @@ where
         self.i2c
             .write_read(self.address, &[command_byte], data)
             .map_err(|_| Error::Interface)?;
+
+        Ok(())
+    }
+
+    /// Disable alarm thresholds for a channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to disable thresholds for.
+    pub fn disable_thresholds(&mut self, channel: Channel) -> Result<(), Error> {
+        // Disable the alarm in the interrupt control register.
+        let mut interrupt_control_register: [u8; 1] = [0];
+        self.read(Register::IntCntrl, &mut interrupt_control_register)?;
+
+        interrupt_control_register[0].set_bit(channel as usize, false);
+
+        self.write(Register::IntCntrl, &interrupt_control_register)?;
 
         Ok(())
     }

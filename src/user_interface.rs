@@ -12,13 +12,12 @@ use embedded_hal::{
     digital::v2::{InputPin, OutputPin},
 };
 
-use crate::monotonic::U32Ext;
-use super::Instant;
+use debounced_pin::{DebouncedInputPin, DebounceState, Debounce};
 
 /// Represents an event indicated through the GPIO buttons.
 pub enum ButtonEvent {
-    EnableAllChannels,
-    DisableChannels,
+    InterlockReset,
+    Standby,
 }
 
 type Button1 = hal::gpio::gpiof::PF14<hal::gpio::Input<hal::gpio::Floating>>;
@@ -46,106 +45,58 @@ impl UserButtons {
         }
     }
 
-    /// Register a button update event.
-    ///
-    /// # Args
-    /// * `instant` - The current time instant when the event occurred.
+    /// Check for a button update event.
     ///
     /// # Returns
     /// An option containing any event that is indicated by the button update.
-    pub fn event(&mut self, instant: Instant) -> Option<ButtonEvent> {
-        if self.button1.check_short_press(instant) {
-            return Some(ButtonEvent::EnableAllChannels);
+    pub fn update(&mut self) -> Option<ButtonEvent> {
+        // Prioritize entering standby.
+        if self.button2.update() {
+            return Some(ButtonEvent::Standby);
         }
 
-        if self.button2.check_short_press(instant) {
-            return Some(ButtonEvent::DisableChannels);
+        if self.button1.update() {
+            return Some(ButtonEvent::InterlockReset);
         }
 
         None
-    }
-
-    /// Check if the buttons are indicating a device reset.
-    ///
-    /// # Args
-    /// * `instant` - The current time instant.
-    ///
-    /// # Returns
-    /// True if a device reset is being requested.
-    pub fn check_reset(&mut self, instant: Instant) -> bool {
-        self.button1.check_long_press(instant) && self.button2.check_long_press(instant)
     }
 }
 
 struct InputButton<INPUT, E>
 where
-    INPUT: InputPin<Error = E> + hal::gpio::ExtiPin,
+    INPUT: InputPin<Error = E>,
     E: core::fmt::Debug,
 {
-    button: INPUT,
-    press_start: Option<Instant>,
+    button: DebouncedInputPin<INPUT, debounced_pin::ActiveLow>,
+    was_active: bool,
 }
 
 impl<INPUT, E> InputButton<INPUT, E>
 where
-    INPUT: InputPin<Error = E> + hal::gpio::ExtiPin,
+    INPUT: InputPin<Error = E>,
     E: core::fmt::Debug,
 {
     pub fn new(button: INPUT) -> Self {
         InputButton {
-            button,
-            press_start: None,
+            was_active: false,
+            button: DebouncedInputPin::new(button, debounced_pin::ActiveLow),
         }
     }
 
-    pub fn check_short_press(&mut self, instant: Instant) -> bool {
-        self.button.clear_interrupt_pending_bit();
-
-        let released = self.button.is_high().unwrap();
-
-        // If this event occurred too close to a previous event, ignore it as a spurious debounce
-        // event.
-        if self.debounce(instant) == false {
-            if released {
-                self.press_start = None;
+    pub fn update(&mut self) -> bool {
+        match self.button.update().unwrap() {
+            DebounceState::Active => {
+                let result = self.was_active == false;
+                self.was_active = true;
+                result
             }
-
-            return false;
+            DebounceState::NotActive => {
+                self.was_active = false;
+                false
+            }
+            _ => false,
         }
-
-        // Check if the button is now released. This indicates a short press (regardless of
-        // duration).
-        if released {
-            let result = self.press_start.is_some();
-
-            self.press_start = None;
-
-            result
-        } else {
-            // Otherwise, record the time of the button press.
-            self.press_start = Some(instant);
-
-            false
-        }
-    }
-
-    /// Check if the button event is debounced from the start.
-    fn debounce(&mut self, instant: Instant) -> bool {
-        self.press_start.map_or(true, |start| {
-            instant - start > 80.millis()
-        })
-    }
-
-    pub fn check_long_press(&mut self, instant: Instant) -> bool {
-        // Check if the button is still pressed.
-        if self.button.is_low().unwrap() == false {
-            return false;
-        }
-
-        self.press_start.map_or(false, |start| {
-            // Check if the button is being held for greater than the long-press duration.
-            instant - start > 2.secs()
-        })
     }
 }
 
@@ -194,7 +145,7 @@ impl UserLeds {
     }
 
     pub fn update(&mut self) {
-        self.spi_oen.set_low().unwrap();
+        self.spi_oen.set_high().unwrap();
 
         self.spi_csn.set_low().unwrap();
         self.spi
@@ -202,14 +153,17 @@ impl UserLeds {
             .unwrap();
         self.spi_csn.set_high().unwrap();
 
-        self.spi_oen.set_high().unwrap();
+        self.spi_oen.set_low().unwrap();
     }
 
     pub fn set_led(&mut self, color: Color, channel: Channel, enabled: bool) {
+        // The LEDs annotate the channels in reverse ordering.
+        let channel = Channel::Seven as usize - channel as usize;
+
         match color {
-            Color::Green => self.green.set_bit(channel as usize, enabled),
-            Color::Yellow => self.yellow.set_bit(channel as usize, enabled),
-            Color::Red => self.red.set_bit(channel as usize, enabled),
+            Color::Green => self.green.set_bit(channel, enabled),
+            Color::Yellow => self.yellow.set_bit(channel, enabled),
+            Color::Red => self.red.set_bit(channel, enabled),
         };
     }
 }

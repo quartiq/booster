@@ -9,11 +9,10 @@ use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal::{self as hal, prelude::*};
 use tca9548::{self, Tca9548};
 
+use super::{I2cBusManager, I2cProxy};
 use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
-
-use super::I2C;
-use shared_bus_rtic::{CommonBus, SharedBus};
+use embedded_hal::blocking::delay::DelayUs;
 
 /// A EUI-48 identifier for a given channel.
 pub struct ChannelIdentifier {
@@ -30,10 +29,10 @@ impl ChannelIdentifier {
 /// Contains channel status information in SI base units.
 #[derive(Debug)]
 pub struct ChannelStatus {
-    pub input_overdrive: bool,
+    pub reflected_overdrive: bool,
     pub output_overdrive: bool,
     pub alert: bool,
-    pub enabled: bool,
+    pub outputting: bool,
     pub temperature: f32,
     pub p28v_current: f32,
     pub p5v_current: f32,
@@ -41,7 +40,7 @@ pub struct ChannelStatus {
     pub input_power: f32,
     pub reflected_power: f32,
     pub output_power: f32,
-    pub input_overdrive_threshold: f32,
+    pub reflected_overdrive_threshold: f32,
     pub output_overdrive_threshold: f32,
     pub bias_voltage: f32,
 }
@@ -50,7 +49,7 @@ pub struct ChannelStatus {
 pub struct BoosterChannels {
     channels: [Option<RfChannel>; 8],
     adc: core::cell::RefCell<hal::adc::Adc<hal::stm32::ADC3>>,
-    mux: Tca9548<SharedBus<I2C>>,
+    mux: Tca9548<I2cProxy>,
 }
 
 /// Indicates a booster RF channel.
@@ -92,14 +91,16 @@ impl BoosterChannels {
     /// * `adc` - The ADC used to measure analog channels.
     /// * `manager` - The I2C bus manager used for the shared I2C bus.
     /// * `pins` - An array of all RfChannel control/status pins.
+    /// * `delay` - A means of delaying during setup.
     ///
     /// # Returns
     /// A `BoosterChannels` object that can be used to manage all available RF channels.
     pub fn new(
-        mut mux: Tca9548<SharedBus<I2C>>,
+        mut mux: Tca9548<I2cProxy>,
         adc: hal::adc::Adc<hal::stm32::ADC3>,
-        manager: &'static CommonBus<I2C>,
+        manager: &'static I2cBusManager,
         mut pins: [Option<RfChannelPins>; 8],
+        delay: &mut impl DelayUs<u8>,
     ) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
             [None, None, None, None, None, None, None, None];
@@ -113,7 +114,7 @@ impl BoosterChannels {
                 .take()
                 .expect("Channel pins not available");
 
-            match RfChannel::new(&manager, control_pins) {
+            match RfChannel::new(&manager, control_pins, delay) {
                 Some(mut rf_channel) => {
                     // Setting interlock thresholds should not fail here as we have verified the
                     // device is on the bus.
@@ -162,22 +163,6 @@ impl BoosterChannels {
         }
     }
 
-    /// Determine if a channel is enabled.
-    ///
-    /// # Args
-    /// * `channel` - The channel to check the enabled state of.
-    ///
-    /// # Returns
-    /// True if the channel is enabled. False otherwise.
-    pub fn is_enabled(&mut self, channel: Channel) -> Result<bool, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.is_enabled()),
-            None => Err(Error::NotPresent),
-        }
-    }
-
     /// Get a channel's EUI-48 identifier.
     ///
     /// # Args
@@ -202,18 +187,19 @@ impl BoosterChannels {
         }
     }
 
-    /// Check if a channel has encountered a warning condition.
+    /// Check if a channel has encountered an overload condition.
     ///
     /// # Args
     /// * `channel` - The channel to check.
     ///
     /// # Returns
-    /// True if a warning condition is present on the channel.
-    pub fn warning_detected(&mut self, channel: Channel) -> Result<bool, Error> {
-        // TODO: Determine what other conditions may constitute a warning to the user.
-        // Check if any alerts/alarms are present on the channel.
+    /// True if an overload condition is present on the channel.
+    pub fn overload_detected(&mut self, channel: Channel) -> Result<bool, Error> {
         match &self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.is_alarmed()),
+            // TODO: Check the input power?
+            // TODO: Legacy firmware does a software check of reflected power. Determine if we need
+            // to do this.
+            Some(rf_channel) => Ok(rf_channel.is_overdriven()),
             None => Err(Error::NotPresent),
         }
     }
@@ -229,7 +215,7 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.is_overdriven()),
+            Some(rf_channel) => Ok(rf_channel.is_errored()),
             None => Err(Error::NotPresent),
         }
     }
@@ -242,7 +228,7 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.enable(),
+            Some(rf_channel) => rf_channel.start_enable(),
             None => Err(Error::NotPresent),
         }
     }
@@ -255,7 +241,7 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.disable(),
+            Some(rf_channel) => rf_channel.start_disable(),
             None => Err(Error::NotPresent),
         }
     }
@@ -310,10 +296,10 @@ impl BoosterChannels {
                 let mut adc = self.adc.borrow_mut();
 
                 let status = ChannelStatus {
-                    input_overdrive: rf_channel.pins.input_overdrive.is_high().unwrap(),
+                    reflected_overdrive: rf_channel.pins.input_overdrive.is_high().unwrap(),
                     output_overdrive: rf_channel.pins.output_overdrive.is_high().unwrap(),
                     alert: rf_channel.is_alarmed(),
-                    enabled: rf_channel.is_enabled(),
+                    outputting: rf_channel.is_outputting(),
                     temperature: rf_channel.get_temperature(),
                     p28v_current: power_measurements.i_p28v0ch,
                     p5v_current: power_measurements.i_p5v0ch,
@@ -321,7 +307,7 @@ impl BoosterChannels {
                     input_power: rf_channel.get_input_power(),
                     output_power: rf_channel.get_output_power(&mut adc),
                     reflected_power: rf_channel.get_reflected_power(&mut adc),
-                    input_overdrive_threshold: rf_channel.get_reflected_interlock_threshold(),
+                    reflected_overdrive_threshold: rf_channel.get_reflected_interlock_threshold(),
                     output_overdrive_threshold: rf_channel.get_output_interlock_threshold(),
                     bias_voltage: rf_channel.get_bias_voltage(),
                 };
@@ -329,6 +315,17 @@ impl BoosterChannels {
                 Ok(status)
             }
             None => Err(Error::NotPresent),
+        }
+    }
+
+    /// Update the states of RF channels as necessary.
+    pub fn update(&mut self) {
+        for channel in Channel::into_enum_iter() {
+            self.mux.select_bus(Some(channel.into())).unwrap();
+
+            if let Some(rf_channel) = &mut self.channels[channel as usize] {
+                rf_channel.update().unwrap();
+            }
         }
     }
 }

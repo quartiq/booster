@@ -14,19 +14,24 @@ use enum_iterator::IntoEnumIterator;
 use panic_halt as _;
 use stm32f4xx_hal as hal;
 
-use hal::{gpio::ExtiPin, prelude::*, timer::Event};
+use hal::prelude::*;
 
 mod booster_channels;
+mod chassis_fans;
+mod delay;
 mod error;
 mod linear_transformation;
+mod mutex;
 mod rf_channel;
 mod user_interface;
-mod monotonic;
-use monotonic::Instant;
 use booster_channels::{BoosterChannels, Channel};
+use chassis_fans::ChassisFans;
+use delay::AsmDelay;
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
+
+use rtic::cyccnt::Duration;
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 type I2C = hal::i2c::I2c<
@@ -36,6 +41,9 @@ type I2C = hal::i2c::I2c<
         hal::gpio::gpiob::PB7<hal::gpio::AlternateOD<hal::gpio::AF4>>,
     ),
 >;
+
+type I2cBusManager = mutex::AtomicCheckManager<I2C>;
+type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
 
 /// Construct ADC pins associated with an RF channel.
 ///
@@ -88,19 +96,19 @@ macro_rules! channel_pins {
     }};
 }
 
-#[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true, monotonic = monotonic::Tim5)]
+#[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        monitor_timer: hal::timer::Timer<hal::stm32::TIM2>,
-        telemetry_timer: hal::timer::Timer<hal::stm32::TIM3>,
         channels: BoosterChannels,
         buttons: UserButtons,
         leds: UserLeds,
+        fans: ChassisFans,
     }
 
-    #[init]
+    #[init(schedule = [telemetry, channel_monitor, button])]
     fn init(mut c: init::Context) -> init::LateResources {
-        let cp = cortex_m::peripheral::Peripherals::take().unwrap();
+        c.core.DWT.enable_cycle_counter();
+        c.core.DCB.enable_trace();
 
         // Initialize the chip
         let rcc = c.device.RCC.constrain();
@@ -115,7 +123,7 @@ const APP: () = {
             .require_pll48clk()
             .freeze();
 
-        let mut delay = hal::delay::Delay::new(cp.SYST, clocks);
+        let mut delay = AsmDelay::new(clocks.sysclk().0);
 
         let gpioa = c.device.GPIOA.split();
         let gpiob = c.device.GPIOB.split();
@@ -125,14 +133,17 @@ const APP: () = {
         let gpiof = c.device.GPIOF.split();
         let gpiog = c.device.GPIOG.split();
 
-        let i2c_bus_manager = {
+        let mut pa_ch_reset_n = gpiob.pb9.into_push_pull_output();
+        pa_ch_reset_n.set_high().unwrap();
+
+        let i2c_bus_manager: &'static _ = {
             let i2c = {
                 let scl = gpiob.pb6.into_alternate_af4_open_drain();
                 let sda = gpiob.pb7.into_alternate_af4_open_drain();
                 hal::i2c::I2c::i2c1(c.device.I2C1, (scl, sda), 100.khz(), clocks)
             };
 
-            shared_bus_rtic::new!(i2c, I2C)
+            new_atomic_check_manager!(I2C = i2c).unwrap()
         };
 
         // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
@@ -177,32 +188,32 @@ const APP: () = {
                 ]
             };
 
-            let mux = {
+            let mut mux = {
                 let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
-                tca9548::Tca9548::default(i2c_bus_manager.acquire(), &mut i2c_mux_reset, &mut delay)
-                    .unwrap()
+                tca9548::Tca9548::default(
+                    i2c_bus_manager.acquire_i2c(),
+                    &mut i2c_mux_reset,
+                    &mut delay,
+                )
+                .unwrap()
             };
 
-            let adc =
-                hal::adc::Adc::adc3(c.device.ADC3, true, hal::adc::config::AdcConfig::default());
+            // Test scanning and reading back MUX channels.
+            assert!(mux.self_test().unwrap() == true);
 
-            BoosterChannels::new(mux, adc, i2c_bus_manager, channel_pins)
+            let adc = hal::adc::Adc::adc3(
+                c.device.ADC3,
+                true,
+                2500,
+                hal::adc::config::AdcConfig::default(),
+            );
+
+            BoosterChannels::new(mux, adc, i2c_bus_manager, channel_pins, &mut delay)
         };
 
         let buttons = {
-            let mut button1 = gpiof.pf14.into_floating_input();
-
-            button1.make_interrupt_source(&mut c.device.SYSCFG);
-            button1.trigger_on_edge(&mut c.device.EXTI, hal::gpio::Edge::RISING_FALLING);
-            button1.clear_interrupt_pending_bit();
-            button1.enable_interrupt(&mut c.device.EXTI);
-
-            let mut button2 = gpiof.pf15.into_floating_input();
-            button2.make_interrupt_source(&mut c.device.SYSCFG);
-            button2.trigger_on_edge(&mut c.device.EXTI, hal::gpio::Edge::RISING_FALLING);
-            button2.clear_interrupt_pending_bit();
-            button2.enable_interrupt(&mut c.device.EXTI);
-
+            let button1 = gpiof.pf14.into_floating_input();
+            let button2 = gpiof.pf15.into_floating_input();
             UserButtons::new(button1, button2)
         };
 
@@ -231,44 +242,61 @@ const APP: () = {
             UserLeds::new(spi, csn, oen)
         };
 
-        monotonic::Tim5::new(c.device.TIM5, clocks);
+        info!("Startup complete");
+
+        let i2c2 = {
+            let scl = gpiob.pb10.into_alternate_af4_open_drain();
+            let sda = gpiob.pb11.into_alternate_af4_open_drain();
+            hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
+        };
+
+        // Selftest: Read the EUI48 identifier.
+        let mut eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
+        let mut eui48: [u8; 6] = [0; 6];
+        eui.read_eui48(&mut eui48).unwrap();
+
+        let mut fans = {
+            let fan1 =
+                max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pulldown)
+                    .unwrap();
+            let fan2 =
+                max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Float)
+                    .unwrap();
+            let fan3 =
+                max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pullup)
+                    .unwrap();
+
+            ChassisFans::new([fan1, fan2, fan3])
+        };
+
+        assert!(fans.self_test(&mut delay));
 
         info!("Startup complete");
 
-        // Configure a timer to periodically monitor the output channels.
-        let mut monitor_timer = hal::timer::Timer::tim2(c.device.TIM2, 50.hz(), clocks);
-        monitor_timer.listen(Event::TimeOut);
-
-        // Configure a timer to periodically gather telemetry.
-        let mut telemetry_timer = hal::timer::Timer::tim3(c.device.TIM3, 2.hz(), clocks);
-        telemetry_timer.listen(Event::TimeOut);
-
-        // Enable the cycle counter.
-        // TODO: Replace the cycle counter monotonic with something that rolls over less. This may
-        // cause errors with button press detections because the cycle counter will roll over every
-        // ~22s.
-        let mut cp = cortex_m::Peripherals::take().unwrap();
-        cp.DWT.enable_cycle_counter();
+        // Kick-start the monitor and telemetry tasks.
+        c.schedule.channel_monitor(c.start).unwrap();
+        c.schedule.telemetry(c.start).unwrap();
+        c.schedule.button(c.start).unwrap();
 
         init::LateResources {
-            monitor_timer: monitor_timer,
-            telemetry_timer: telemetry_timer,
+            channels: channels,
+            fans: fans,
             buttons: buttons,
             leds: leds,
-            channels: channels,
         }
     }
 
-    #[task(binds=TIM2, priority=2, resources=[monitor_timer, channels, leds])]
+    #[task(priority = 2, schedule = [channel_monitor], resources=[channels, leds])]
     fn channel_monitor(c: channel_monitor::Context) {
-        c.resources.monitor_timer.clear_interrupt(Event::TimeOut);
+        // Potentially update the state of any channels.
+        c.resources.channels.update();
 
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
             let error_detected = match c.resources.channels.error_detected(channel) {
                 Err(Error::NotPresent) => {
-                    // Clear all LEDs for this channel.
-                    c.resources.leds.set_led(Color::Red, channel, false);
+                    // Set all LEDs for this channel.
+                    c.resources.leds.set_led(Color::Red, channel, true);
                     c.resources.leds.set_led(Color::Yellow, channel, false);
                     c.resources.leds.set_led(Color::Green, channel, false);
                     continue;
@@ -277,15 +305,8 @@ const APP: () = {
                 Err(error) => panic!("Encountered error: {:?}", error),
             };
 
-            let warning_detected = match c.resources.channels.warning_detected(channel) {
-                Ok(detected) => detected,
-                Err(error) => panic!("Encountered error: {:?}", error),
-            };
-
-            let enabled = match c.resources.channels.is_enabled(channel) {
-                Ok(detected) => detected,
-                Err(error) => panic!("Encountered error: {:?}", error),
-            };
+            let overloaded = c.resources.channels.overload_detected(channel)
+                .expect("Failed to check channel overloaded state");
 
             // Echo the measured values to the LEDs on the user interface for this channel.
             c.resources
@@ -293,18 +314,22 @@ const APP: () = {
                 .set_led(Color::Red, channel, error_detected);
             c.resources
                 .leds
-                .set_led(Color::Yellow, channel, warning_detected);
-            c.resources.leds.set_led(Color::Green, channel, enabled);
+                .set_led(Color::Yellow, channel, overloaded);
+            c.resources.leds.set_led(Color::Green, channel, error_detected == false);
         }
 
         // Propagate the updated LED values to the user interface.
         c.resources.leds.update();
+
+        // TODO: Replace hard-coded CPU cycles here.
+        // Schedule to run this task periodically at 50Hz.
+        c.schedule
+            .channel_monitor(c.scheduled + Duration::from_cycles(168_000_000 / 50))
+            .unwrap();
     }
 
-    #[task(binds=TIM3, priority=1, resources=[telemetry_timer, channels])]
+    #[task(priority = 1, schedule = [telemetry], resources=[channels])]
     fn telemetry(mut c: telemetry::Context) {
-        c.resources.telemetry_timer.clear_interrupt(Event::TimeOut);
-
         // Gather telemetry for all of the channels.
         for channel in Channel::into_enum_iter() {
             let measurements = c
@@ -315,17 +340,12 @@ const APP: () = {
             // TODO: Broadcast the measured data over the telemetry interface.
             info!("{:?}", measurements);
         }
-    }
 
-    #[task(resources=[channels])]
-    fn enable_channels(_c: enable_channels::Context) {
-        for _chan in Channel::into_enum_iter() {
-            //TODO: Enable all channels
-            //match channels.disable_channel(chan) {
-            //    Ok(_) | Err(Error::NotPresent) => {}
-            //    Err(e) => panic!("Enable failed on {:?}: {:?}", chan, e),
-            //}
-        }
+        // TODO: Replace hard-coded CPU cycles here.
+        // Schedule to run this task periodically at 2Hz.
+        c.schedule
+            .telemetry(c.scheduled + Duration::from_cycles(168_000_000 / 2))
+            .unwrap();
     }
 
     #[task(resources=[channels])]
@@ -340,29 +360,29 @@ const APP: () = {
         }
     }
 
-    #[task(binds=EXTI4, spawn=[disable_channels, enable_channels], resources=[buttons])]
+    #[task(spawn=[button, disable_channels], schedule = [button], resources=[buttons])]
     fn button(c: button::Context) {
-        if let Some(event) = c.resources.buttons.event(Instant::now()) {
+        if let Some(event) = c.resources.buttons.update() {
             match event {
-                ButtonEvent::EnableAllChannels => {
-                    c.spawn.enable_channels().unwrap();
+                ButtonEvent::InterlockReset => {
+                    // TODO: Reset the interlocks.
                 }
-                ButtonEvent::DisableChannels => {
+                ButtonEvent::Standby  => {
                     c.spawn.disable_channels().unwrap();
                 }
             }
         }
+
+        // TODO: Replace hard-coded CPU cycles here.
+        // Schedule to run this task periodically at 25Hz.
+        c.schedule
+            .button(c.scheduled + Duration::from_cycles(168_000_000 / 25))
+            .unwrap();
     }
 
     #[idle(resources=[buttons, channels])]
-    fn idle(mut c: idle::Context) -> ! {
+    fn idle(_: idle::Context) -> ! {
         loop {
-            // Check if the user is requested a reset of the device.
-            c.resources.buttons.lock(|buttons| {
-                if buttons.check_reset(Instant::now()) {
-                    cortex_m::peripheral::SCB::sys_reset();
-                }
-            });
         }
     }
 
@@ -371,5 +391,7 @@ const APP: () = {
         fn EXTI1();
         fn EXTI2();
         fn EXTI3();
+        fn USART1();
+        fn USART2();
     }
 };
