@@ -99,6 +99,7 @@ macro_rules! channel_pins {
 const APP: () = {
     struct Resources {
         channels: BoosterChannels,
+        fans: ChassisFans,
     }
 
     #[init(schedule = [telemetry, channel_monitor])]
@@ -217,16 +218,20 @@ const APP: () = {
         let mut eui48: [u8; 6] = [0; 6];
         eui.read_eui48(&mut eui48).unwrap();
 
-        let fan1 =
-            max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pulldown)
-                .unwrap();
-        let fan2 = max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Float)
-            .unwrap();
-        let fan3 =
-            max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pullup)
-                .unwrap();
+        let mut fans = {
+            let fan1 =
+                max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pulldown)
+                    .unwrap();
+            let fan2 =
+                max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Float)
+                    .unwrap();
+            let fan3 =
+                max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pullup)
+                    .unwrap();
 
-        let mut fans = ChassisFans::new([fan1, fan2, fan3]);
+            ChassisFans::new([fan1, fan2, fan3])
+        };
+
         assert!(fans.self_test(&mut delay));
 
         info!("Startup complete");
@@ -235,7 +240,10 @@ const APP: () = {
         c.schedule.channel_monitor(c.start).unwrap();
         c.schedule.telemetry(c.start).unwrap();
 
-        init::LateResources { channels: channels }
+        init::LateResources {
+            channels: channels,
+            fans: fans,
+        }
     }
 
     #[task(priority = 2, schedule = [channel_monitor], resources=[channels])]
