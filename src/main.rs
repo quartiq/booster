@@ -305,17 +305,20 @@ const APP: () = {
                 Err(error) => panic!("Encountered error: {:?}", error),
             };
 
-            let overloaded = c.resources.channels.overload_detected(channel)
+            let overloaded = c
+                .resources
+                .channels
+                .overload_detected(channel)
                 .expect("Failed to check channel overloaded state");
 
             // Echo the measured values to the LEDs on the user interface for this channel.
             c.resources
                 .leds
                 .set_led(Color::Red, channel, error_detected);
+            c.resources.leds.set_led(Color::Yellow, channel, overloaded);
             c.resources
                 .leds
-                .set_led(Color::Yellow, channel, overloaded);
-            c.resources.leds.set_led(Color::Green, channel, error_detected == false);
+                .set_led(Color::Green, channel, error_detected == false);
         }
 
         // Propagate the updated LED values to the user interface.
@@ -367,7 +370,7 @@ const APP: () = {
                 ButtonEvent::InterlockReset => {
                     // TODO: Reset the interlocks.
                 }
-                ButtonEvent::Standby  => {
+                ButtonEvent::Standby => {
                     c.spawn.disable_channels().unwrap();
                 }
             }
@@ -383,6 +386,7 @@ const APP: () = {
     #[idle(resources=[buttons, channels])]
     fn idle(_: idle::Context) -> ! {
         loop {
+            asm::nop();
         }
     }
 

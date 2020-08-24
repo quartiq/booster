@@ -403,7 +403,6 @@ impl RfChannel {
     /// # Note
     /// This must be called periodically to facilitate enabling a channel.
     pub fn update(&mut self) -> Result<(), Error> {
-
         // Check potential new fault conditions.
         if self.error_latch.is_none() {
             let temperature = self.get_temperature();
@@ -582,8 +581,14 @@ impl RfChannel {
         self.pins.signal_on.set_low().unwrap();
 
         // Disable the alarm thresholds for P5V0_CH and P28V0.
-        self.i2c_devices.power_monitor.disable_thresholds(ads7924::Channel::Zero).unwrap();
-        self.i2c_devices.power_monitor.disable_thresholds(ads7924::Channel::One).unwrap();
+        self.i2c_devices
+            .power_monitor
+            .disable_thresholds(ads7924::Channel::Zero)
+            .unwrap();
+        self.i2c_devices
+            .power_monitor
+            .disable_thresholds(ads7924::Channel::One)
+            .unwrap();
 
         // Set the bias DAC output into pinch-off.
         self.i2c_devices

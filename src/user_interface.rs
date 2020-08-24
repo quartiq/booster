@@ -12,7 +12,7 @@ use embedded_hal::{
     digital::v2::{InputPin, OutputPin},
 };
 
-use debounced_pin::{DebouncedInputPin, DebounceState, Debounce};
+use debounced_pin::{Debounce, DebounceState, DebouncedInputPin};
 
 /// Represents an event indicated through the GPIO buttons.
 pub enum ButtonEvent {
