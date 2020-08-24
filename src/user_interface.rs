@@ -21,6 +21,7 @@ pub enum ButtonEvent {
 }
 
 type Button1 = hal::gpio::gpiof::PF14<hal::gpio::Input<hal::gpio::Floating>>;
+
 type Button2 = hal::gpio::gpiof::PF15<hal::gpio::Input<hal::gpio::Floating>>;
 
 /// Represents the two user input buttons on the front panel.
@@ -63,6 +64,7 @@ impl UserButtons {
     }
 }
 
+/// A structure representing one of the input buttons.
 struct InputButton<INPUT, E>
 where
     INPUT: InputPin<Error = E>,
@@ -77,6 +79,7 @@ where
     INPUT: InputPin<Error = E>,
     E: core::fmt::Debug,
 {
+    /// Construct a new input button.
     pub fn new(button: INPUT) -> Self {
         InputButton {
             was_active: false,
@@ -84,6 +87,10 @@ where
         }
     }
 
+    /// Periodically check the state of the input button.
+    ///
+    /// # Returns
+    /// True if the debounced button state has encountered an activation.
     pub fn update(&mut self) -> bool {
         match self.button.update().unwrap() {
             DebounceState::Active => {
@@ -100,6 +107,7 @@ where
     }
 }
 
+/// Represents LED colors on the front panel.
 pub enum Color {
     Red,
     Yellow,
@@ -125,6 +133,7 @@ pub struct UserLeds {
 }
 
 impl UserLeds {
+    /// Construct a driver for the user front-panel LEDs.
     pub fn new(
         spi: LedSpi,
         csn: hal::gpio::gpiob::PB12<hal::gpio::Output<hal::gpio::PushPull>>,
@@ -144,7 +153,9 @@ impl UserLeds {
         leds
     }
 
+    /// Write the LED state to the LED outputs.
     pub fn update(&mut self) {
+        // Disable LED output while we update the display.
         self.spi_oen.set_high().unwrap();
 
         self.spi_csn.set_low().unwrap();
@@ -153,9 +164,16 @@ impl UserLeds {
             .unwrap();
         self.spi_csn.set_high().unwrap();
 
+        // Re-enable LED outputs.
         self.spi_oen.set_low().unwrap();
     }
 
+    /// Update the state of an LED.
+    ///
+    /// # Args
+    /// * `color` - The LED color to modify.
+    /// * `channel` - The channel to update the LED for.
+    /// * `enabled` - Specified true if the LED should be illuminated.
     pub fn set_led(&mut self, color: Color, channel: Channel, enabled: bool) {
         // The LEDs annotate the channels in reverse ordering.
         let channel = Channel::Seven as usize - channel as usize;
