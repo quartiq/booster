@@ -182,22 +182,6 @@ where
         Ok(())
     }
 
-    /// Disable alarm thresholds for a channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to disable thresholds for.
-    pub fn disable_thresholds(&mut self, channel: Channel) -> Result<(), Error> {
-        // Disable the alarm in the interrupt control register.
-        let mut interrupt_control_register: [u8; 1] = [0];
-        self.read(Register::IntCntrl, &mut interrupt_control_register)?;
-
-        interrupt_control_register[0].set_bit(channel as usize, false);
-
-        self.write(Register::IntCntrl, &interrupt_control_register)?;
-
-        Ok(())
-    }
-
     /// Configure and enable alarm thresholds for a channel.
     ///
     /// # Args

@@ -389,7 +389,7 @@ const APP: () = {
     }
 
     #[idle(resources=[buttons, channels])]
-    fn idle(mut c: idle::Context) -> ! {
+    fn idle(_: idle::Context) -> ! {
         loop {
             cortex_m::asm::nop();
         }

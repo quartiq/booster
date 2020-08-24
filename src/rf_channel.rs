@@ -601,16 +601,6 @@ impl RfChannel {
         // the time until we can enable a channel after a power-down.
         self.pins.signal_on.set_low().unwrap();
 
-        // Disable the alarm thresholds for P5V0_CH and P28V0.
-        self.i2c_devices
-            .power_monitor
-            .disable_thresholds(ads7924::Channel::Zero)
-            .unwrap();
-        self.i2c_devices
-            .power_monitor
-            .disable_thresholds(ads7924::Channel::One)
-            .unwrap();
-
         // Set the bias DAC output into pinch-off.
         self.i2c_devices
             .bias_dac
