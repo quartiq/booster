@@ -19,12 +19,14 @@ use hal::prelude::*;
 
 mod booster_channels;
 mod chassis_fans;
+mod delay;
 mod error;
 mod linear_transformation;
 mod mutex;
 mod rf_channel;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
+use delay::AsmDelay;
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
 
@@ -116,10 +118,7 @@ const APP: () = {
             .require_pll48clk()
             .freeze();
 
-        // For some reason, asm_delay divides the frequency by 2. To work around this, provide it a
-        // rate that is 2x the CPU rate.
-        // TODO: Replace usage of asm_delay.
-        let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(168_000_000 * 2));
+        let mut delay = AsmDelay::new(clocks.sysclk().0);
 
         let gpioa = c.device.GPIOA.split();
         let gpiob = c.device.GPIOB.split();

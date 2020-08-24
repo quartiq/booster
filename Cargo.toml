@@ -14,7 +14,6 @@ embedded-hal = "0.2.4"
 enum-iterator = "0.6.0"
 cortex-m-log = { version = "0.6.1", features = ["log-integration"] }
 log = "0.4.8"
-asm-delay = "0.9.0"
 
 shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
 
