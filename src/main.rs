@@ -293,7 +293,7 @@ const APP: () = {
 
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
-            let error_detected = match c.resources.channels.error_detected(channel) {
+            let error = match c.resources.channels.error_detected(channel) {
                 Err(Error::NotPresent) => {
                     // Set all LEDs for this channel.
                     c.resources.leds.set_led(Color::Red, channel, true);
@@ -311,14 +311,16 @@ const APP: () = {
                 .overload_detected(channel)
                 .expect("Failed to check channel overloaded state");
 
+            let enabled = c
+                .resources
+                .channels
+                .is_enabled(channel)
+                .expect("Failed to check channel enabled state");
+
             // Echo the measured values to the LEDs on the user interface for this channel.
-            c.resources
-                .leds
-                .set_led(Color::Red, channel, error_detected);
+            c.resources.leds.set_led(Color::Red, channel, error);
             c.resources.leds.set_led(Color::Yellow, channel, overloaded);
-            c.resources
-                .leds
-                .set_led(Color::Green, channel, error_detected == false);
+            c.resources.leds.set_led(Color::Green, channel, enabled);
         }
 
         // Propagate the updated LED values to the user interface.
@@ -351,42 +353,45 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(resources=[channels])]
-    fn disable_channels(mut c: disable_channels::Context) {
-        for chan in Channel::into_enum_iter() {
-            c.resources
-                .channels
-                .lock(|channels| match channels.disable_channel(chan) {
-                    Ok(_) | Err(Error::NotPresent) => {}
-                    Err(e) => panic!("Disable failed on {:?}: {:?}", chan, e),
-                })
-        }
-    }
-
-    #[task(spawn=[button, disable_channels], schedule = [button], resources=[buttons])]
-    fn button(c: button::Context) {
+    #[task(spawn=[button], schedule = [button], resources=[channels, buttons])]
+    fn button(mut c: button::Context) {
         if let Some(event) = c.resources.buttons.update() {
             match event {
                 ButtonEvent::InterlockReset => {
-                    // TODO: Reset the interlocks.
+                    for chan in Channel::into_enum_iter() {
+                        c.resources.channels.lock(|channels| {
+                            match channels.reset_channel_interlocks(chan) {
+                                Ok(_) | Err(Error::NotPresent) => {}
+                                Err(e) => panic!("Reset failed on {:?}: {:?}", chan, e),
+                            }
+                        })
+                    }
                 }
+
                 ButtonEvent::Standby => {
-                    c.spawn.disable_channels().unwrap();
+                    for chan in Channel::into_enum_iter() {
+                        c.resources
+                            .channels
+                            .lock(|channels| match channels.disable_channel(chan) {
+                                Ok(_) | Err(Error::NotPresent) => {}
+                                Err(e) => panic!("Disable failed on {:?}: {:?}", chan, e),
+                            })
+                    }
                 }
             }
         }
 
         // TODO: Replace hard-coded CPU cycles here.
-        // Schedule to run this task periodically at 25Hz.
+        // Schedule to run this task every 10ms.
         c.schedule
-            .button(c.scheduled + Duration::from_cycles(168_000_000 / 25))
+            .button(c.scheduled + Duration::from_cycles(10 * (168_000_000 / 1000)))
             .unwrap();
     }
 
     #[idle(resources=[buttons, channels])]
-    fn idle(_: idle::Context) -> ! {
+    fn idle(mut c: idle::Context) -> ! {
         loop {
-            asm::nop();
+            cortex_m::asm::nop();
         }
     }
 

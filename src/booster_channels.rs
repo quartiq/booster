@@ -195,6 +195,8 @@ impl BoosterChannels {
     /// # Returns
     /// True if an overload condition is present on the channel.
     pub fn overload_detected(&mut self, channel: Channel) -> Result<bool, Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
         match &self.channels[channel as usize] {
             // TODO: Check the input power?
             // TODO: Legacy firmware does a software check of reflected power. Determine if we need
@@ -233,6 +235,22 @@ impl BoosterChannels {
         }
     }
 
+    /// Check if an RF channel is enabled.
+    ///
+    /// # Note
+    /// This will return true even if the channel interlock is tripped.
+    ///
+    /// # Args
+    /// * `channel` - The channel to check.
+    pub fn is_enabled(&mut self, channel: Channel) -> Result<bool, Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => Ok(rf_channel.is_enabled()),
+            None => Err(Error::NotPresent),
+        }
+    }
+
     /// Disable an RF channel.
     ///
     /// # Args
@@ -242,6 +260,19 @@ impl BoosterChannels {
 
         match &mut self.channels[channel as usize] {
             Some(rf_channel) => rf_channel.start_disable(),
+            None => Err(Error::NotPresent),
+        }
+    }
+
+    /// Reset interlocks of an RF channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to reset the interlocks of.
+    pub fn reset_channel_interlocks(&mut self, channel: Channel) -> Result<(), Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => Ok(rf_channel.reset_interlocks()),
             None => Err(Error::NotPresent),
         }
     }

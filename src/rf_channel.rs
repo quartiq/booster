@@ -32,6 +32,7 @@ pub struct SupplyMeasurements {
 }
 
 /// The current state of an RF channel.
+#[derive(PartialEq)]
 pub enum ChannelState {
     /// The channel output is disabled.
     Disabled,
@@ -47,6 +48,9 @@ pub enum ChannelState {
 
     /// The channel is in the process of shutting down.
     Disabling(Instant),
+
+    /// The channel is in the process of resetting the interlocks.
+    InterlockReset(Instant),
 }
 
 pub enum ChannelFault {
@@ -457,17 +461,44 @@ impl RfChannel {
             // There's nothing to do if the channel is disabled or tripped.
             ChannelState::Disabled => {}
             ChannelState::Tripped => {}
+            ChannelState::InterlockReset(start_time) => {
+                if self.error_latch.is_some() {
+                    self.start_disable()?;
+                } else {
+                    if start_time.elapsed() > Duration::from_cycles(100 * (168_000_000 / 1000)) {
+                        self.finalize_enable()?;
+                    }
+                }
+            }
         }
 
         Ok(())
+    }
+
+    /// Start the process of resetting interlocks.
+    pub fn reset_interlocks(&mut self) {
+        // Interlocks cannot be tripped if we are not actively outputting.
+        if self.state != ChannelState::Active && self.state != ChannelState::Tripped {
+            return;
+        }
+
+        self.pins.signal_on.set_low().unwrap();
+
+        // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
+        self.i2c_devices
+            .bias_dac
+            .set_voltage(3.2)
+            .expect("Failed to disable RF bias voltage");
+
+        self.state = ChannelState::InterlockReset(Instant::now());
     }
 
     /// Check if the channel is indicating an interlock has tripped.
     pub fn is_overdriven(&self) -> bool {
         // These are only valid if the channel is enabled.
         if self.pins.signal_on.is_high().unwrap() {
-            let input_overdrive = self.pins.input_overdrive.is_low().unwrap();
-            let output_overdrive = self.pins.output_overdrive.is_low().unwrap();
+            let input_overdrive = self.pins.input_overdrive.is_high().unwrap();
+            let output_overdrive = self.pins.output_overdrive.is_high().unwrap();
 
             input_overdrive || output_overdrive
         } else {
@@ -480,7 +511,7 @@ impl RfChannel {
         self.error_latch.is_some()
     }
 
-    /// Check if the channel is enabled.
+    /// Check if the channel is outputting.
     pub fn is_outputting(&self) -> bool {
         let enabled =
             self.pins.enable_power.is_high().unwrap() && self.pins.signal_on.is_high().unwrap();
@@ -491,6 +522,14 @@ impl RfChannel {
         let bias_enabled = self.bias_voltage > -3.0;
 
         enabled && !self.is_overdriven() && bias_enabled
+    }
+
+    /// Check if the channel is enabled.
+    pub fn is_enabled(&self) -> bool {
+        match self.state {
+            ChannelState::Tripped | ChannelState::Active => true,
+            _ => false,
+        }
     }
 
     /// Check if the channel is indicating an alarm.
@@ -525,52 +564,34 @@ impl RfChannel {
 
     /// Finalize the enable process once all RF channel supplies have enabled.
     fn finalize_enable(&mut self) -> Result<(), Error> {
-        // It is only valid to finish the enable process if we have previously started enabling.
-        if let ChannelState::Enabling(_) = self.state {
-            // It is not valid to enable the channel while the interlock thresholds are low. Due to
-            // hardware configurations, it is possible that this would result in a condition where the
-            // interlock is never tripped even though the output is exceeding the interlock threshold.
-            // As a workaround, we need to ensure that the interlock level is above the output power
-            // detector level. When RF is disabled, the power detectors output a near-zero value, so
-            // 100mV should be a sufficient level.
-            if (self.reflected_interlock_threshold < self.reflected_power_transform.map(0.100))
-                || (self.output_interlock_threshold < self.output_power_transform.map(0.100))
-            {
-                self.start_disable()?;
-                return Err(Error::Invalid);
-            }
-
-            self.i2c_devices
-                .bias_dac
-                .set_voltage(-1.0 * self.bias_voltage)
-                .expect("Failed to configure RF bias voltage");
-
-            // The P28V0 current rail has an equivalent equation of Isns = Vsns * 0.233.
-            // Configure limits for 500mA range.
-            self.i2c_devices
-                .power_monitor
-                .set_thresholds(
-                    ads7924::Channel::Zero,
-                    0.0,
-                    0.500 * (100.0 / 0.100 / 4300.0),
-                )
-                .unwrap();
-
-            // The P5V0 current rail has an equivalent equation of Isns = Vsns * 0.156.
-            // Configure limits for 300mA of range.
-            self.i2c_devices
-                .power_monitor
-                .set_thresholds(ads7924::Channel::One, 0.0, 0.300 * (100.0 / 0.100 / 6200.0))
-                .unwrap();
-
-            self.pins.signal_on.set_high().unwrap();
-
-            self.state = ChannelState::Active;
-
-            Ok(())
-        } else {
-            Err(Error::InvalidState)
+        // It is only valid to finish the enable process if the channel is powered.
+        if self.pins.enable_power.is_low().unwrap() {
+            return Err(Error::InvalidState);
         }
+
+        // It is not valid to enable the channel while the interlock thresholds are low. Due to
+        // hardware configurations, it is possible that this would result in a condition where the
+        // interlock is never tripped even though the output is exceeding the interlock threshold.
+        // As a workaround, we need to ensure that the interlock level is above the output power
+        // detector level. When RF is disabled, the power detectors output a near-zero value, so
+        // 100mV should be a sufficient level.
+        if (self.reflected_interlock_threshold < self.reflected_power_transform.map(0.100))
+            || (self.output_interlock_threshold < self.output_power_transform.map(0.100))
+        {
+            self.start_disable()?;
+            return Err(Error::Invalid);
+        }
+
+        self.i2c_devices
+            .bias_dac
+            .set_voltage(-1.0 * self.bias_voltage)
+            .expect("Failed to configure RF bias voltage");
+
+        self.pins.signal_on.set_high().unwrap();
+
+        self.state = ChannelState::Active;
+
+        Ok(())
     }
 
     /// Disable the channel and power it off.
