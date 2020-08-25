@@ -61,14 +61,15 @@ The booster main-board also supports the following control/measurements for each
 ### User Interface
 
 Planned LED indications:
-* GREEN - Channel is present and output is enabled.
-* YELLOW - Channel interlocks tripped.
-* RED - Channel is not detected, has experienced an over-temperature condition, or has experienced
-  an over-current condition.
+* GREEN - Channel is present and powered.
+* YELLOW+GREEN - Channel interlocks tripped.
+* YELLOW - Channel is in standby. It may be re-enabled by pressing the "STANDBY" button.
+* RED - Channel is detected, but channel will not enable due to a fatal error or configuration
+  disable.
 
 Push button assignments (TBD):
 * PB1 (short press) - Interlock Reset (reset any enabled channels)
-* PB2 (short press) - Standby (disable all channels)
+* PB2 (short press) - Standby (toggle disable state on all channels)
 
 ## Software Overview
 

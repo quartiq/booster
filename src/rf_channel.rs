@@ -44,7 +44,7 @@ pub enum ChannelState {
     Active,
 
     /// The channel has tripped an interlock threshold.
-    Tripped,
+    Tripped(Interlock),
 
     /// The channel is in the process of shutting down.
     Disabling(Instant),
@@ -59,10 +59,19 @@ pub enum ChannelState {
     StandBy,
 }
 
+/// Represents the possible channel fault conditions.
 pub enum ChannelFault {
     OverTemperature,
     UnderTemperature,
     OverCurrent,
+}
+
+/// Represents the three power interlocks present on the device.
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub enum Interlock {
+    Input,
+    Output,
+    Reflected,
 }
 
 // Macro magic to generate an enum that looks like:
@@ -470,8 +479,11 @@ impl RfChannel {
             ChannelState::Active => {
                 // We explicitly only check for overdrive conditions once the channel has been
                 // fully enabled.
-                if self.is_overdriven() || self.is_alarmed() {
-                    self.state = ChannelState::Tripped;
+                if let Some(trip_source) = self.get_overdrive_source() {
+                    // Manually disable the ON_OFFn net - this may be a software-initiated
+                    // interlockthis may be a software-initiated interlock
+                    self.pins.signal_on.set_low().unwrap();
+                    self.state = ChannelState::Tripped(trip_source);
                 }
             }
 
@@ -482,7 +494,8 @@ impl RfChannel {
             }
 
             // There's no active transitions in the following states.
-            ChannelState::Disabled | ChannelState::Tripped | ChannelState::StandBy => {}
+            ChannelState::Disabled | ChannelState::StandBy => {}
+            ChannelState::Tripped(_) => {}
         }
 
         Ok(())
@@ -490,7 +503,7 @@ impl RfChannel {
 
     pub fn toggle_standby(&mut self) {
         match self.state {
-            ChannelState::Active | ChannelState::Tripped => {
+            ChannelState::Active | ChannelState::Tripped(_) => {
                 self._begin_disable();
                 self.state = ChannelState::StandingBy(Instant::now());
             }
@@ -507,7 +520,7 @@ impl RfChannel {
     /// Start the process of resetting interlocks.
     pub fn reset_interlocks(&mut self) {
         // Interlocks cannot be tripped if we are not actively outputting.
-        if self.state != ChannelState::Active && self.state != ChannelState::Tripped {
+        if self.is_enabled() == false {
             return;
         }
 
@@ -522,20 +535,45 @@ impl RfChannel {
         self.state = ChannelState::InterlockReset(Instant::now());
     }
 
+    fn get_overdrive_source(&mut self) -> Option<Interlock> {
+        let reflected_overdrive = self.pins.reflected_overdrive.is_high().unwrap();
+        let output_overdrive = self.pins.output_overdrive.is_high().unwrap();
+
+        // The schematic indicates the maximum input power is 25dBm. We'll use 20dBm to provide
+        // a safety margin.
+        let input_overdrive = self.get_input_power() > 20.0;
+
+        if input_overdrive {
+            Some(Interlock::Input)
+        } else if output_overdrive {
+            Some(Interlock::Output)
+        } else if reflected_overdrive {
+            Some(Interlock::Reflected)
+        } else {
+            None
+        }
+    }
+
     /// Check if the channel is indicating an interlock has tripped.
-    pub fn is_overdriven(&mut self) -> bool {
-        // These are only valid if the channel is enabled.
-        if self.pins.signal_on.is_high().unwrap() {
-            let reflected_overdrive = self.pins.reflected_overdrive.is_high().unwrap();
-            let output_overdrive = self.pins.output_overdrive.is_high().unwrap();
-
-            // The schematic indicates the maximum input power is 25dBm. We'll use 20dBm to provide
-            // a safety margin.
-            let input_overdrive = self.get_input_power() > 20.0;
-
-            reflected_overdrive || output_overdrive || input_overdrive
+    pub fn was_overdriven(&mut self) -> bool {
+        let was_overdriven = if let ChannelState::Tripped(_) = self.state {
+            true
         } else {
             false
+        };
+
+        self.get_overdrive_source().is_some() || was_overdriven
+    }
+
+    /// Get the trip source of the channel.
+    ///
+    /// # Returns
+    /// An option containing the tripped interlock.
+    pub fn get_trip_source(&self) -> Option<Interlock> {
+        if let ChannelState::Tripped(source) = self.state {
+            Some(source)
+        } else {
+            None
         }
     }
 
@@ -560,15 +598,15 @@ impl RfChannel {
         // -3.2 V.
         let bias_enabled = self.bias_voltage > -3.0;
 
-        enabled && !self.is_overdriven() && bias_enabled
+        let reflected_overdrive = self.pins.reflected_overdrive.is_high().unwrap();
+        let output_overdrive = self.pins.output_overdrive.is_high().unwrap();
+
+        enabled && (reflected_overdrive == false) && (output_overdrive == false) && bias_enabled
     }
 
     /// Check if the channel is enabled.
     pub fn is_enabled(&self) -> bool {
-        match self.state {
-            ChannelState::Tripped | ChannelState::Active => true,
-            _ => false,
-        }
+        self.pins.enable_power.is_high().unwrap()
     }
 
     /// Check if the channel is standing by.

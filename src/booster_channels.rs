@@ -11,7 +11,7 @@ use tca9548::{self, Tca9548};
 
 use super::{I2cBusManager, I2cProxy};
 use crate::error::Error;
-use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
+use crate::rf_channel::{ChannelPins as RfChannelPins, Interlock, RfChannel};
 use embedded_hal::blocking::delay::DelayUs;
 
 /// A EUI-48 identifier for a given channel.
@@ -43,6 +43,7 @@ pub struct ChannelStatus {
     pub reflected_overdrive_threshold: f32,
     pub output_overdrive_threshold: f32,
     pub bias_voltage: f32,
+    pub trip_source: Option<Interlock>,
 }
 
 /// Represents a control structure for interfacing to booster RF channels.
@@ -198,7 +199,7 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.is_overdriven()),
+            Some(rf_channel) => Ok(rf_channel.was_overdriven()),
             None => Err(Error::NotPresent),
         }
     }
@@ -367,6 +368,7 @@ impl BoosterChannels {
                     reflected_overdrive_threshold: rf_channel.get_reflected_interlock_threshold(),
                     output_overdrive_threshold: rf_channel.get_output_interlock_threshold(),
                     bias_voltage: rf_channel.get_bias_voltage(),
+                    trip_source: rf_channel.get_trip_source(),
                 };
 
                 Ok(status)
