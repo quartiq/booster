@@ -41,6 +41,17 @@ type I2C = hal::i2c::I2c<
     ),
 >;
 
+type SPI = hal::spi::Spi<
+    hal::stm32::SPI1,
+    (
+        hal::gpio::gpioa::PA5<hal::gpio::Alternate<hal::gpio::AF5>>,
+        hal::gpio::gpioa::PA6<hal::gpio::Alternate<hal::gpio::AF5>>,
+        hal::gpio::gpioa::PA7<hal::gpio::Alternate<hal::gpio::AF5>>,
+    ),
+>;
+
+type Ethernet = w5500::W5500<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
+
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
 type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
 
@@ -100,6 +111,7 @@ const APP: () = {
     struct Resources {
         channels: BoosterChannels,
         fans: ChassisFans,
+        ethernet: Ethernet,
     }
 
     #[init(schedule = [telemetry, channel_monitor])]
@@ -213,10 +225,45 @@ const APP: () = {
             hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
         };
 
+        let mut w5500 = {
+            let spi = {
+                let sck = gpioa.pa5.into_alternate_af5();
+                let miso = gpioa.pa6.into_alternate_af5();
+                let mosi = gpioa.pa7.into_alternate_af5();
+
+                let mode = hal::spi::Mode {
+                    polarity: hal::spi::Polarity::IdleLow,
+                    phase: hal::spi::Phase::CaptureOnFirstTransition,
+                };
+
+                // TODO: Check SPI frequency against old design.
+                hal::spi::Spi::spi1(c.device.SPI1, (sck, miso, mosi), mode, 1.mhz().into(), clocks,)
+            };
+
+            let cs = {
+                let mut pin = gpioa.pa4.into_push_pull_output();
+                pin.set_high().unwrap();
+                pin
+            };
+
+            w5500::W5500::new(spi, cs,
+                    w5500::OnWakeOnLan::Ignore,
+                    w5500::OnPingRequest::Respond,
+                    w5500::ConnectionType::Ethernet,
+                    w5500::ArpResponses::Cache).unwrap()
+        };
+
+
         // Selftest: Read the EUI48 identifier.
         let mut eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
         let mut eui48: [u8; 6] = [0; 6];
         eui.read_eui48(&mut eui48).unwrap();
+        w5500.set_mac(w5500::MacAddress::from_bytes(eui48)).unwrap();
+
+        // Set default netmask and gateway.
+        w5500.set_gateway(w5500::Ipv4Addr::new(10, 0, 0, 0)).unwrap();
+        w5500.set_subnet(w5500::Ipv4Addr::new(255, 255, 255, 0)).unwrap();
+        w5500.set_ip(w5500::Ipv4Addr::new(10, 0, 0, 1)).unwrap();
 
         let mut fans = {
             let fan1 =
@@ -243,6 +290,7 @@ const APP: () = {
         init::LateResources {
             channels: channels,
             fans: fans,
+            ethernet: w5500,
         }
     }
 
