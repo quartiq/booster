@@ -34,7 +34,7 @@ pub enum Error<SpiError, ChipSelectError> {
     NotReady,
 }
 
-pub enum SocketState {
+enum SocketState {
     Closed = 0x00,
     Init = 0x13,
     Listen = 0x14,

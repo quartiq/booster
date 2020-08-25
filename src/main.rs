@@ -236,12 +236,11 @@ const APP: () = {
                     phase: hal::spi::Phase::CaptureOnFirstTransition,
                 };
 
-                // TODO: Check SPI frequency against old design.
                 hal::spi::Spi::spi1(
                     c.device.SPI1,
                     (sck, miso, mosi),
                     mode,
-                    1.mhz().into(),
+                    30.mhz().into(),
                     clocks,
                 )
             };
@@ -263,7 +262,7 @@ const APP: () = {
             .unwrap()
         };
 
-        // Selftest: Read the EUI48 identifier.
+        // Read the EUI48 identifier and configure the ethernet MAC address.
         let mut eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
         let mut eui48: [u8; 6] = [0; 6];
         eui.read_eui48(&mut eui48).unwrap();
