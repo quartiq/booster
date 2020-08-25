@@ -3,9 +3,12 @@
 
 use bit_field::BitField;
 
+mod nal;
 pub mod net;
+pub use nal::Interface;
+
+pub use embedded_nal::Ipv4Addr;
 pub use net::MacAddress;
-pub use no_std_net::Ipv4Addr;
 
 use embedded_hal::blocking::spi::{Transfer, Write};
 use embedded_hal::digital::v2::OutputPin;
@@ -32,16 +35,17 @@ pub enum Error<SpiError, ChipSelectError> {
     ChipSelect(ChipSelectError),
     Exhausted,
     NotReady,
+    Unsupported,
 }
 
 enum SocketState {
-    Closed = 0x00,
+    //Closed = 0x00,
     Init = 0x13,
-    Listen = 0x14,
+    //Listen = 0x14,
     Established = 0x17,
-    CloseWait = 0x1c,
-    Udp = 0x22,
-    MacRaw = 0x42,
+    //CloseWait = 0x1c,
+    //Udp = 0x22,
+    //MacRaw = 0x42,
 }
 
 /// Settings for wake on LAN.  Allows the W5500 to optionally emit an interrupt upon receiving a
@@ -444,35 +448,9 @@ where
         Ok(())
     }
 
-    pub fn connect_tcp(
-        &mut self,
-        remote: Ipv4Addr,
-        port: u16,
-    ) -> Result<TcpSocket, Error<SPIE, CSE>> {
+    pub fn open_tcp(&mut self) -> Result<TcpSocket, Error<SPIE, CSE>> {
         let socket = self.take_socket().ok_or(Error::<SPIE, CSE>::Exhausted)?;
 
-        // Set our local port to some ephemeral port.
-        let local_port = self.get_ephemeral_port();
-        self.write_u16(socket.at(SocketRegister::LocalPort), local_port)
-            .or_else(|e| {
-                self.return_socket(socket);
-                Err(e)
-            })?;
-
-        // Write the report port and IP
-        self.write(socket.at(SocketRegister::DestinationIp), &remote.octets())
-            .or_else(|e| {
-                self.return_socket(socket);
-                Err(e)
-            })?;
-
-        self.write_u16(socket.at(SocketRegister::DestinationPort), port)
-            .or_else(|e| {
-                self.return_socket(socket);
-                Err(e)
-            })?;
-
-        // Open and connect the socket.
         self.write_u8(socket.at(SocketRegister::Mode), Protocol::TCP as u8)
             .or_else(|e| {
                 self.return_socket(socket);
@@ -502,17 +480,31 @@ where
             }
         }
 
+        Ok(TcpSocket(socket))
+    }
+
+    pub fn connect_tcp(
+        &mut self,
+        socket: TcpSocket,
+        remote: Ipv4Addr,
+        port: u16,
+    ) -> Result<TcpSocket, Error<SPIE, CSE>> {
+        // Set our local port to some ephemeral port.
+        let local_port = self.get_ephemeral_port();
+        self.write_u16(socket.0.at(SocketRegister::LocalPort), local_port)?;
+
+        // Write the report port and IP
+        self.write(socket.0.at(SocketRegister::DestinationIp), &remote.octets())?;
+
+        self.write_u16(socket.0.at(SocketRegister::DestinationPort), port)?;
+
         // Connect the socket.
         self.write_u8(
-            socket.at(SocketRegister::Command),
+            socket.0.at(SocketRegister::Command),
             SocketCommand::Connect as u8,
-        )
-        .or_else(|e| {
-            self.return_socket(socket);
-            Err(e)
-        })?;
+        )?;
 
-        Ok(TcpSocket(socket))
+        Ok(socket)
     }
 
     pub fn is_connected(&mut self, socket: &TcpSocket) -> Result<bool, Error<SPIE, CSE>> {
