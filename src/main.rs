@@ -70,25 +70,28 @@ macro_rules! adc_pins {
 /// * `gpiog` - The GPIOG Parts structure to extract pins from.
 /// * `enable` - The pin ID of the enable pin in GPIOD.
 /// * `alert` - The pin ID of the alert pin in GPIOD.
-/// * `input_overdrive` - The pin ID of the input overdrive pin in GPIOE.
+/// * `reflected_overdrive` - The pin ID of the input overdrive pin in GPIOE.
 /// * `output_overdrive` - The pin ID of the output overdrive pin in GPIOE.
 /// * `signal_on` - The pin ID of the signal on pin in GPIOG.
 ///
 /// # Returns
 /// An option containing the RfChannelPins structure.
 macro_rules! channel_pins {
-    ($gpiod:ident, $gpioe:ident, $gpiog:ident, $enable:ident, $alert:ident, $input_overdrive:ident,
+    ($gpiod:ident, $gpioe:ident, $gpiog:ident, $enable:ident, $alert:ident, $reflected_overdrive:ident,
      $output_overdrive:ident, $signal_on:ident, $analog_pins:ident) => {{
         let enable_power = $gpiod.$enable.into_push_pull_output().downgrade();
         let alert = $gpiod.$alert.into_floating_input().downgrade();
-        let input_overdrive = $gpioe.$input_overdrive.into_floating_input().downgrade();
+        let reflected_overdrive = $gpioe
+            .$reflected_overdrive
+            .into_floating_input()
+            .downgrade();
         let output_overdrive = $gpioe.$output_overdrive.into_pull_down_input().downgrade();
         let signal_on = $gpiog.$signal_on.into_push_pull_output().downgrade();
 
         Some(RfChannelPins::new(
             enable_power,
             alert,
-            input_overdrive,
+            reflected_overdrive,
             output_overdrive,
             signal_on,
             $analog_pins,
@@ -293,15 +296,15 @@ const APP: () = {
 
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
-            let error = match c.resources.channels.error_detected(channel) {
+            let error = match c.resources.channels.channel_can_enable(channel) {
                 Err(Error::NotPresent) => {
-                    // Set all LEDs for this channel.
-                    c.resources.leds.set_led(Color::Red, channel, true);
+                    // Clear all LEDs for this channel.
+                    c.resources.leds.set_led(Color::Red, channel, false);
                     c.resources.leds.set_led(Color::Yellow, channel, false);
                     c.resources.leds.set_led(Color::Green, channel, false);
                     continue;
                 }
-                Ok(detected) => detected,
+                Ok(can_enable) => can_enable == false,
                 Err(error) => panic!("Encountered error: {:?}", error),
             };
 
@@ -317,9 +320,17 @@ const APP: () = {
                 .is_enabled(channel)
                 .expect("Failed to check channel enabled state");
 
+            let in_standby = c
+                .resources
+                .channels
+                .is_standing_by(channel)
+                .expect("Failed to check if channel is standing by");
+
             // Echo the measured values to the LEDs on the user interface for this channel.
             c.resources.leds.set_led(Color::Red, channel, error);
-            c.resources.leds.set_led(Color::Yellow, channel, overloaded);
+            c.resources
+                .leds
+                .set_led(Color::Yellow, channel, overloaded || in_standby);
             c.resources.leds.set_led(Color::Green, channel, enabled);
         }
 
@@ -372,9 +383,9 @@ const APP: () = {
                     for chan in Channel::into_enum_iter() {
                         c.resources
                             .channels
-                            .lock(|channels| match channels.disable_channel(chan) {
+                            .lock(|channels| match channels.toggle_standby(chan) {
                                 Ok(_) | Err(Error::NotPresent) => {}
-                                Err(e) => panic!("Disable failed on {:?}: {:?}", chan, e),
+                                Err(e) => panic!("Standby failed on {:?}: {:?}", chan, e),
                             })
                     }
                 }

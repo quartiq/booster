@@ -197,27 +197,40 @@ impl BoosterChannels {
     pub fn overload_detected(&mut self, channel: Channel) -> Result<bool, Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
-        match &self.channels[channel as usize] {
-            // TODO: Check the input power?
-            // TODO: Legacy firmware does a software check of reflected power. Determine if we need
-            // to do this.
+        match &mut self.channels[channel as usize] {
             Some(rf_channel) => Ok(rf_channel.is_overdriven()),
             None => Err(Error::NotPresent),
         }
     }
 
-    /// Check if a channel has encountered an error condition.
+    /// Check if a channel can enable.
     ///
     /// # Args
     /// * `channel` - The channel to check.
     ///
     /// # Returns
-    /// True if an error condition is present on the channel.
-    pub fn error_detected(&mut self, channel: Channel) -> Result<bool, Error> {
+    /// True if the channel can be enabled.
+    pub fn channel_can_enable(&mut self, channel: Channel) -> Result<bool, Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.is_errored()),
+            Some(rf_channel) => Ok(rf_channel.can_enable()),
+            None => Err(Error::NotPresent),
+        }
+    }
+
+    /// Check if a channel is standing by (not outputting).
+    ///
+    /// # Args
+    /// * `channel` - The channel to check.
+    ///
+    /// # Returns
+    /// True if the channel is standing by and may be re-enabled.
+    pub fn is_standing_by(&mut self, channel: Channel) -> Result<bool, Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &self.channels[channel as usize] {
+            Some(rf_channel) => Ok(rf_channel.is_standing_by()),
             None => Err(Error::NotPresent),
         }
     }
@@ -231,6 +244,19 @@ impl BoosterChannels {
 
         match &mut self.channels[channel as usize] {
             Some(rf_channel) => rf_channel.start_enable(),
+            None => Err(Error::NotPresent),
+        }
+    }
+
+    /// Toggle an RF channel from standby
+    ///
+    /// # Args
+    /// * `channel` - The channel to toggle.
+    pub fn toggle_standby(&mut self, channel: Channel) -> Result<(), Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => Ok(rf_channel.toggle_standby()),
             None => Err(Error::NotPresent),
         }
     }
@@ -259,7 +285,7 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.start_disable(),
+            Some(rf_channel) => Ok(rf_channel.start_disable()),
             None => Err(Error::NotPresent),
         }
     }
@@ -327,7 +353,7 @@ impl BoosterChannels {
                 let mut adc = self.adc.borrow_mut();
 
                 let status = ChannelStatus {
-                    reflected_overdrive: rf_channel.pins.input_overdrive.is_high().unwrap(),
+                    reflected_overdrive: rf_channel.pins.reflected_overdrive.is_high().unwrap(),
                     output_overdrive: rf_channel.pins.output_overdrive.is_high().unwrap(),
                     alert: rf_channel.is_alarmed(),
                     outputting: rf_channel.is_outputting(),

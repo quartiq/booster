@@ -51,6 +51,12 @@ pub enum ChannelState {
 
     /// The channel is in the process of resetting the interlocks.
     InterlockReset(Instant),
+
+    /// The channel is in the process of standing by.
+    StandingBy(Instant),
+
+    /// The channel is in standby mode.
+    StandBy,
 }
 
 pub enum ChannelFault {
@@ -230,7 +236,7 @@ pub struct ChannelPins {
     // them internally.
     pub alert: hal::gpio::gpiod::PD<Input<Floating>>,
 
-    pub input_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
+    pub reflected_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
 
     // There are no pullup/pulldown resistors on this input, so we will pull it down internally.
     pub output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
@@ -244,17 +250,17 @@ impl ChannelPins {
     /// Construct new set of control pins.
     ///
     /// # Args
-    /// * `enable_power_pin` - An output pin used to power up the RF channel.
-    /// * `alert_pin` - An input pin monitoring the status of the RF power module. This is connected
-    ///   to the ADS7924 alert output.
-    /// * `input_overdrive_pin` - An input pin that indicates an input overdrive.
-    /// * `output_overdrive_pin` - An input pin that indicates an output overdrive.
-    /// * `signal_on_pin` - An output pin that is set high to enable output signal amplification.
+    /// * `enable_power` - An output pin used to power up the RF channel.
+    /// * `alert` - An input pin monitoring the status of the RF power module. This is connected to
+    ///   the ADS7924 alert output.
+    /// * `reflected_overdrive` - An input pin that indicates an input overdrive.
+    /// * `output_overdrive` - An input pin that indicates an output overdrive.
+    /// * `signal_on` - An output pin that is set high to enable output signal amplification.
     /// * `adc_pins` - The AnalogPins that are associated with the channel.
     pub fn new(
         enable_power: hal::gpio::gpiod::PD<Output<PushPull>>,
         alert: hal::gpio::gpiod::PD<Input<Floating>>,
-        input_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
+        reflected_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
         output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
         signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
         adc_pins: AnalogPins,
@@ -262,7 +268,7 @@ impl ChannelPins {
         let mut pins = Self {
             enable_power,
             alert,
-            input_overdrive,
+            reflected_overdrive,
             output_overdrive,
             signal_on,
             adc_pins,
@@ -342,7 +348,9 @@ impl RfChannel {
                         1.5 / 0.035,
                         -35.6 + 19.8 + 10.0,
                     ),
-                    state: ChannelState::Disabled,
+
+                    // TODO: Set the initial state based on NVM-based settings.
+                    state: ChannelState::StandBy,
                     error_latch: None,
                 };
 
@@ -419,18 +427,19 @@ impl RfChannel {
             }
         }
 
+        // Unconditionally disable the channel if an error is latched.
+        if self.error_latch.is_some() && self.pins.enable_power.is_high().unwrap() {
+            self.start_disable();
+        }
+
         match self.state {
             ChannelState::Enabling(start_time) => {
-                if self.error_latch.is_some() {
-                    self.start_disable()?;
-                } else {
-                    // The LM3880 requires 180ms to power up all supplies on the channel. We add an
-                    // additional 20ms margin.
+                // The LM3880 requires 180ms to power up all supplies on the channel. We add an
+                // additional 20ms margin.
 
-                    // TODO: Replace constant definition of CPU frequency here.
-                    if start_time.elapsed() > Duration::from_cycles(200 * (168_000_000 / 1000)) {
-                        self.finalize_enable()?;
-                    }
+                // TODO: Replace constant definition of CPU frequency here.
+                if start_time.elapsed() > Duration::from_cycles(200 * (168_000_000 / 1000)) {
+                    self.finalize_enable()?;
                 }
             }
 
@@ -446,33 +455,53 @@ impl RfChannel {
                 }
             }
 
-            ChannelState::Active => {
-                if self.error_latch.is_some() {
-                    self.start_disable()?;
-                } else {
-                    // We explicitly only check for overdrive conditions once the channel has been
-                    // fully enabled.
-                    if self.is_overdriven() || self.is_alarmed() {
-                        self.state = ChannelState::Tripped;
-                    }
+            ChannelState::StandingBy(start_time) => {
+                // Note that we use 500ms here due to the worst-case power-sequencing operation of
+                // the LM3880 that occurs when a channel is disabled immediately after enable. In
+                // this case, the LM3880 will require 180ms to power up the channel, 120ms to
+                // stabilize, and then 180ms to power down the channel.
+
+                // TODO: Replace constant definition of CPU frequency here.
+                if start_time.elapsed() > Duration::from_cycles(500 * (168_000_000 / 1000)) {
+                    self.state = ChannelState::StandBy;
                 }
             }
 
-            // There's nothing to do if the channel is disabled or tripped.
-            ChannelState::Disabled => {}
-            ChannelState::Tripped => {}
-            ChannelState::InterlockReset(start_time) => {
-                if self.error_latch.is_some() {
-                    self.start_disable()?;
-                } else {
-                    if start_time.elapsed() > Duration::from_cycles(100 * (168_000_000 / 1000)) {
-                        self.finalize_enable()?;
-                    }
+            ChannelState::Active => {
+                // We explicitly only check for overdrive conditions once the channel has been
+                // fully enabled.
+                if self.is_overdriven() || self.is_alarmed() {
+                    self.state = ChannelState::Tripped;
                 }
             }
+
+            ChannelState::InterlockReset(start_time) => {
+                if start_time.elapsed() > Duration::from_cycles(100 * (168_000_000 / 1000)) {
+                    self.finalize_enable()?;
+                }
+            }
+
+            // There's no active transitions in the following states.
+            ChannelState::Disabled | ChannelState::Tripped | ChannelState::StandBy => {}
         }
 
         Ok(())
+    }
+
+    pub fn toggle_standby(&mut self) {
+        match self.state {
+            ChannelState::Active | ChannelState::Tripped => {
+                self._begin_disable();
+                self.state = ChannelState::StandingBy(Instant::now());
+            }
+            ChannelState::StandBy => {
+                // Only re-enable the channel if there is no error latched.
+                if self.error_latch.is_none() {
+                    self.start_enable().unwrap();
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Start the process of resetting interlocks.
@@ -494,25 +523,35 @@ impl RfChannel {
     }
 
     /// Check if the channel is indicating an interlock has tripped.
-    pub fn is_overdriven(&self) -> bool {
+    pub fn is_overdriven(&mut self) -> bool {
         // These are only valid if the channel is enabled.
         if self.pins.signal_on.is_high().unwrap() {
-            let input_overdrive = self.pins.input_overdrive.is_high().unwrap();
+            let reflected_overdrive = self.pins.reflected_overdrive.is_high().unwrap();
             let output_overdrive = self.pins.output_overdrive.is_high().unwrap();
 
-            input_overdrive || output_overdrive
+            // The schematic indicates the maximum input power is 25dBm. We'll use 20dBm to provide
+            // a safety margin.
+            let input_overdrive = self.get_input_power() > 20.0;
+
+            reflected_overdrive || output_overdrive || input_overdrive
         } else {
             false
         }
     }
 
-    /// Check if the channel has a fault.
-    pub fn is_errored(&self) -> bool {
-        self.error_latch.is_some()
+    /// Check if the channel can enable.
+    pub fn can_enable(&self) -> bool {
+        let wont_enable = match self.state {
+            ChannelState::Disabling(_) => true,
+            ChannelState::Disabled => true,
+            _ => false,
+        };
+
+        self.error_latch.is_none() && (wont_enable == false)
     }
 
     /// Check if the channel is outputting.
-    pub fn is_outputting(&self) -> bool {
+    pub fn is_outputting(&mut self) -> bool {
         let enabled =
             self.pins.enable_power.is_high().unwrap() && self.pins.signal_on.is_high().unwrap();
 
@@ -532,6 +571,15 @@ impl RfChannel {
         }
     }
 
+    /// Check if the channel is standing by.
+    pub fn is_standing_by(&self) -> bool {
+        match self.state {
+            ChannelState::StandingBy(_) => true,
+            ChannelState::StandBy => true,
+            _ => false,
+        }
+    }
+
     /// Check if the channel is indicating an alarm.
     pub fn is_alarmed(&self) -> bool {
         self.pins.alert.is_low().unwrap()
@@ -544,6 +592,11 @@ impl RfChannel {
         // within 200ms.
         if let ChannelState::Disabling(_) = self.state {
             return Err(Error::InvalidState);
+        }
+
+        // It is not allowed to enable a channel while an error is latched.
+        if self.error_latch.is_some() {
+            return Err(Error::Fault);
         }
 
         // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
@@ -569,6 +622,11 @@ impl RfChannel {
             return Err(Error::InvalidState);
         }
 
+        // It is not allowed to enable a channel while an error is latched.
+        if self.error_latch.is_some() {
+            return Err(Error::Fault);
+        }
+
         // It is not valid to enable the channel while the interlock thresholds are low. Due to
         // hardware configurations, it is possible that this would result in a condition where the
         // interlock is never tripped even though the output is exceeding the interlock threshold.
@@ -578,7 +636,7 @@ impl RfChannel {
         if (self.reflected_interlock_threshold < self.reflected_power_transform.map(0.100))
             || (self.output_interlock_threshold < self.output_power_transform.map(0.100))
         {
-            self.start_disable()?;
+            self.start_disable();
             return Err(Error::Invalid);
         }
 
@@ -594,8 +652,7 @@ impl RfChannel {
         Ok(())
     }
 
-    /// Disable the channel and power it off.
-    pub fn start_disable(&mut self) -> Result<(), Error> {
+    fn _begin_disable(&mut self) {
         // The RF channel may be unconditionally disabled at any point to aid in preventing damage.
         // The effect of this is that we must assume worst-case power-down timing, which increases
         // the time until we can enable a channel after a power-down.
@@ -608,10 +665,12 @@ impl RfChannel {
             .expect("Failed to disable RF bias voltage");
 
         self.pins.enable_power.set_low().unwrap();
+    }
 
+    /// Disable the channel and power it off.
+    pub fn start_disable(&mut self) {
+        self._begin_disable();
         self.state = ChannelState::Disabling(Instant::now());
-
-        Ok(())
     }
 
     /// Get the temperature of the channel in celsius.

@@ -129,7 +129,6 @@ pub struct UserLeds {
     green: u8,
     spi: LedSpi,
     spi_csn: hal::gpio::gpiob::PB12<hal::gpio::Output<hal::gpio::PushPull>>,
-    spi_oen: hal::gpio::gpiob::PB8<hal::gpio::Output<hal::gpio::PushPull>>,
 }
 
 impl UserLeds {
@@ -137,16 +136,18 @@ impl UserLeds {
     pub fn new(
         spi: LedSpi,
         csn: hal::gpio::gpiob::PB12<hal::gpio::Output<hal::gpio::PushPull>>,
-        oen: hal::gpio::gpiob::PB8<hal::gpio::Output<hal::gpio::PushPull>>,
+        mut oen: hal::gpio::gpiob::PB8<hal::gpio::Output<hal::gpio::PushPull>>,
     ) -> Self {
         let mut leds = UserLeds {
             red: 0u8,
             yellow: 0u8,
             green: 0u8,
             spi: spi,
-            spi_oen: oen,
             spi_csn: csn,
         };
+
+        // Enable LED output.
+        oen.set_low().unwrap();
 
         leds.update();
 
@@ -155,17 +156,11 @@ impl UserLeds {
 
     /// Write the LED state to the LED outputs.
     pub fn update(&mut self) {
-        // Disable LED output while we update the display.
-        self.spi_oen.set_high().unwrap();
-
         self.spi_csn.set_low().unwrap();
         self.spi
             .write(&[self.green, self.yellow, self.red])
             .unwrap();
         self.spi_csn.set_high().unwrap();
-
-        // Re-enable LED outputs.
-        self.spi_oen.set_low().unwrap();
     }
 
     /// Update the state of an LED.

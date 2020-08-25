@@ -13,4 +13,5 @@ pub enum Error {
     NotPresent,
     Interface,
     Bounds,
+    Fault,
 }
