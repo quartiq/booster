@@ -237,7 +237,13 @@ const APP: () = {
                 };
 
                 // TODO: Check SPI frequency against old design.
-                hal::spi::Spi::spi1(c.device.SPI1, (sck, miso, mosi), mode, 1.mhz().into(), clocks,)
+                hal::spi::Spi::spi1(
+                    c.device.SPI1,
+                    (sck, miso, mosi),
+                    mode,
+                    1.mhz().into(),
+                    clocks,
+                )
             };
 
             let cs = {
@@ -246,13 +252,16 @@ const APP: () = {
                 pin
             };
 
-            w5500::W5500::new(spi, cs,
-                    w5500::OnWakeOnLan::Ignore,
-                    w5500::OnPingRequest::Respond,
-                    w5500::ConnectionType::Ethernet,
-                    w5500::ArpResponses::Cache).unwrap()
+            w5500::W5500::new(
+                spi,
+                cs,
+                w5500::OnWakeOnLan::Ignore,
+                w5500::OnPingRequest::Respond,
+                w5500::ConnectionType::Ethernet,
+                w5500::ArpResponses::Cache,
+            )
+            .unwrap()
         };
-
 
         // Selftest: Read the EUI48 identifier.
         let mut eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
@@ -261,8 +270,12 @@ const APP: () = {
         w5500.set_mac(w5500::MacAddress::from_bytes(eui48)).unwrap();
 
         // Set default netmask and gateway.
-        w5500.set_gateway(w5500::Ipv4Addr::new(10, 0, 0, 0)).unwrap();
-        w5500.set_subnet(w5500::Ipv4Addr::new(255, 255, 255, 0)).unwrap();
+        w5500
+            .set_gateway(w5500::Ipv4Addr::new(10, 0, 0, 0))
+            .unwrap();
+        w5500
+            .set_subnet(w5500::Ipv4Addr::new(255, 255, 255, 0))
+            .unwrap();
         w5500.set_ip(w5500::Ipv4Addr::new(10, 0, 0, 1)).unwrap();
 
         let mut fans = {
