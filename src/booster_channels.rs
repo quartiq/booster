@@ -27,7 +27,7 @@ impl ChannelIdentifier {
 }
 
 /// Contains channel status information in SI base units.
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct ChannelStatus {
     pub reflected_overdrive: bool,
     pub output_overdrive: bool,

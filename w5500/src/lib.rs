@@ -504,6 +504,10 @@ where
             SocketCommand::Connect as u8,
         )?;
 
+        // Wait for the socket to connect.
+        // TODO: Detect disconnection events here as well.
+        while self.is_connected(&socket)? == false {}
+
         Ok(socket)
     }
 

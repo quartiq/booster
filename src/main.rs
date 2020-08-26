@@ -12,6 +12,8 @@ extern crate log;
 
 use cortex_m::asm;
 use enum_iterator::IntoEnumIterator;
+use heapless::String;
+use minimq::{MqttClient, QoS};
 use panic_halt as _;
 use stm32f4xx_hal as hal;
 
@@ -50,7 +52,8 @@ type SPI = hal::spi::Spi<
     ),
 >;
 
-type Ethernet = w5500::W5500<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
+type Ethernet =
+    w5500::Interface<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
 type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
@@ -111,7 +114,7 @@ const APP: () = {
     struct Resources {
         channels: BoosterChannels,
         fans: ChassisFans,
-        ethernet: Ethernet,
+        mqtt_client: MqttClient<minimq::consts::U1024, Ethernet>,
     }
 
     #[init(schedule = [telemetry, channel_monitor])]
@@ -225,57 +228,69 @@ const APP: () = {
             hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
         };
 
-        let mut w5500 = {
-            let spi = {
-                let sck = gpioa.pa5.into_alternate_af5();
-                let miso = gpioa.pa6.into_alternate_af5();
-                let mosi = gpioa.pa7.into_alternate_af5();
+        // Read the EUI48 identifier and configure the ethernet MAC address.
+        let mut eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
 
-                let mode = hal::spi::Mode {
-                    polarity: hal::spi::Polarity::IdleLow,
-                    phase: hal::spi::Phase::CaptureOnFirstTransition,
+        let mqtt_client = {
+            let interface = {
+                let spi = {
+                    let sck = gpioa.pa5.into_alternate_af5();
+                    let miso = gpioa.pa6.into_alternate_af5();
+                    let mosi = gpioa.pa7.into_alternate_af5();
+
+                    let mode = hal::spi::Mode {
+                        polarity: hal::spi::Polarity::IdleLow,
+                        phase: hal::spi::Phase::CaptureOnFirstTransition,
+                    };
+
+                    hal::spi::Spi::spi1(
+                        c.device.SPI1,
+                        (sck, miso, mosi),
+                        mode,
+                        1.mhz().into(),
+                        clocks,
+                    )
                 };
 
-                hal::spi::Spi::spi1(
-                    c.device.SPI1,
-                    (sck, miso, mosi),
-                    mode,
-                    30.mhz().into(),
-                    clocks,
+                let cs = {
+                    let mut pin = gpioa.pa4.into_push_pull_output();
+                    pin.set_high().unwrap();
+                    pin
+                };
+
+                let mut w5500 = w5500::W5500::new(
+                    spi,
+                    cs,
+                    w5500::OnWakeOnLan::Ignore,
+                    w5500::OnPingRequest::Respond,
+                    w5500::ConnectionType::Ethernet,
+                    w5500::ArpResponses::Cache,
                 )
+                .unwrap();
+
+                let mut eui48: [u8; 6] = [0; 6];
+                eui.read_eui48(&mut eui48).unwrap();
+                w5500.set_mac(w5500::MacAddress::from_bytes(eui48)).unwrap();
+
+                // Set default netmask and gateway.
+                w5500
+                    .set_gateway(w5500::Ipv4Addr::new(10, 0, 0, 0))
+                    .unwrap();
+                w5500
+                    .set_subnet(w5500::Ipv4Addr::new(255, 255, 255, 0))
+                    .unwrap();
+                w5500.set_ip(w5500::Ipv4Addr::new(10, 0, 0, 1)).unwrap();
+
+                w5500::Interface::new(w5500)
             };
 
-            let cs = {
-                let mut pin = gpioa.pa4.into_push_pull_output();
-                pin.set_high().unwrap();
-                pin
-            };
-
-            w5500::W5500::new(
-                spi,
-                cs,
-                w5500::OnWakeOnLan::Ignore,
-                w5500::OnPingRequest::Respond,
-                w5500::ConnectionType::Ethernet,
-                w5500::ArpResponses::Cache,
+            MqttClient::<minimq::consts::U1024, Ethernet>::new(
+                minimq::embedded_nal::IpAddr::V4(minimq::embedded_nal::Ipv4Addr::new(10, 0, 0, 2)),
+                "booster",
+                interface,
             )
             .unwrap()
         };
-
-        // Read the EUI48 identifier and configure the ethernet MAC address.
-        let mut eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
-        let mut eui48: [u8; 6] = [0; 6];
-        eui.read_eui48(&mut eui48).unwrap();
-        w5500.set_mac(w5500::MacAddress::from_bytes(eui48)).unwrap();
-
-        // Set default netmask and gateway.
-        w5500
-            .set_gateway(w5500::Ipv4Addr::new(10, 0, 0, 0))
-            .unwrap();
-        w5500
-            .set_subnet(w5500::Ipv4Addr::new(255, 255, 255, 0))
-            .unwrap();
-        w5500.set_ip(w5500::Ipv4Addr::new(10, 0, 0, 1)).unwrap();
 
         let mut fans = {
             let fan1 =
@@ -291,7 +306,7 @@ const APP: () = {
             ChassisFans::new([fan1, fan2, fan3])
         };
 
-        assert!(fans.self_test(&mut delay));
+        //assert!(fans.self_test(&mut delay));
 
         info!("Startup complete");
 
@@ -302,7 +317,7 @@ const APP: () = {
         init::LateResources {
             channels: channels,
             fans: fans,
-            ethernet: w5500,
+            mqtt_client,
         }
     }
 
@@ -342,7 +357,7 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[channels])]
+    #[task(priority = 1, schedule = [telemetry], resources=[channels, mqtt_client])]
     fn telemetry(mut c: telemetry::Context) {
         // Gather telemetry for all of the channels.
         for channel in Channel::into_enum_iter() {
@@ -351,8 +366,26 @@ const APP: () = {
                 .channels
                 .lock(|booster_channels| booster_channels.get_status(channel));
 
-            // TODO: Broadcast the measured data over the telemetry interface.
-            info!("{:?}", measurements);
+            if let Ok(measurements) = measurements {
+                // Broadcast the measured data over the telemetry interface.
+                let topic_base = "booster/chX";
+                let mut topic: [u8; 32] = [0; 32];
+                topic[..topic_base.len()].copy_from_slice(topic_base.as_bytes());
+                topic[topic_base.len() - 1] = '1' as u8 + channel as u8;
+
+                let message: String<heapless::consts::U1024> =
+                    serde_json_core::to_string(&measurements).unwrap();
+
+                c.resources
+                    .mqtt_client
+                    .publish(
+                        core::str::from_utf8(&topic[..topic_base.len()]).unwrap(),
+                        &message.into_bytes(),
+                        QoS::AtMostOnce,
+                        &[],
+                    )
+                    .unwrap();
+            }
         }
 
         // TODO: Replace hard-coded CPU cycles here.
@@ -362,9 +395,18 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[channels])]
-    fn idle(_: idle::Context) -> ! {
+    #[idle(resources=[channels, mqtt_client])]
+    fn idle(mut c: idle::Context) -> ! {
         loop {
+            c.resources.mqtt_client.lock(|client| {
+                client
+                    .poll(|client, topic, message, properties| {
+                        // TODO: Handle topics.
+                    })
+                    .unwrap()
+            });
+
+            // TODO: Properly sleep here until there's something to process.
             asm::nop();
         }
     }
