@@ -306,7 +306,7 @@ const APP: () = {
             ChassisFans::new([fan1, fan2, fan3])
         };
 
-        //assert!(fans.self_test(&mut delay));
+        assert!(fans.self_test(&mut delay));
 
         info!("Startup complete");
 
@@ -400,7 +400,7 @@ const APP: () = {
         loop {
             c.resources.mqtt_client.lock(|client| {
                 client
-                    .poll(|client, topic, message, properties| {
+                    .poll(|_client, _topic, _message, _properties| {
                         // TODO: Handle topics.
                     })
                     .unwrap()
