@@ -61,15 +61,15 @@ The booster main-board also supports the following control/measurements for each
 ### User Interface
 
 Planned LED indications:
-* GREEN - Channel is present and powered.
-* YELLOW+GREEN - Channel interlocks tripped.
-* YELLOW - Channel is in standby. It may be re-enabled by pressing the "STANDBY" button.
+* GREEN - Channel is present, powered, RF switch enabled
+* YELLOW+GREEN - Channel is present, powered but an interlock is tripped and RF switch disabled
+* YELLOW - Channel is in standby (not powered and RF switch disabled). It may be re-enabled by pressing the "RESET INTERLOCKS" button.
 * RED - Channel is detected, but channel will not enable due to a fatal error or configuration
   disable.
 
 Push button assignments (TBD):
-* PB1 (short press) - Interlock Reset (reset any enabled channels)
-* PB2 (short press) - Standby (toggle disable state on all channels)
+* PB1 (short press) - Interlock Reset and enable all channels (power channels, reset interlocks, enable RF switches)
+* PB2 (short press) - Standby (close RF switches, remove channel power)
 
 ## Software Overview
 
