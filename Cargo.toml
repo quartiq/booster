@@ -14,8 +14,8 @@ embedded-hal = "0.2.4"
 enum-iterator = "0.6.0"
 cortex-m-log = { version = "0.6.1", features = ["log-integration"] }
 log = "0.4.8"
-minimq = "0.1.0"
-heapless = "0.5.5"
+minimq = { path = "../minimq" }
+heapless = { version = "0.5.5", features = ["serde"] }
 serde = {version = "1.0", features = ["derive"], default-features = false }
 serde-json-core = "0.1"
 

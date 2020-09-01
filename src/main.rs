@@ -10,6 +10,8 @@
 #[macro_use]
 extern crate log;
 
+use core::fmt::Write;
+
 use cortex_m::asm;
 use enum_iterator::IntoEnumIterator;
 use heapless::String;
@@ -26,6 +28,7 @@ mod error;
 mod linear_transformation;
 mod mutex;
 mod rf_channel;
+mod mqtt_control;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
@@ -368,10 +371,8 @@ const APP: () = {
 
             if let Ok(measurements) = measurements {
                 // Broadcast the measured data over the telemetry interface.
-                let topic_base = "booster/chX";
-                let mut topic: [u8; 32] = [0; 32];
-                topic[..topic_base.len()].copy_from_slice(topic_base.as_bytes());
-                topic[topic_base.len() - 1] = '1' as u8 + channel as u8;
+                let mut topic = String::<heapless::consts::U32>::new();
+                write!(&mut topic, "booster/ch{}", channel as u8).unwrap();
 
                 let message: String<heapless::consts::U1024> =
                     serde_json_core::to_string(&measurements).unwrap();
@@ -379,7 +380,7 @@ const APP: () = {
                 c.resources
                     .mqtt_client
                     .publish(
-                        core::str::from_utf8(&topic[..topic_base.len()]).unwrap(),
+                        topic.as_str(),
                         &message.into_bytes(),
                         QoS::AtMostOnce,
                         &[],
@@ -397,14 +398,10 @@ const APP: () = {
 
     #[idle(resources=[channels, mqtt_client])]
     fn idle(mut c: idle::Context) -> ! {
+        let mut manager = mqtt_control::ControlState::new();
+
         loop {
-            c.resources.mqtt_client.lock(|client| {
-                client
-                    .poll(|_client, _topic, _message, _properties| {
-                        // TODO: Handle topics.
-                    })
-                    .unwrap()
-            });
+            manager.update(&mut c.resources);
 
             // TODO: Properly sleep here until there's something to process.
             asm::nop();

@@ -53,7 +53,7 @@ pub struct BoosterChannels {
 }
 
 /// Indicates a booster RF channel.
-#[derive(IntoEnumIterator, Copy, Clone, Debug)]
+#[derive(IntoEnumIterator, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Channel {
     Zero = 0,
     One = 1,
@@ -290,6 +290,20 @@ impl BoosterChannels {
                 rf_channel.set_bias(bias_voltage)?;
                 Ok(())
             }
+            None => Err(Error::NotPresent),
+        }
+    }
+
+    /// Tune a channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to set the bias voltage of.
+    /// * `desired_current` - The desired RF amplifier drain current.
+    pub fn tune_channel(&mut self, channel: Channel, desired_current: f32) -> Result<(f32, f32), Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => rf_channel.tune_bias(desired_current),
             None => Err(Error::NotPresent),
         }
     }
