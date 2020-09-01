@@ -28,7 +28,7 @@ use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
 use error::Error;
-use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
+use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
 
 use rtic::cyccnt::Duration;
@@ -296,7 +296,7 @@ const APP: () = {
 
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
-            let error = match c.resources.channels.channel_can_enable(channel) {
+            let state = match c.resources.channels.get_channel_state(channel) {
                 Err(Error::NotPresent) => {
                     // Clear all LEDs for this channel.
                     c.resources.leds.set_led(Color::Red, channel, false);
@@ -304,34 +304,38 @@ const APP: () = {
                     c.resources.leds.set_led(Color::Green, channel, false);
                     continue;
                 }
-                Ok(can_enable) => can_enable == false,
-                Err(error) => panic!("Encountered error: {:?}", error),
+                Err(error) => panic!("Invalid channel error: {:?}", error),
+                Ok(state) => state,
             };
 
-            let overloaded = c
-                .resources
-                .channels
-                .overload_detected(channel)
-                .expect("Failed to check channel overloaded state");
+            let powered = match state {
+                ChannelState::Powerup(_) | ChannelState::Enabled | ChannelState::Tripped(_) => true,
+                _ => false,
+            };
 
-            let enabled = c
-                .resources
-                .channels
-                .is_enabled(channel)
-                .expect("Failed to check channel enabled state");
+            let fault = if let ChannelState::Blocked(_) = state {
+                true
+            } else {
+                false
+            };
 
-            let in_standby = c
-                .resources
-                .channels
-                .is_standing_by(channel)
-                .expect("Failed to check if channel is standing by");
+            let tripped = if let ChannelState::Tripped(_) = state {
+                true
+            } else {
+                false
+            };
+
+            let in_standby = match state {
+                ChannelState::Powerdown(_) | ChannelState::Disabled => true,
+                _ => false,
+            };
 
             // Echo the measured values to the LEDs on the user interface for this channel.
-            c.resources.leds.set_led(Color::Red, channel, error);
+            c.resources.leds.set_led(Color::Green, channel, powered);
             c.resources
                 .leds
-                .set_led(Color::Yellow, channel, overloaded || in_standby);
-            c.resources.leds.set_led(Color::Green, channel, enabled);
+                .set_led(Color::Yellow, channel, tripped || in_standby);
+            c.resources.leds.set_led(Color::Red, channel, fault);
         }
 
         // Propagate the updated LED values to the user interface.
@@ -371,8 +375,14 @@ const APP: () = {
                 ButtonEvent::InterlockReset => {
                     for chan in Channel::into_enum_iter() {
                         c.resources.channels.lock(|channels| {
-                            match channels.reset_channel_interlocks(chan) {
+                            match channels.enable_channel(chan) {
                                 Ok(_) | Err(Error::NotPresent) => {}
+
+                                // It is possible to attempt to re-enable the channel before it was
+                                // fully disabled. Ignore this transient error - the user may need
+                                // to press twice.
+                                Err(Error::InvalidState) => {}
+
                                 Err(e) => panic!("Reset failed on {:?}: {:?}", chan, e),
                             }
                         })
@@ -383,7 +393,7 @@ const APP: () = {
                     for chan in Channel::into_enum_iter() {
                         c.resources
                             .channels
-                            .lock(|channels| match channels.toggle_standby(chan) {
+                            .lock(|channels| match channels.disable_channel(chan) {
                                 Ok(_) | Err(Error::NotPresent) => {}
                                 Err(e) => panic!("Standby failed on {:?}: {:?}", chan, e),
                             })

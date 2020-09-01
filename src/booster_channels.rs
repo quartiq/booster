@@ -11,7 +11,7 @@ use tca9548::{self, Tca9548};
 
 use super::{I2cBusManager, I2cProxy};
 use crate::error::Error;
-use crate::rf_channel::{ChannelPins as RfChannelPins, Interlock, RfChannel};
+use crate::rf_channel::{ChannelPins as RfChannelPins, ChannelState, RfChannel};
 use embedded_hal::blocking::delay::DelayUs;
 
 /// A EUI-48 identifier for a given channel.
@@ -32,7 +32,6 @@ pub struct ChannelStatus {
     pub reflected_overdrive: bool,
     pub output_overdrive: bool,
     pub alert: bool,
-    pub outputting: bool,
     pub temperature: f32,
     pub p28v_current: f32,
     pub p5v_current: f32,
@@ -43,7 +42,7 @@ pub struct ChannelStatus {
     pub reflected_overdrive_threshold: f32,
     pub output_overdrive_threshold: f32,
     pub bias_voltage: f32,
-    pub trip_source: Option<Interlock>,
+    pub state: ChannelState,
 }
 
 /// Represents a control structure for interfacing to booster RF channels.
@@ -188,54 +187,6 @@ impl BoosterChannels {
         }
     }
 
-    /// Check if a channel has encountered an overload condition.
-    ///
-    /// # Args
-    /// * `channel` - The channel to check.
-    ///
-    /// # Returns
-    /// True if an overload condition is present on the channel.
-    pub fn overload_detected(&mut self, channel: Channel) -> Result<bool, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.was_overdriven()),
-            None => Err(Error::NotPresent),
-        }
-    }
-
-    /// Check if a channel can enable.
-    ///
-    /// # Args
-    /// * `channel` - The channel to check.
-    ///
-    /// # Returns
-    /// True if the channel can be enabled.
-    pub fn channel_can_enable(&mut self, channel: Channel) -> Result<bool, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.can_enable()),
-            None => Err(Error::NotPresent),
-        }
-    }
-
-    /// Check if a channel is standing by (not outputting).
-    ///
-    /// # Args
-    /// * `channel` - The channel to check.
-    ///
-    /// # Returns
-    /// True if the channel is standing by and may be re-enabled.
-    pub fn is_standing_by(&mut self, channel: Channel) -> Result<bool, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.is_standing_by()),
-            None => Err(Error::NotPresent),
-        }
-    }
-
     /// Enable an RF channel.
     ///
     /// # Args
@@ -249,35 +200,6 @@ impl BoosterChannels {
         }
     }
 
-    /// Toggle an RF channel from standby
-    ///
-    /// # Args
-    /// * `channel` - The channel to toggle.
-    pub fn toggle_standby(&mut self, channel: Channel) -> Result<(), Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.toggle_standby()),
-            None => Err(Error::NotPresent),
-        }
-    }
-
-    /// Check if an RF channel is enabled.
-    ///
-    /// # Note
-    /// This will return true even if the channel interlock is tripped.
-    ///
-    /// # Args
-    /// * `channel` - The channel to check.
-    pub fn is_enabled(&mut self, channel: Channel) -> Result<bool, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.is_enabled()),
-            None => Err(Error::NotPresent),
-        }
-    }
-
     /// Disable an RF channel.
     ///
     /// # Args
@@ -287,19 +209,6 @@ impl BoosterChannels {
 
         match &mut self.channels[channel as usize] {
             Some(rf_channel) => Ok(rf_channel.start_disable()),
-            None => Err(Error::NotPresent),
-        }
-    }
-
-    /// Reset interlocks of an RF channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to reset the interlocks of.
-    pub fn reset_channel_interlocks(&mut self, channel: Channel) -> Result<(), Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.reset_interlocks()),
             None => Err(Error::NotPresent),
         }
     }
@@ -337,6 +246,22 @@ impl BoosterChannels {
         }
     }
 
+    /// Get the state of a channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to get the state of.
+    ///
+    /// # Returns
+    /// The channel state of the requested channel.
+    pub fn get_channel_state(&mut self, channel: Channel) -> Result<ChannelState, Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => Ok(rf_channel.get_state()),
+            None => Err(Error::NotPresent),
+        }
+    }
+
     /// Get the current status of the channel.
     ///
     /// # Args
@@ -356,8 +281,7 @@ impl BoosterChannels {
                 let status = ChannelStatus {
                     reflected_overdrive: rf_channel.pins.reflected_overdrive.is_high().unwrap(),
                     output_overdrive: rf_channel.pins.output_overdrive.is_high().unwrap(),
-                    alert: rf_channel.is_alarmed(),
-                    outputting: rf_channel.is_outputting(),
+                    alert: rf_channel.pins.alert.is_low().unwrap(),
                     temperature: rf_channel.get_temperature(),
                     p28v_current: power_measurements.i_p28v0ch,
                     p5v_current: power_measurements.i_p5v0ch,
@@ -368,7 +292,7 @@ impl BoosterChannels {
                     reflected_overdrive_threshold: rf_channel.get_reflected_interlock_threshold(),
                     output_overdrive_threshold: rf_channel.get_output_interlock_threshold(),
                     bias_voltage: rf_channel.get_bias_voltage(),
-                    trip_source: rf_channel.get_trip_source(),
+                    state: rf_channel.get_state(),
                 };
 
                 Ok(status)
