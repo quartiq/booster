@@ -7,6 +7,8 @@
 #![no_std]
 #![no_main]
 
+use core::fmt::Write;
+
 #[macro_use]
 extern crate log;
 
@@ -368,22 +370,15 @@ const APP: () = {
 
             if let Ok(measurements) = measurements {
                 // Broadcast the measured data over the telemetry interface.
-                let topic_base = "booster/chX";
-                let mut topic: [u8; 32] = [0; 32];
-                topic[..topic_base.len()].copy_from_slice(topic_base.as_bytes());
-                topic[topic_base.len() - 1] = '1' as u8 + channel as u8;
+                let mut topic: String<heapless::consts::U32> = String::new();
+                write!(&mut topic, "booster/ch{}", channel as u8).unwrap();
 
                 let message: String<heapless::consts::U1024> =
                     serde_json_core::to_string(&measurements).unwrap();
 
                 c.resources
                     .mqtt_client
-                    .publish(
-                        core::str::from_utf8(&topic[..topic_base.len()]).unwrap(),
-                        &message.into_bytes(),
-                        QoS::AtMostOnce,
-                        &[],
-                    )
+                    .publish(topic.as_str(), &message.into_bytes(), QoS::AtMostOnce, &[])
                     .unwrap();
             }
         }
