@@ -386,7 +386,10 @@ const APP: () = {
             };
 
             let powered = match state {
-                ChannelState::Powerup(_) | ChannelState::Enabled | ChannelState::Tripped(_) => true,
+                ChannelState::Powerup(_)
+                | ChannelState::Powerdown(_)
+                | ChannelState::Enabled
+                | ChannelState::Tripped(_) => true,
                 _ => false,
             };
 
@@ -396,22 +399,18 @@ const APP: () = {
                 false
             };
 
-            let tripped = if let ChannelState::Tripped(_) = state {
-                true
-            } else {
-                false
-            };
-
-            let in_standby = match state {
-                ChannelState::Powerdown(_) | ChannelState::Disabled => true,
-                _ => false,
+            // RF is only enabled in the Enabled state. We also ignore the `blocked` state as this
+            // is indicated by the red fault LED instead.
+            let rf_disabled = match state {
+                ChannelState::Enabled | ChannelState::Blocked(_) => false,
+                _ => true,
             };
 
             // Echo the measured values to the LEDs on the user interface for this channel.
             c.resources.leds.set_led(Color::Green, channel, powered);
             c.resources
                 .leds
-                .set_led(Color::Yellow, channel, tripped || in_standby);
+                .set_led(Color::Yellow, channel, rf_disabled);
             c.resources.leds.set_led(Color::Red, channel, fault);
         }
 

@@ -72,22 +72,30 @@ pub enum ChannelState {
 impl serde::Serialize for ChannelState {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match *self {
-            ChannelState::Blocked(_) =>
-                serializer.serialize_unit_variant("ChannelState", 0, "Blocked"),
-            ChannelState::Disabled =>
-                serializer.serialize_unit_variant("ChannelState", 1, "Disabled"),
-            ChannelState::Powerup(_) =>
-                serializer.serialize_unit_variant("ChannelState", 2, "Powerup"),
-            ChannelState::Enabled =>
-                serializer.serialize_unit_variant("ChannelState", 3, "Enabled"),
-            ChannelState::Tripped(Interlock::Input) =>
-                serializer.serialize_unit_variant("ChannelState", 4, "Tripped(Input)"),
-            ChannelState::Tripped(Interlock::Output) =>
-                serializer.serialize_unit_variant("ChannelState", 4, "Tripped(Output)"),
-            ChannelState::Tripped(Interlock::Reflected) =>
-                serializer.serialize_unit_variant("ChannelState", 4, "Tripped(Reflected)"),
-            ChannelState::Powerdown(_) =>
-                serializer.serialize_unit_variant("ChannelState", 5, "Powerdown"),
+            ChannelState::Blocked(_) => {
+                serializer.serialize_unit_variant("ChannelState", 0, "Blocked")
+            }
+            ChannelState::Disabled => {
+                serializer.serialize_unit_variant("ChannelState", 1, "Disabled")
+            }
+            ChannelState::Powerup(_) => {
+                serializer.serialize_unit_variant("ChannelState", 2, "Powerup")
+            }
+            ChannelState::Enabled => {
+                serializer.serialize_unit_variant("ChannelState", 3, "Enabled")
+            }
+            ChannelState::Tripped(Interlock::Input) => {
+                serializer.serialize_unit_variant("ChannelState", 4, "Tripped(Input)")
+            }
+            ChannelState::Tripped(Interlock::Output) => {
+                serializer.serialize_unit_variant("ChannelState", 4, "Tripped(Output)")
+            }
+            ChannelState::Tripped(Interlock::Reflected) => {
+                serializer.serialize_unit_variant("ChannelState", 4, "Tripped(Reflected)")
+            }
+            ChannelState::Powerdown(_) => {
+                serializer.serialize_unit_variant("ChannelState", 5, "Powerdown")
+            }
         }
     }
 }
