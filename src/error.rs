@@ -6,7 +6,7 @@
 //! Proprietary and confidential.
 
 /// An enumeration of possible errors with the device.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, serde::Serialize)]
 pub enum Error {
     Invalid,
     InvalidState,
