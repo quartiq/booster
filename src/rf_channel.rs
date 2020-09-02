@@ -877,13 +877,16 @@ impl RfChannel {
     /// A tuple of (Vgs, Ids) where Vgs is the bias voltage on the amplifier gate. Ids is the actual
     /// drain current achieved.
     pub fn tune_bias(&mut self, desired_current: f32) -> Result<(f32, f32), Error> {
-        // TODO: Verify the channel is fully enabled before starting the bias tuning algorithm.
-        if self.pins.enable_power.is_low().unwrap() {
-            return Err(Error::InvalidState);
+        // Verify the channel is fully enabled before starting the bias tuning algorithm.
+        match self.state_machine.state() {
+            ChannelState::Enabled | ChannelState::Tripped(_) => {}
+            _ => return Err(Error::InvalidState),
         }
 
         // Booster schematic indicates the regulator is configured to supply up to 550mA. We will
         // bound at 500mA for safety.
+        // TODO: Robert Joerdens has indicated that the maximum current is likely much lower when
+        // the RF input is disabled. The upper bound for this algorithm should likely be lower.
         if desired_current < 0.0 || desired_current > 0.500 {
             return Err(Error::Bounds);
         }
@@ -912,7 +915,8 @@ impl RfChannel {
             let new_current = self.measure_p28v_current(true);
 
             // Check that the LDO did not enter fold-back.
-            // TODO: Verify the fold-back threshold
+            // TODO: Verify the fold-back threshold - current testing shows that foldback still
+            // occassionally sporadically will occur.
             if last_current - new_current > 0.003 {
                 return Err(Error::Foldback);
             }
