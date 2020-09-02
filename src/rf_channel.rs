@@ -781,18 +781,16 @@ impl RfChannel {
 
         let p28v_rail_current_sense = if force_update {
             // Force the power monitor to make a new reading.
-            self
-            .i2c_devices
-            .power_monitor
-            .measure_voltage(ads7924::Channel::Zero)
-            .unwrap()
+            self.i2c_devices
+                .power_monitor
+                .measure_voltage(ads7924::Channel::Zero)
+                .unwrap()
         } else {
             // Read the cached (scanned) ADC measurement from the monitor.
-            self
-            .i2c_devices
-            .power_monitor
-            .get_voltage(ads7924::Channel::Zero)
-            .unwrap()
+            self.i2c_devices
+                .power_monitor
+                .get_voltage(ads7924::Channel::Zero)
+                .unwrap()
         };
 
         p28v_rail_current_sense * (100.0 / 0.100 / 4300.0)
@@ -857,7 +855,7 @@ impl RfChannel {
     /// # Returns
     /// The current reflected interlock threshold in dBm.
     pub fn get_reflected_interlock_threshold(&self) -> f32 {
-        self.output_interlock_threshold
+        self.reflected_interlock_threshold
     }
 
     /// Get the current bias voltage programmed to the RF amplification transistor.
@@ -900,12 +898,12 @@ impl RfChannel {
 
         // First, increase the bias voltage until we overshoot the desired set current by a small
         // margin.
-        while last_current  < desired_current {
+        while last_current < desired_current {
             // Slowly bring the bias voltage up in steps of 20mV until the desired drain current is
             // achieved.
             bias_voltage = bias_voltage + 0.020;
             if bias_voltage >= 0.0 {
-                return Err(Error::Invalid)
+                return Err(Error::Invalid);
             }
 
             self.set_bias(bias_voltage).unwrap();
@@ -916,13 +914,12 @@ impl RfChannel {
             // Check that the LDO did not enter fold-back.
             // TODO: Verify the fold-back threshold
             if last_current - new_current > 0.001 {
-                return Err(Error::Invalid)
+                return Err(Error::Invalid);
             }
         }
 
         // Next, decrease the bias voltage until we drop back below the desired set point.
         while last_current > desired_current {
-
             // Decrease the bias voltage in 1mV steps to decrease the drain current marginally.
             bias_voltage = bias_voltage - 0.001;
             if bias_voltage <= -3.2 {

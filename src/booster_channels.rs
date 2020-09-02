@@ -251,7 +251,11 @@ impl BoosterChannels {
     /// # Args
     /// * `channel` - The channel to set the bias voltage of.
     /// * `desired_current` - The desired RF amplifier drain current.
-    pub fn tune_channel(&mut self, channel: Channel, desired_current: f32) -> Result<(f32, f32), Error> {
+    pub fn tune_channel(
+        &mut self,
+        channel: Channel,
+        desired_current: f32,
+    ) -> Result<(f32, f32), Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {

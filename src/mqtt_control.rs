@@ -1,18 +1,13 @@
-use super::{
-    idle::Resources,
-    Error,
-    Channel,
-    BoosterChannels,
-};
+use super::{idle::Resources, BoosterChannels, Channel, Error};
 
 use core::fmt::Write;
 
-use minimq::{QoS, Property};
+use minimq::{Property, QoS};
 
-use heapless::{String, consts};
+use heapless::{consts, String};
 
 pub struct ControlState {
-    subscribed: bool
+    subscribed: bool,
 }
 
 impl ControlState {
@@ -29,39 +24,44 @@ impl ControlState {
                     client.subscribe("booster/enable", &[]).unwrap();
                     client.subscribe("booster/disable", &[]).unwrap();
                     client.subscribe("booster/tune", &[]).unwrap();
+                    client.subscribe("booster/thresholds", &[]).unwrap();
+                    self.subscribed = true;
                 }
             });
-
-            self.subscribed = true;
         }
 
         let channels = &mut resources.channels;
 
         resources.mqtt_client.lock(|client| {
-            channels.lock(|c| {
+            channels.lock(|channels| {
                 client
                     .poll(|client, topic, message, properties| {
                         let response = match topic {
-                            "booster/enable" => handle_channel_enable(message, c),
-                            "booster/disable" => handle_channel_disable(message, c),
-                            "booster/tune" => handle_channel_tune(message, c),
+                            "booster/enable" => handle_channel_enable(message, channels),
+                            "booster/disable" => handle_channel_disable(message, channels),
+                            "booster/tune" => handle_channel_tune(message, channels),
+                            "booster/thresholds" => handle_channel_thresholds(message, channels),
                             _ => Response::error_msg("Unexpected topic"),
                         };
 
-                    if let Property::ResponseTopic(topic) = properties.iter().find(|&prop|
-                            if let minimq::Property::ResponseTopic(_) = *prop {
-                                true
-                            } else {
-                                false
+                        if let Property::ResponseTopic(topic) = properties
+                            .iter()
+                            .find(|&prop| {
+                                if let minimq::Property::ResponseTopic(_) = *prop {
+                                    true
+                                } else {
+                                    false
+                                }
                             })
-                        .or(Some(&Property::ResponseTopic("booster/log")))
-                        .unwrap()
-                    {
-                        client.publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[]).unwrap();
-                    }
-
-                })
-                .unwrap()
+                            .or(Some(&Property::ResponseTopic("booster/log")))
+                            .unwrap()
+                        {
+                            client
+                                .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
+                                .unwrap();
+                        }
+                    })
+                    .unwrap()
             });
         });
     }
@@ -133,10 +133,7 @@ impl Response {
         let mut msg = String::<consts::U256>::new();
         write!(&mut msg, "{:?}", error).unwrap();
 
-        let response = Response {
-            code: 400,
-            msg,
-        };
+        let response = Response { code: 400, msg };
 
         serde_json_core::to_string(&response).unwrap()
     }
@@ -145,7 +142,7 @@ impl Response {
 fn handle_channel_enable(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
         Ok(data) => data,
-        Err(_) => return Response::error_msg("Failed to decode data")
+        Err(_) => return Response::error_msg("Failed to decode data"),
     };
 
     match channels.enable_channel(request.channel) {
@@ -157,7 +154,7 @@ fn handle_channel_enable(message: &[u8], channels: &mut BoosterChannels) -> Stri
 fn handle_channel_disable(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
         Ok(data) => data,
-        Err(_) => return Response::error_msg("Failed to decode data")
+        Err(_) => return Response::error_msg("Failed to decode data"),
     };
 
     match channels.disable_channel(request.channel) {
@@ -166,10 +163,29 @@ fn handle_channel_disable(message: &[u8], channels: &mut BoosterChannels) -> Str
     }
 }
 
+fn handle_channel_thresholds(
+    message: &[u8],
+    channels: &mut BoosterChannels,
+) -> String<consts::U256> {
+    let request = match serde_json_core::from_slice::<ChannelThresholds>(message) {
+        Ok(data) => data,
+        Err(_) => return Response::error_msg("Failed to decode data"),
+    };
+
+    match channels.set_interlock_thresholds(
+        request.channel,
+        request.output_power,
+        request.reflected_power,
+    ) {
+        Ok(_) => Response::okay("Thresholds set"),
+        Err(error) => Response::error(error),
+    }
+}
+
 fn handle_channel_tune(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelTuneRequest>(message) {
         Ok(data) => data,
-        Err(_) => return Response::error_msg("Failed to decode data")
+        Err(_) => return Response::error_msg("Failed to decode data"),
     };
 
     match channels.tune_channel(request.channel, request.current) {
