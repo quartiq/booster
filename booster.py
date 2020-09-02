@@ -172,7 +172,10 @@ async def channel_configuration(args):
 
 def main():
     """ Main program entry point. """
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='Modify booster RF channel configuration',
+        epilog='*Note*: The positional argument should be the channel index. For example, to '
+               'enable channel 0, the call would appear as `python booster.py 0 --enable`')
     parser.add_argument('channel', type=int, choices=list(range(8)))
     parser.add_argument('--bias', type=float,
                         help='Tune the RF channel bias current to the provided value')
