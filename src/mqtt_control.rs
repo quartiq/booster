@@ -35,8 +35,10 @@ impl ControlState {
             self.subscribed = true;
         }
 
+        let channels = &mut resources.channels;
+
         resources.mqtt_client.lock(|client| {
-            resources.channels.lock(|c| {
+            channels.lock(|c| {
                 client
                     .poll(|client, topic, message, properties| {
                         let response = match topic {
@@ -83,22 +85,19 @@ struct ChannelTuneResponse {
     pub ids: f32,
 }
 
+#[derive(serde::Deserialize)]
+struct ChannelThresholds {
+    pub channel: Channel,
+    pub reflected_power: f32,
+    pub output_power: f32,
+}
+
 impl ChannelTuneResponse {
     pub fn okay(vgs: f32, ids: f32) -> String<consts::U256> {
         let response = Self {
             code: 200,
             vgs,
             ids,
-        };
-
-        serde_json_core::to_string(&response).unwrap()
-    }
-
-    pub fn error() -> String<consts::U256> {
-        let response = Self {
-            code: 400,
-            vgs: -1.0,
-            ids: -1.0,
         };
 
         serde_json_core::to_string(&response).unwrap()
