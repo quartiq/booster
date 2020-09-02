@@ -9,80 +9,6 @@ use minimq::{Property, QoS};
 use heapless::{consts, String};
 use core::fmt::Write;
 
-/// Represents a means of handling MQTT-based control interface.
-pub struct ControlState {
-    subscribed: bool,
-}
-
-impl ControlState {
-    /// Construct the MQTT control state manager.
-    pub fn new() -> Self {
-        Self { subscribed: false }
-    }
-
-    /// Handle the MQTT-based control interface.
-    ///
-    /// # Args
-    /// * `resources` - The `idle` resources containing the client and RF channels.
-    pub fn update(&mut self, resources: &mut Resources) {
-        use rtic::Mutex as _;
-        // Subscribe to any control topics necessary.
-        if !self.subscribed {
-            resources.mqtt_client.lock(|client| {
-                if client.is_connected() {
-                    client.subscribe("booster/enable", &[]).unwrap();
-                    client.subscribe("booster/disable", &[]).unwrap();
-                    client.subscribe("booster/tune", &[]).unwrap();
-                    client.subscribe("booster/thresholds", &[]).unwrap();
-                    self.subscribed = true;
-                }
-            });
-        }
-
-        let channels = &mut resources.channels;
-
-        resources.mqtt_client.lock(|client| {
-            match client
-                .poll(|client, topic, message, properties| {
-                    channels.lock(|channels| {
-                        let response = match topic {
-                            "booster/enable" => handle_channel_enable(message, channels),
-                            "booster/disable" => handle_channel_disable(message, channels),
-                            "booster/tune" => handle_channel_tune(message, channels),
-                            "booster/thresholds" => handle_channel_thresholds(message, channels),
-                            _ => Response::error_msg("Unexpected topic"),
-                        };
-
-                        if let Property::ResponseTopic(topic) = properties
-                            .iter()
-                            .find(|&prop| {
-                                if let minimq::Property::ResponseTopic(_) = *prop {
-                                    true
-                                } else {
-                                    false
-                                }
-                            })
-                            .or(Some(&Property::ResponseTopic("booster/log")))
-                            .unwrap()
-                        {
-                            client
-                                .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
-                                .unwrap();
-                        }
-                    });
-                }) {
-                Ok(_) => {},
-
-                // Whenever MQTT disconnects, we will lose our pending subscriptions. We will need
-                // to re-establish them once we reconnect.
-                Err(minimq::Error::Disconnected) => self.subscribed = false,
-
-                Err(e) => panic!("Unexpected error: {:?}", e),
-            }
-        });
-    }
-}
-
 /// Specifies a generic request for a specific channel.
 #[derive(serde::Deserialize)]
 struct ChannelRequest {
@@ -174,6 +100,80 @@ impl Response {
         let response = Response { code: 400, msg };
 
         serde_json_core::to_string(&response).unwrap()
+    }
+}
+
+/// Represents a means of handling MQTT-based control interface.
+pub struct ControlState {
+    subscribed: bool,
+}
+
+impl ControlState {
+    /// Construct the MQTT control state manager.
+    pub fn new() -> Self {
+        Self { subscribed: false }
+    }
+
+    /// Handle the MQTT-based control interface.
+    ///
+    /// # Args
+    /// * `resources` - The `idle` resources containing the client and RF channels.
+    pub fn update(&mut self, resources: &mut Resources) {
+        use rtic::Mutex as _;
+        // Subscribe to any control topics necessary.
+        if !self.subscribed {
+            resources.mqtt_client.lock(|client| {
+                if client.is_connected() {
+                    client.subscribe("booster/enable", &[]).unwrap();
+                    client.subscribe("booster/disable", &[]).unwrap();
+                    client.subscribe("booster/tune", &[]).unwrap();
+                    client.subscribe("booster/thresholds", &[]).unwrap();
+                    self.subscribed = true;
+                }
+            });
+        }
+
+        let channels = &mut resources.channels;
+
+        resources.mqtt_client.lock(|client| {
+            match client
+                .poll(|client, topic, message, properties| {
+                    channels.lock(|channels| {
+                        let response = match topic {
+                            "booster/enable" => handle_channel_enable(message, channels),
+                            "booster/disable" => handle_channel_disable(message, channels),
+                            "booster/tune" => handle_channel_tune(message, channels),
+                            "booster/thresholds" => handle_channel_thresholds(message, channels),
+                            _ => Response::error_msg("Unexpected topic"),
+                        };
+
+                        if let Property::ResponseTopic(topic) = properties
+                            .iter()
+                            .find(|&prop| {
+                                if let minimq::Property::ResponseTopic(_) = *prop {
+                                    true
+                                } else {
+                                    false
+                                }
+                            })
+                            .or(Some(&Property::ResponseTopic("booster/log")))
+                            .unwrap()
+                        {
+                            client
+                                .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
+                                .unwrap();
+                        }
+                    });
+                }) {
+                Ok(_) => {},
+
+                // Whenever MQTT disconnects, we will lose our pending subscriptions. We will need
+                // to re-establish them once we reconnect.
+                Err(minimq::Error::Disconnected) => self.subscribed = false,
+
+                Err(e) => panic!("Unexpected error: {:?}", e),
+            }
+        });
     }
 }
 
