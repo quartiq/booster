@@ -371,7 +371,7 @@ const APP: () = {
 
             if let Ok(measurements) = measurements {
                 // Broadcast the measured data over the telemetry interface.
-                let mut topic = String::<heapless::consts::U32>::new();
+                let mut topic: String<heapless::consts::U32> = String::new();
                 write!(&mut topic, "booster/ch{}", channel as u8).unwrap();
 
                 let message: String<heapless::consts::U1024> =
@@ -379,12 +379,7 @@ const APP: () = {
 
                 c.resources
                     .mqtt_client
-                    .publish(
-                        topic.as_str(),
-                        &message.into_bytes(),
-                        QoS::AtMostOnce,
-                        &[],
-                    )
+                    .publish(topic.as_str(), &message.into_bytes(), QoS::AtMostOnce, &[])
                     .unwrap();
             }
         }
