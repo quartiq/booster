@@ -349,7 +349,7 @@ const APP: () = {
             ChassisFans::new([fan1, fan2, fan3])
         };
 
-        //assert!(fans.self_test(&mut delay));
+        assert!(fans.self_test(&mut delay));
 
         info!("Startup complete");
 

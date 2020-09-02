@@ -1,20 +1,29 @@
+//! Booster NGFW Application
+//!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
 use super::{idle::Resources, BoosterChannels, Channel, Error};
-
+use minimq::{Property, QoS};
+use heapless::{consts, String};
 use core::fmt::Write;
 
-use minimq::{Property, QoS};
-
-use heapless::{consts, String};
-
+/// Represents a means of handling MQTT-based control interface.
 pub struct ControlState {
     subscribed: bool,
 }
 
 impl ControlState {
+    /// Construct the MQTT control state manager.
     pub fn new() -> Self {
         Self { subscribed: false }
     }
 
+    /// Handle the MQTT-based control interface.
+    ///
+    /// # Args
+    /// * `resources` - The `idle` resources containing the client and RF channels.
     pub fn update(&mut self, resources: &mut Resources) {
         use rtic::Mutex as _;
         // Subscribe to any control topics necessary.
@@ -33,9 +42,9 @@ impl ControlState {
         let channels = &mut resources.channels;
 
         resources.mqtt_client.lock(|client| {
-            channels.lock(|channels| {
-                client
-                    .poll(|client, topic, message, properties| {
+            match client
+                .poll(|client, topic, message, properties| {
+                    channels.lock(|channels| {
                         let response = match topic {
                             "booster/enable" => handle_channel_enable(message, channels),
                             "booster/disable" => handle_channel_disable(message, channels),
@@ -60,24 +69,34 @@ impl ControlState {
                                 .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
                                 .unwrap();
                         }
-                    })
-                    .unwrap()
-            });
+                    });
+                }) {
+                Ok(_) => {},
+
+                // Whenever MQTT disconnects, we will lose our pending subscriptions. We will need
+                // to re-establish them once we reconnect.
+                Err(minimq::Error::Disconnected) => self.subscribed = false,
+
+                Err(e) => panic!("Unexpected error: {:?}", e),
+            }
         });
     }
 }
 
+/// Specifies a generic request for a specific channel.
 #[derive(serde::Deserialize)]
 struct ChannelRequest {
     pub channel: Channel,
 }
 
+/// Specifies the desired channel RF bias current.
 #[derive(serde::Deserialize)]
 struct ChannelTuneRequest {
     pub channel: Channel,
     pub current: f32,
 }
 
+/// Indicates the result of a channel tuning request.
 #[derive(serde::Serialize)]
 struct ChannelTuneResponse {
     code: u32,
@@ -85,6 +104,7 @@ struct ChannelTuneResponse {
     pub ids: f32,
 }
 
+/// Specifies the desired interlock thresholds for a channel.
 #[derive(serde::Deserialize)]
 struct ChannelThresholds {
     pub channel: Channel,
@@ -93,6 +113,11 @@ struct ChannelThresholds {
 }
 
 impl ChannelTuneResponse {
+    /// Indicate that a channel bias tuning command was successfully processed.
+    ///
+    /// # Args
+    /// * `vgs` - The resulting gate voltage of the RF amplifier.
+    /// * `ids` - The resulting drain current of the RF amplifier.
     pub fn okay(vgs: f32, ids: f32) -> String<consts::U256> {
         let response = Self {
             code: 200,
@@ -104,6 +129,7 @@ impl ChannelTuneResponse {
     }
 }
 
+/// Represents a generic response to a command.
 #[derive(serde::Serialize)]
 struct Response {
     code: u32,
@@ -111,6 +137,10 @@ struct Response {
 }
 
 impl Response {
+    /// Indicate that a command was successfully processed.
+    ///
+    /// # Args
+    /// * `msg` - An additional user-readable message.
     pub fn okay<'a>(msg: &'a str) -> String<consts::U256> {
         let response = Response {
             code: 200,
@@ -120,6 +150,10 @@ impl Response {
         serde_json_core::to_string(&response).unwrap()
     }
 
+    /// Indicate that a command failed to be processed.
+    ///
+    /// # Args
+    /// * `msg` - An additional user-readable message.
     pub fn error_msg<'a>(msg: &'a str) -> String<consts::U256> {
         let response = Response {
             code: 400,
@@ -129,6 +163,10 @@ impl Response {
         serde_json_core::to_string(&response).unwrap()
     }
 
+    /// Indicate that a command failed to be processed.
+    ///
+    /// # Args
+    /// * `error` - The error that was encountered while the command was being processed.
     pub fn error(error: Error) -> String<consts::U256> {
         let mut msg = String::<consts::U256>::new();
         write!(&mut msg, "{:?}", error).unwrap();
@@ -139,6 +177,14 @@ impl Response {
     }
 }
 
+/// Handle a request to enable a booster RF output.
+///
+/// # Args
+/// * `message` - The serialized message request.
+/// * `channels` - The booster RF channels to configure.
+///
+/// # Returns
+/// A String response indicating the result of the request.
 fn handle_channel_enable(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
         Ok(data) => data,
@@ -151,6 +197,14 @@ fn handle_channel_enable(message: &[u8], channels: &mut BoosterChannels) -> Stri
     }
 }
 
+/// Handle a request to disable a booster RF output.
+///
+/// # Args
+/// * `message` - The serialized message request.
+/// * `channels` - The booster RF channels to configure.
+///
+/// # Returns
+/// A String response indicating the result of the request.
 fn handle_channel_disable(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
         Ok(data) => data,
@@ -163,6 +217,14 @@ fn handle_channel_disable(message: &[u8], channels: &mut BoosterChannels) -> Str
     }
 }
 
+/// Handle a request to configure interlock thresholds of a channel.
+///
+/// # Args
+/// * `message` - The serialized message request.
+/// * `channels` - The booster RF channels to configure.
+///
+/// # Returns
+/// A String response indicating the result of the request.
 fn handle_channel_thresholds(
     message: &[u8],
     channels: &mut BoosterChannels,
@@ -182,6 +244,14 @@ fn handle_channel_thresholds(
     }
 }
 
+/// Handle a request to tune the bias current of a channel.
+///
+/// # Args
+/// * `message` - The serialized message request.
+/// * `channels` - The booster RF channels to configure.
+///
+/// # Returns
+/// A String response indicating the result of the request.
 fn handle_channel_tune(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelTuneRequest>(message) {
         Ok(data) => data,
