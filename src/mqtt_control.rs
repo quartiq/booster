@@ -5,9 +5,9 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 use super::{idle::Resources, BoosterChannels, Channel, Error};
-use minimq::{Property, QoS};
-use heapless::{consts, String};
 use core::fmt::Write;
+use heapless::{consts, String};
+use minimq::{Property, QoS};
 
 /// Specifies a generic request for a specific channel.
 #[derive(serde::Deserialize)]
@@ -136,36 +136,35 @@ impl ControlState {
         let channels = &mut resources.channels;
 
         resources.mqtt_client.lock(|client| {
-            match client
-                .poll(|client, topic, message, properties| {
-                    channels.lock(|channels| {
-                        let response = match topic {
-                            "booster/enable" => handle_channel_enable(message, channels),
-                            "booster/disable" => handle_channel_disable(message, channels),
-                            "booster/tune" => handle_channel_tune(message, channels),
-                            "booster/thresholds" => handle_channel_thresholds(message, channels),
-                            _ => Response::error_msg("Unexpected topic"),
-                        };
+            match client.poll(|client, topic, message, properties| {
+                channels.lock(|channels| {
+                    let response = match topic {
+                        "booster/enable" => handle_channel_enable(message, channels),
+                        "booster/disable" => handle_channel_disable(message, channels),
+                        "booster/tune" => handle_channel_tune(message, channels),
+                        "booster/thresholds" => handle_channel_thresholds(message, channels),
+                        _ => Response::error_msg("Unexpected topic"),
+                    };
 
-                        if let Property::ResponseTopic(topic) = properties
-                            .iter()
-                            .find(|&prop| {
-                                if let minimq::Property::ResponseTopic(_) = *prop {
-                                    true
-                                } else {
-                                    false
-                                }
-                            })
-                            .or(Some(&Property::ResponseTopic("booster/log")))
-                            .unwrap()
-                        {
-                            client
-                                .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
-                                .unwrap();
-                        }
-                    });
-                }) {
-                Ok(_) => {},
+                    if let Property::ResponseTopic(topic) = properties
+                        .iter()
+                        .find(|&prop| {
+                            if let minimq::Property::ResponseTopic(_) = *prop {
+                                true
+                            } else {
+                                false
+                            }
+                        })
+                        .or(Some(&Property::ResponseTopic("booster/log")))
+                        .unwrap()
+                    {
+                        client
+                            .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
+                            .unwrap();
+                    }
+                });
+            }) {
+                Ok(_) => {}
 
                 // Whenever MQTT disconnects, we will lose our pending subscriptions. We will need
                 // to re-establish them once we reconnect.
