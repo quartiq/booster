@@ -12,6 +12,7 @@ pub enum Error {
     InvalidState,
     NotPresent,
     Interface,
+    Foldback,
     Bounds,
     Fault,
 }

@@ -913,9 +913,10 @@ impl RfChannel {
 
             // Check that the LDO did not enter fold-back.
             // TODO: Verify the fold-back threshold
-            if last_current - new_current > 0.001 {
-                return Err(Error::Invalid);
+            if last_current - new_current > 0.003 {
+                return Err(Error::Foldback);
             }
+            last_current = new_current;
         }
 
         // Next, decrease the bias voltage until we drop back below the desired set point.
