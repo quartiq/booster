@@ -16,6 +16,8 @@ cortex-m-log = { version = "0.6.1", features = ["log-integration"] }
 log = "0.4.8"
 minimq = { path = "../minimq" }
 heapless = { version = "0.5.5", features = ["serde"] }
+bit_field = "0.10.0"
+debounced-pin = "0.3.0"
 serde = {version = "1.0", features = ["derive"], default-features = false }
 serde-json-core = "0.1"
 

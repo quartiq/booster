@@ -12,7 +12,6 @@ extern crate log;
 
 use core::fmt::Write;
 
-use cortex_m::asm;
 use enum_iterator::IntoEnumIterator;
 use heapless::String;
 use minimq::{MqttClient, QoS};
@@ -29,11 +28,13 @@ mod linear_transformation;
 mod mutex;
 mod rf_channel;
 mod mqtt_control;
+mod user_interface;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
 use error::Error;
-use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins};
+use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
+use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
 
 use rtic::cyccnt::Duration;
 
@@ -86,25 +87,28 @@ macro_rules! adc_pins {
 /// * `gpiog` - The GPIOG Parts structure to extract pins from.
 /// * `enable` - The pin ID of the enable pin in GPIOD.
 /// * `alert` - The pin ID of the alert pin in GPIOD.
-/// * `input_overdrive` - The pin ID of the input overdrive pin in GPIOE.
+/// * `reflected_overdrive` - The pin ID of the input overdrive pin in GPIOE.
 /// * `output_overdrive` - The pin ID of the output overdrive pin in GPIOE.
 /// * `signal_on` - The pin ID of the signal on pin in GPIOG.
 ///
 /// # Returns
 /// An option containing the RfChannelPins structure.
 macro_rules! channel_pins {
-    ($gpiod:ident, $gpioe:ident, $gpiog:ident, $enable:ident, $alert:ident, $input_overdrive:ident,
+    ($gpiod:ident, $gpioe:ident, $gpiog:ident, $enable:ident, $alert:ident, $reflected_overdrive:ident,
      $output_overdrive:ident, $signal_on:ident, $analog_pins:ident) => {{
         let enable_power = $gpiod.$enable.into_push_pull_output().downgrade();
         let alert = $gpiod.$alert.into_floating_input().downgrade();
-        let input_overdrive = $gpioe.$input_overdrive.into_floating_input().downgrade();
+        let reflected_overdrive = $gpioe
+            .$reflected_overdrive
+            .into_floating_input()
+            .downgrade();
         let output_overdrive = $gpioe.$output_overdrive.into_pull_down_input().downgrade();
         let signal_on = $gpiog.$signal_on.into_push_pull_output().downgrade();
 
         Some(RfChannelPins::new(
             enable_power,
             alert,
-            input_overdrive,
+            reflected_overdrive,
             output_overdrive,
             signal_on,
             $analog_pins,
@@ -116,11 +120,13 @@ macro_rules! channel_pins {
 const APP: () = {
     struct Resources {
         channels: BoosterChannels,
+        buttons: UserButtons,
+        leds: UserLeds,
         fans: ChassisFans,
         mqtt_client: MqttClient<minimq::consts::U1024, Ethernet>,
     }
 
-    #[init(schedule = [telemetry, channel_monitor])]
+    #[init(schedule = [telemetry, channel_monitor, button])]
     fn init(mut c: init::Context) -> init::LateResources {
         c.core.DWT.enable_cycle_counter();
         c.core.DCB.enable_trace();
@@ -134,6 +140,7 @@ const APP: () = {
             .use_hse(8.mhz())
             .sysclk(168.mhz())
             .hclk(168.mhz())
+            .pclk1(42.mhz())
             .require_pll48clk()
             .freeze();
 
@@ -224,6 +231,39 @@ const APP: () = {
 
             BoosterChannels::new(mux, adc, i2c_bus_manager, channel_pins, &mut delay)
         };
+
+        let buttons = {
+            let button1 = gpiof.pf14.into_floating_input();
+            let button2 = gpiof.pf15.into_floating_input();
+            UserButtons::new(button1, button2)
+        };
+
+        let leds = {
+            let spi = {
+                let sck = gpiob.pb13.into_alternate_af5();
+                let mosi = gpiob.pb15.into_alternate_af5();
+
+                let mode = hal::spi::Mode {
+                    polarity: hal::spi::Polarity::IdleLow,
+                    phase: hal::spi::Phase::CaptureOnFirstTransition,
+                };
+
+                hal::spi::Spi::spi2(
+                    c.device.SPI2,
+                    (sck, hal::spi::NoMiso, mosi),
+                    mode,
+                    10.mhz().into(),
+                    clocks,
+                )
+            };
+
+            let csn = gpiob.pb12.into_push_pull_output();
+            let oen = gpiob.pb8.into_push_pull_output();
+
+            UserLeds::new(spi, csn, oen)
+        };
+
+        info!("Startup complete");
 
         let i2c2 = {
             let scl = gpiob.pb10.into_alternate_af4_open_drain();
@@ -316,42 +356,67 @@ const APP: () = {
         // Kick-start the monitor and telemetry tasks.
         c.schedule.channel_monitor(c.start).unwrap();
         c.schedule.telemetry(c.start).unwrap();
+        c.schedule.button(c.start).unwrap();
 
         init::LateResources {
             channels: channels,
             fans: fans,
+            buttons: buttons,
+            leds: leds,
             mqtt_client,
         }
     }
 
-    #[task(priority = 2, schedule = [channel_monitor], resources=[channels])]
+    #[task(priority = 2, schedule = [channel_monitor], resources=[channels, leds])]
     fn channel_monitor(c: channel_monitor::Context) {
         // Potentially update the state of any channels.
         c.resources.channels.update();
 
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
-            let _error_detected = match c.resources.channels.error_detected(channel) {
+            let state = match c.resources.channels.get_channel_state(channel) {
                 Err(Error::NotPresent) => {
-                    // TODO: Clear all LEDs for this channel.
+                    // Clear all LEDs for this channel.
+                    c.resources.leds.set_led(Color::Red, channel, false);
+                    c.resources.leds.set_led(Color::Yellow, channel, false);
+                    c.resources.leds.set_led(Color::Green, channel, false);
                     continue;
                 }
-                Ok(detected) => detected,
-                Err(error) => panic!("Encountered error: {:?}", error),
+                Err(error) => panic!("Invalid channel error: {:?}", error),
+                Ok(state) => state,
             };
 
-            let _warning_detected = match c.resources.channels.warning_detected(channel) {
-                Ok(detected) => detected,
-                Err(error) => panic!("Encountered error: {:?}", error),
+            let powered = match state {
+                ChannelState::Powerup(_)
+                | ChannelState::Powerdown(_)
+                | ChannelState::Enabled
+                | ChannelState::Tripped(_) => true,
+                _ => false,
             };
 
-            let _enabled = match c.resources.channels.is_enabled(channel) {
-                Ok(detected) => detected,
-                Err(error) => panic!("Encountered error: {:?}", error),
+            let fault = if let ChannelState::Blocked(_) = state {
+                true
+            } else {
+                false
             };
 
-            // TODO: Echo the measured values to the LEDs on the user interface for this channel.
+            // RF is only enabled in the Enabled state. We also ignore the `blocked` state as this
+            // is indicated by the red fault LED instead.
+            let rf_disabled = match state {
+                ChannelState::Enabled | ChannelState::Blocked(_) => false,
+                _ => true,
+            };
+
+            // Echo the measured values to the LEDs on the user interface for this channel.
+            c.resources.leds.set_led(Color::Green, channel, powered);
+            c.resources
+                .leds
+                .set_led(Color::Yellow, channel, rf_disabled);
+            c.resources.leds.set_led(Color::Red, channel, fault);
         }
+
+        // Propagate the updated LED values to the user interface.
+        c.resources.leds.update();
 
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 50Hz.
@@ -391,6 +456,47 @@ const APP: () = {
             .unwrap();
     }
 
+    #[task(spawn=[button], schedule = [button], resources=[channels, buttons])]
+    fn button(mut c: button::Context) {
+        if let Some(event) = c.resources.buttons.update() {
+            match event {
+                ButtonEvent::InterlockReset => {
+                    for chan in Channel::into_enum_iter() {
+                        c.resources.channels.lock(|channels| {
+                            match channels.enable_channel(chan) {
+                                Ok(_) | Err(Error::NotPresent) => {}
+
+                                // It is possible to attempt to re-enable the channel before it was
+                                // fully disabled. Ignore this transient error - the user may need
+                                // to press twice.
+                                Err(Error::InvalidState) => {}
+
+                                Err(e) => panic!("Reset failed on {:?}: {:?}", chan, e),
+                            }
+                        })
+                    }
+                }
+
+                ButtonEvent::Standby => {
+                    for chan in Channel::into_enum_iter() {
+                        c.resources
+                            .channels
+                            .lock(|channels| match channels.disable_channel(chan) {
+                                Ok(_) | Err(Error::NotPresent) => {}
+                                Err(e) => panic!("Standby failed on {:?}: {:?}", chan, e),
+                            })
+                    }
+                }
+            }
+        }
+
+        // TODO: Replace hard-coded CPU cycles here.
+        // Schedule to run this task every 10ms.
+        c.schedule
+            .button(c.scheduled + Duration::from_cycles(10 * (168_000_000 / 1000)))
+            .unwrap();
+    }
+
     #[idle(resources=[channels, mqtt_client])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = mqtt_control::ControlState::new();
@@ -399,11 +505,15 @@ const APP: () = {
             manager.update(&mut c.resources);
 
             // TODO: Properly sleep here until there's something to process.
-            asm::nop();
+            cortex_m::asm::nop();
         }
     }
 
     extern "C" {
+        fn EXTI0();
+        fn EXTI1();
+        fn EXTI2();
+        fn EXTI3();
         fn USART1();
         fn USART2();
     }
