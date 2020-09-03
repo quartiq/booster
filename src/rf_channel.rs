@@ -883,11 +883,10 @@ impl RfChannel {
             _ => return Err(Error::InvalidState),
         }
 
-        // Booster schematic indicates the regulator is configured to supply up to 550mA. We will
-        // bound at 500mA for safety.
-        // TODO: Robert Joerdens has indicated that the maximum current is likely much lower when
-        // the RF input is disabled. The upper bound for this algorithm should likely be lower.
-        if desired_current < 0.0 || desired_current > 0.500 {
+        // Booster schematic indicates the regulator is configured to supply up to 550mA. However,
+        // when the RF input is disabled, the bias current is significantly lower. For this reason,
+        // the upper bound is currently limited to 100mA, but may be adjusted in the future.
+        if desired_current < 0.010 || desired_current > 0.100 {
             return Err(Error::Bounds);
         }
 
@@ -914,10 +913,10 @@ impl RfChannel {
             // Re-measure the drain current.
             let new_current = self.measure_p28v_current(true);
 
-            // Check that the LDO did not enter fold-back.
-            // TODO: Verify the fold-back threshold - current testing shows that foldback still
-            // occassionally sporadically will occur.
-            if last_current - new_current > 0.003 {
+            // Check that the LDO did not enter fold-back. When the LDO enters fold-back, the
+            // current should begin to drop dramatically. For now, a 20mA threshold is used to
+            // detect foldback.
+            if last_current - new_current > 0.020 {
                 return Err(Error::Foldback);
             }
             last_current = new_current;

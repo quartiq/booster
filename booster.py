@@ -157,15 +157,20 @@ async def channel_configuration(args):
 
     if args.enable:
         await interface.enable_channel(args.channel)
+        print(f'Channel {args.channel} enabled')
 
     if args.thresholds:
         await interface.set_channel_thresholds(args.channel, args.thresholds[0], args.thresholds[1])
+        print(f'Channel {args.channel}: Output power threshold = {args.thresholds[0]} dBm, '
+              f'Reflected power interlock threshold = {args.thresholds[1]} dBm')
 
     if args.bias:
-        await interface.tune_bias(args.channel, args.bias)
+        vgs, ids = await interface.tune_bias(args.channel, args.bias)
+        print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
 
     if args.disable:
         await interface.disable_channel(args.channel)
+        print(f'Channel {args.channel} disabled')
 
     await interface.client.disconnect()
 
