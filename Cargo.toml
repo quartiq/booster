@@ -30,9 +30,8 @@ git = "https://github.com/quartiq/stm32f4xx-hal"
 features = ["stm32f407", "rt"]
 
 [dependencies.w5500]
-# git = "https://github.com/quartiq/w5500"
-# branch = "feature/tcp-nal"
-path = "../w5500"
+git = "https://github.com/quartiq/w5500"
+branch = "feature/tcp-nal"
 
 [dependencies.ad5627]
 path = "ad5627"
