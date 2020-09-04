@@ -200,18 +200,18 @@ fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> Stri
     };
 
     match request.action {
-        ChannelAction::Enable => match channels.enable_channel(request.channel) {
-            Err(e) => Response::error(e),
-            Ok(_) => Response::okay("Channel enabled"),
-        },
-        ChannelAction::Disable => match channels.disable_channel(request.channel) {
-            Err(e) => Response::error(e),
-            Ok(_) => Response::okay("Channel disabled"),
-        },
-        ChannelAction::Powerup => match channels.power_channel(request.channel) {
-            Err(e) => Response::error(e),
-            Ok(_) => Response::okay("Channel powered"),
-        },
+        ChannelAction::Enable => channels.enable_channel(request.channel).map_or_else(
+            |e| Response::error(e),
+            |_| Response::okay("Channel enabled"),
+        ),
+        ChannelAction::Disable => channels.disable_channel(request.channel).map_or_else(
+            |e| Response::error(e),
+            |_| Response::okay("Channel disabled"),
+        ),
+        ChannelAction::Powerup => channels.power_channel(request.channel).map_or_else(
+            |e| Response::error(e),
+            |_| Response::okay("Channel powered"),
+        ),
     }
 }
 
