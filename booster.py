@@ -6,6 +6,7 @@ Description: Provides an API for controlling Booster NGFW over MQTT.
 """
 import argparse
 import asyncio
+import enum
 import json
 import time
 
@@ -121,7 +122,7 @@ class BoosterApi:
         await self._update_channel_state(channel, Action.Disable)
 
 
-    async def _update_channel_state(self, action):
+    async def _update_channel_state(self, channel, action):
         """ Update the state of a booster RF channel.
 
         Args:

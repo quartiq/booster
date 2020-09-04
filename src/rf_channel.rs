@@ -645,7 +645,13 @@ impl RfChannel {
         // If we are just tripped or are already powered, we can re-enable the channel by cycling
         // the ON_OFFn input.
         match self.state_machine.state() {
-            ChannelState::Tripped(_) | ChannelState::Powered => return self.enable_output(),
+            ChannelState::Tripped(_) | ChannelState::Powered => {
+                if should_enable {
+                    return self.enable_output();
+                } else {
+                    return self.state_machine.transition(ChannelState::Powered);
+                }
+            }
 
             // If the channel is already enabled, there's nothing to do.
             ChannelState::Enabled => return Ok(()),
