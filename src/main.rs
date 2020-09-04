@@ -387,7 +387,8 @@ const APP: () = {
             };
 
             let powered = match state {
-                ChannelState::Powerup(_)
+                ChannelState::Powerup(_, _)
+                | ChannelState::Powered
                 | ChannelState::Powerdown(_)
                 | ChannelState::Enabled
                 | ChannelState::Tripped(_) => true,

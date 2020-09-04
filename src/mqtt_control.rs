@@ -9,10 +9,19 @@ use core::fmt::Write;
 use heapless::{consts, String};
 use minimq::{Property, QoS};
 
+/// Specifies an action to take on a channel.
+#[derive(serde::Deserialize)]
+enum ChannelAction {
+    Enable,
+    Disable,
+    Powerup,
+}
+
 /// Specifies a generic request for a specific channel.
 #[derive(serde::Deserialize)]
 struct ChannelRequest {
     pub channel: Channel,
+    pub action: ChannelAction,
 }
 
 /// Specifies the desired channel RF bias current.
@@ -124,10 +133,9 @@ impl ControlState {
         if !self.subscribed {
             resources.mqtt_client.lock(|client| {
                 if client.is_connected() {
-                    client.subscribe("booster/enable", &[]).unwrap();
-                    client.subscribe("booster/disable", &[]).unwrap();
-                    client.subscribe("booster/tune", &[]).unwrap();
-                    client.subscribe("booster/thresholds", &[]).unwrap();
+                    client.subscribe("booster/channel/state", &[]).unwrap();
+                    client.subscribe("booster/channel/tune", &[]).unwrap();
+                    client.subscribe("booster/channel/thresholds", &[]).unwrap();
                     self.subscribed = true;
                 }
             });
@@ -139,10 +147,11 @@ impl ControlState {
             match client.poll(|client, topic, message, properties| {
                 channels.lock(|channels| {
                     let response = match topic {
-                        "booster/enable" => handle_channel_enable(message, channels),
-                        "booster/disable" => handle_channel_disable(message, channels),
-                        "booster/tune" => handle_channel_tune(message, channels),
-                        "booster/thresholds" => handle_channel_thresholds(message, channels),
+                        "booster/channel/state" => handle_channel_update(message, channels),
+                        "booster/channel/tune" => handle_channel_tune(message, channels),
+                        "booster/channel/thresholds" => {
+                            handle_channel_thresholds(message, channels)
+                        }
                         _ => Response::error_msg("Unexpected topic"),
                     };
 
@@ -176,7 +185,7 @@ impl ControlState {
     }
 }
 
-/// Handle a request to enable a booster RF output.
+/// Handle a request to update a booster RF channel state.
 ///
 /// # Args
 /// * `message` - The serialized message request.
@@ -184,35 +193,25 @@ impl ControlState {
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_enable(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
+fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
         Ok(data) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
 
-    match channels.enable_channel(request.channel) {
-        Ok(_) => Response::okay("Channel enabled"),
-        Err(error) => Response::error(error),
-    }
-}
-
-/// Handle a request to disable a booster RF output.
-///
-/// # Args
-/// * `message` - The serialized message request.
-/// * `channels` - The booster RF channels to configure.
-///
-/// # Returns
-/// A String response indicating the result of the request.
-fn handle_channel_disable(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
-    let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
-        Ok(data) => data,
-        Err(_) => return Response::error_msg("Failed to decode data"),
-    };
-
-    match channels.disable_channel(request.channel) {
-        Err(error) => Response::error(error),
-        Ok(_) => Response::okay("Channel disabled"),
+    match request.action {
+        ChannelAction::Enable => match channels.enable_channel(request.channel) {
+            Err(e) => Response::error(e),
+            Ok(_) => Response::okay("Channel enabled"),
+        },
+        ChannelAction::Disable => match channels.disable_channel(request.channel) {
+            Err(e) => Response::error(e),
+            Ok(_) => Response::okay("Channel disabled"),
+        },
+        ChannelAction::Powerup => match channels.power_channel(request.channel) {
+            Err(e) => Response::error(e),
+            Ok(_) => Response::okay("Channel powered"),
+        },
     }
 }
 

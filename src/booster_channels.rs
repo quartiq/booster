@@ -195,7 +195,20 @@ impl BoosterChannels {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.start_enable(),
+            Some(rf_channel) => rf_channel.start_powerup(true),
+            None => Err(Error::NotPresent),
+        }
+    }
+
+    /// Power up an RF channel without enabling output.
+    ///
+    /// # Args
+    /// * `channel` - The channel to power-up.
+    pub fn power_channel(&mut self, channel: Channel) -> Result<(), Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => rf_channel.start_powerup(false),
             None => Err(Error::NotPresent),
         }
     }

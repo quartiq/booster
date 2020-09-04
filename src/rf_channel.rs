@@ -56,8 +56,12 @@ pub enum ChannelState {
     /// The channel output is disabled.
     Disabled,
 
-    /// The channel is in the enabling process.
-    Powerup(Instant),
+    /// The channel is in the enabling process. The two parameters are the instant that power-up
+    /// began and whether or not the output should be enabled once power-up is complete.
+    Powerup(Instant, bool),
+
+    /// The channel is powered up, but outputs are not enabled.
+    Powered,
 
     /// The channel is actively outputting.
     Enabled,
@@ -78,23 +82,26 @@ impl serde::Serialize for ChannelState {
             ChannelState::Disabled => {
                 serializer.serialize_unit_variant("ChannelState", 1, "Disabled")
             }
-            ChannelState::Powerup(_) => {
+            ChannelState::Powerup(_, _) => {
                 serializer.serialize_unit_variant("ChannelState", 2, "Powerup")
             }
+            ChannelState::Powered => {
+                serializer.serialize_unit_variant("ChannelState", 3, "Powered")
+            }
             ChannelState::Enabled => {
-                serializer.serialize_unit_variant("ChannelState", 3, "Enabled")
+                serializer.serialize_unit_variant("ChannelState", 4, "Enabled")
             }
             ChannelState::Tripped(Interlock::Input) => {
-                serializer.serialize_unit_variant("ChannelState", 4, "Tripped(Input)")
+                serializer.serialize_unit_variant("ChannelState", 5, "Tripped(Input)")
             }
             ChannelState::Tripped(Interlock::Output) => {
-                serializer.serialize_unit_variant("ChannelState", 4, "Tripped(Output)")
+                serializer.serialize_unit_variant("ChannelState", 5, "Tripped(Output)")
             }
             ChannelState::Tripped(Interlock::Reflected) => {
-                serializer.serialize_unit_variant("ChannelState", 4, "Tripped(Reflected)")
+                serializer.serialize_unit_variant("ChannelState", 5, "Tripped(Reflected)")
             }
             ChannelState::Powerdown(_) => {
-                serializer.serialize_unit_variant("ChannelState", 5, "Powerdown")
+                serializer.serialize_unit_variant("ChannelState", 6, "Powerdown")
             }
         }
     }
@@ -132,21 +139,33 @@ impl StateMachine {
 
             // It is only valid to transition from disabled into the power-up state.
             ChannelState::Disabled => match new_state {
-                ChannelState::Disabled | ChannelState::Powerup(_) => new_state,
+                ChannelState::Disabled | ChannelState::Powerup(_, _) => new_state,
                 _ => return Err(Error::InvalidState),
             },
 
-            // During power up, it is only possible to transition to enabled or power-down.
-            ChannelState::Powerup(_) => match new_state {
-                ChannelState::Enabled | ChannelState::Powerdown(_) => new_state,
-                _ => return Err(Error::InvalidState),
-            },
-
-            // When enabled, it is only possible to transition to powerdown or tripped.
-            ChannelState::Enabled => match new_state {
-                ChannelState::Enabled | ChannelState::Tripped(_) | ChannelState::Powerdown(_) => {
+            // During power up, it is only possible to transition to powered, enabled, or
+            // power-down.
+            ChannelState::Powerup(_, _) => match new_state {
+                ChannelState::Enabled | ChannelState::Powered | ChannelState::Powerdown(_) => {
                     new_state
                 }
+                _ => return Err(Error::InvalidState),
+            },
+
+            // When powered, it is only valid to enter enabled or power-down.
+            ChannelState::Powered => match new_state {
+                ChannelState::Powered | ChannelState::Enabled | ChannelState::Powerdown(_) => {
+                    new_state
+                }
+                _ => return Err(Error::InvalidState),
+            },
+
+            // When enabled, it is only possible to transition to powered, powerdown, or tripped.
+            ChannelState::Enabled => match new_state {
+                ChannelState::Enabled
+                | ChannelState::Powered
+                | ChannelState::Tripped(_)
+                | ChannelState::Powerdown(_) => new_state,
                 _ => return Err(Error::InvalidState),
             },
 
@@ -156,9 +175,13 @@ impl StateMachine {
                 _ => return Err(Error::InvalidState),
             },
 
-            // When tripped, it is only possible to re-enable or enter power-down.
+            // When tripped, it is only possible to re-enable, enter powered mode, or enter
+            // power-down.  Note that semantically, `Powered` and `Tripped` are identical states -
+            // the channel is powered, but RF output is disabled.
             ChannelState::Tripped(_) => match new_state {
-                ChannelState::Powerdown(_) | ChannelState::Enabled => new_state,
+                ChannelState::Powerdown(_) | ChannelState::Powered | ChannelState::Enabled => {
+                    new_state
+                }
                 _ => return Err(Error::InvalidState),
             },
         };
@@ -543,13 +566,17 @@ impl RfChannel {
         }
 
         match self.state_machine.state() {
-            ChannelState::Powerup(start_time) => {
+            ChannelState::Powerup(start_time, should_enable) => {
                 // The LM3880 requires 180ms to power up all supplies on the channel. We add an
                 // additional 20ms margin.
 
                 // TODO: Replace constant definition of CPU frequency here.
                 if start_time.elapsed() > Duration::from_cycles(200 * (168_000_000 / 1000)) {
-                    self.finalize_enable()?;
+                    if should_enable {
+                        self.enable_output()?;
+                    } else {
+                        self.state_machine.transition(ChannelState::Powered)?;
+                    }
                 }
             }
 
@@ -581,7 +608,10 @@ impl RfChannel {
             }
 
             // There's no active transitions in the following states.
-            ChannelState::Disabled | ChannelState::Blocked(_) | ChannelState::Tripped(_) => {}
+            ChannelState::Disabled
+            | ChannelState::Blocked(_)
+            | ChannelState::Tripped(_)
+            | ChannelState::Powered => {}
         }
 
         Ok(())
@@ -606,17 +636,26 @@ impl RfChannel {
         }
     }
 
-    /// Start the enable process for channel and power it up.
-    pub fn start_enable(&mut self) -> Result<(), Error> {
-        // If we are just tripped, we can re-enable the channel by cycling the ON_OFFn input.
-        if let ChannelState::Tripped(_) = self.state_machine.state() {
-            return self.finalize_enable();
+    /// Start the power-up process for channel.
+    ///
+    /// # Args
+    /// * `should_enable` - Specified true if the channel output should be enabled when power-up
+    ///   completes.
+    pub fn start_powerup(&mut self, should_enable: bool) -> Result<(), Error> {
+        // If we are just tripped or are already powered, we can re-enable the channel by cycling
+        // the ON_OFFn input.
+        match self.state_machine.state() {
+            ChannelState::Tripped(_) | ChannelState::Powered => return self.enable_output(),
+
+            // If the channel is already enabled, there's nothing to do.
+            ChannelState::Enabled => return Ok(()),
+            _ => {}
         }
 
         // We will be starting the supply sequencer for the RF channel power rail. This will take
         // some time. We can't set the bias DAC until those supplies have stabilized.
         self.state_machine
-            .transition(ChannelState::Powerup(Instant::now()))?;
+            .transition(ChannelState::Powerup(Instant::now(), should_enable))?;
 
         // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
         self.i2c_devices
@@ -624,14 +663,20 @@ impl RfChannel {
             .set_voltage(3.2)
             .expect("Failed to disable RF bias voltage");
 
+        // Ensure that the RF output is disabled during the power-up process.
+        self.pins.signal_on.set_low().unwrap();
+
         // Start the LM3880 power supply sequencer.
         self.pins.enable_power.set_high().unwrap();
         Ok(())
     }
 
-    /// Finalize the enable process once all RF channel supplies have enabled.
-    fn finalize_enable(&mut self) -> Result<(), Error> {
-        // It is only valid to finish the enable process if the channel is powered.
+    /// Enable RF input/output signals on the channel.
+    ///
+    /// # Note
+    /// This can only be completed once the channel has been fully powered.
+    fn enable_output(&mut self) -> Result<(), Error> {
+        // It is only valid to enable the output if the channel is powered.
         if self.pins.enable_power.is_low().unwrap() {
             return Err(Error::InvalidState);
         }
@@ -877,9 +922,9 @@ impl RfChannel {
     /// A tuple of (Vgs, Ids) where Vgs is the bias voltage on the amplifier gate. Ids is the actual
     /// drain current achieved.
     pub fn tune_bias(&mut self, desired_current: f32) -> Result<(f32, f32), Error> {
-        // Verify the channel is fully enabled before starting the bias tuning algorithm.
+        // Verify that the channel is powered, but is not actively outputting for bias calibration.
         match self.state_machine.state() {
-            ChannelState::Enabled | ChannelState::Tripped(_) => {}
+            ChannelState::Powered | ChannelState::Tripped(_) => {}
             _ => return Err(Error::InvalidState),
         }
 
@@ -890,7 +935,8 @@ impl RfChannel {
             return Err(Error::Bounds);
         }
 
-        // Disable the RF input during the test.
+        // Disable the RF input during the test. Note: The state should ensure this is already the
+        // case, but it is done here redundantly as a safety precaution.
         self.pins.signal_on.set_low().unwrap();
 
         // Place the RF channel into pinch-off to start.
@@ -934,9 +980,6 @@ impl RfChannel {
             self.set_bias(bias_voltage).unwrap();
             last_current = self.measure_p28v_current(true);
         }
-
-        // Re-enable the RF input.
-        self.pins.signal_on.set_high().unwrap();
 
         // Note that we're returning the actual bias voltage as calculated by the DAC as opposed to
         // the voltage we used in the algorithm because the voltage reported by the DAC is more

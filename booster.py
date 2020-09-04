@@ -7,6 +7,7 @@ Description: Provides an API for controlling Booster NGFW over MQTT.
 import argparse
 import asyncio
 import json
+import time
 
 from gmqtt  import Client as MqttClient
 
@@ -21,6 +22,13 @@ CHANNEL = [
     "Six",
     "Seven",
 ]
+
+class Action(enum.Enum):
+    """ Represents an action that can be taken on channel state. """
+    Enable = 'Enable'
+    Disable = 'Disable'
+    Powerup = 'Powerup'
+
 
 def generate_request(**kwargs):
     """ Generate an serialized request for Booster.
@@ -101,8 +109,7 @@ class BoosterApi:
         Args:
             channel: The channel index to enable.
         """
-        request = generate_request(channel=CHANNEL[channel])
-        await self.command("booster/enable", request)
+        await self._update_channel_state(channel, Action.Enable)
 
 
     async def disable_channel(self, channel):
@@ -111,8 +118,18 @@ class BoosterApi:
         Args:
             channel: The channel index to disble.
         """
-        request = generate_request(channel=CHANNEL[channel])
-        await self.command("booster/disable", request)
+        await self._update_channel_state(channel, Action.Disable)
+
+
+    async def _update_channel_state(self, action):
+        """ Update the state of a booster RF channel.
+
+        Args:
+            channel: The channel to update
+            action: The action to take on the channel.
+        """
+        request = generate_request(channel=CHANNEL[channel], action=action.value)
+        await self.command('booster/channel/state', request)
 
 
     async def set_channel_thresholds(self, channel, output_power, reflected_power):
@@ -140,14 +157,17 @@ class BoosterApi:
             (Vgs, Ids) where Vgs is the tuned bias voltage and Ids is the RF amplifier drain
             current.
         """
+
+        # Power up the channel. Wait 200ms for the channel to fully power-up before continuing.
+        self._update_channel_state(channel, Action.Powerup)
+        time.sleep(0.200)
+
         request = generate_request(channel=CHANNEL[channel],
                                    current=float(desired_current))
         response = await self.command("booster/tune", request)
 
         return (response['vgs'], response['ids'])
 
-
-STOP = asyncio.Event()
 
 async def channel_configuration(args):
     """ Configure an RF channel. """
