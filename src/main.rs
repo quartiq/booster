@@ -19,6 +19,7 @@ use panic_halt as _;
 use stm32f4xx_hal as hal;
 
 use hal::prelude::*;
+use usb_device::prelude::*;
 
 mod booster_channels;
 mod chassis_fans;
@@ -60,6 +61,8 @@ type Ethernet =
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
 type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
+
+type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;
 
 /// Construct ADC pins associated with an RF channel.
 ///
@@ -115,6 +118,9 @@ macro_rules! channel_pins {
     }};
 }
 
+// USB end-point memory.
+static mut USB_EP_MEMORY: [u32; 1024] = [0; 1024];
+
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
@@ -122,11 +128,15 @@ const APP: () = {
         buttons: UserButtons,
         leds: UserLeds,
         fans: ChassisFans,
+        usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
+        usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
         mqtt_client: MqttClient<minimq::consts::U1024, Ethernet>,
     }
 
     #[init(schedule = [telemetry, channel_monitor, button])]
     fn init(mut c: init::Context) -> init::LateResources {
+        static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None;
+
         c.core.DWT.enable_cycle_counter();
         c.core.DCB.enable_trace();
 
@@ -155,6 +165,34 @@ const APP: () = {
 
         let mut pa_ch_reset_n = gpiob.pb9.into_push_pull_output();
         pa_ch_reset_n.set_high().unwrap();
+
+        // Set up the USB bus.
+        let (usb_serial, usb_device) = {
+            let usb = hal::otg_fs::USB {
+                usb_global: c.device.OTG_FS_GLOBAL,
+                usb_device: c.device.OTG_FS_DEVICE,
+                usb_pwrclk: c.device.OTG_FS_PWRCLK,
+                pin_dm: gpioa.pa11.into_alternate_af10(),
+                pin_dp: gpioa.pa12.into_alternate_af10(),
+                hclk: clocks.hclk(),
+            };
+
+            *USB_BUS = Some(hal::otg_fs::UsbBus::new(usb, unsafe { &mut USB_EP_MEMORY }));
+
+            let usb_serial = usbd_serial::SerialPort::new(USB_BUS.as_ref().unwrap());
+
+            let usb_device = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(),
+                // TODO: Look into sub-licensing from ST.
+                UsbVidPid(0x0483, 0x5740))
+                .manufacturer("STMicroelectronics")
+                .product("STM32 Virtual ComPort")
+                // TODO: Replace this with our EUI48 identifier or other serial number.
+                .serial_number("TODO")
+                .device_class(usbd_serial::USB_CLASS_CDC)
+                .build();
+
+            (usb_serial, usb_device)
+        };
 
         let i2c_bus_manager: &'static _ = {
             let i2c = {
@@ -363,6 +401,8 @@ const APP: () = {
             buttons: buttons,
             leds: leds,
             mqtt_client,
+            usb_serial,
+            usb_device,
         }
     }
 
