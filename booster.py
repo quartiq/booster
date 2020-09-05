@@ -144,7 +144,7 @@ class BoosterApi:
         request = generate_request(channel=CHANNEL[channel],
                                    output_power=float(output_power),
                                    reflected_power=float(reflected_power))
-        await self.command("booster/thresholds", request)
+        await self.command("booster/channel/thresholds", request)
 
 
     async def tune_bias(self, channel, desired_current):
@@ -160,12 +160,12 @@ class BoosterApi:
         """
 
         # Power up the channel. Wait 200ms for the channel to fully power-up before continuing.
-        self._update_channel_state(channel, Action.Powerup)
+        await self._update_channel_state(channel, Action.Powerup)
         time.sleep(0.200)
 
         request = generate_request(channel=CHANNEL[channel],
                                    current=float(desired_current))
-        response = await self.command("booster/tune", request)
+        response = await self.command("booster/channel/tune", request)
 
         return (response['vgs'], response['ids'])
 
