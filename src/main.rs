@@ -29,12 +29,14 @@ mod linear_transformation;
 mod mqtt_control;
 mod mutex;
 mod rf_channel;
+mod serial_terminal;
 mod user_interface;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
+use serial_terminal::SerialTerminal;
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
 
 use rtic::cyccnt::Duration;
@@ -129,8 +131,7 @@ const APP: () = {
         buttons: UserButtons,
         leds: UserLeds,
         fans: ChassisFans,
-        usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
-        usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
+        usb_terminal: SerialTerminal,
         mqtt_client: MqttClient<minimq::consts::U1024, Ethernet>,
     }
 
@@ -166,34 +167,6 @@ const APP: () = {
 
         let mut pa_ch_reset_n = gpiob.pb9.into_push_pull_output();
         pa_ch_reset_n.set_high().unwrap();
-
-        // Set up the USB bus.
-        let (usb_serial, usb_device) = {
-            let usb = hal::otg_fs::USB {
-                usb_global: c.device.OTG_FS_GLOBAL,
-                usb_device: c.device.OTG_FS_DEVICE,
-                usb_pwrclk: c.device.OTG_FS_PWRCLK,
-                pin_dm: gpioa.pa11.into_alternate_af10(),
-                pin_dp: gpioa.pa12.into_alternate_af10(),
-                hclk: clocks.hclk(),
-            };
-
-            *USB_BUS = Some(hal::otg_fs::UsbBus::new(usb, unsafe { &mut USB_EP_MEMORY }));
-
-            let usb_serial = usbd_serial::SerialPort::new(USB_BUS.as_ref().unwrap());
-
-            let usb_device = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(),
-                // TODO: Look into sub-licensing from ST.
-                UsbVidPid(0x0483, 0x5740))
-                .manufacturer("STMicroelectronics")
-                .product("STM32 Virtual ComPort")
-                // TODO: Replace this with our EUI48 identifier or other serial number.
-                .serial_number("TODO")
-                .device_class(usbd_serial::USB_CLASS_CDC)
-                .build();
-
-            (usb_serial, usb_device)
-        };
 
         let i2c_bus_manager: &'static _ = {
             let i2c = {
@@ -389,9 +362,39 @@ const APP: () = {
 
         assert!(fans.self_test(&mut delay));
 
+        // Set up the USB bus.
+        let usb_terminal = {
+            let usb = hal::otg_fs::USB {
+                usb_global: c.device.OTG_FS_GLOBAL,
+                usb_device: c.device.OTG_FS_DEVICE,
+                usb_pwrclk: c.device.OTG_FS_PWRCLK,
+                pin_dm: gpioa.pa11.into_alternate_af10(),
+                pin_dp: gpioa.pa12.into_alternate_af10(),
+                hclk: clocks.hclk(),
+            };
+
+            *USB_BUS = Some(hal::otg_fs::UsbBus::new(usb, unsafe { &mut USB_EP_MEMORY }));
+
+            let usb_serial = usbd_serial::SerialPort::new(USB_BUS.as_ref().unwrap());
+
+            let usb_device = UsbDeviceBuilder::new(
+                USB_BUS.as_ref().unwrap(),
+                // TODO: Look into sub-licensing from ST.
+                UsbVidPid(0x0483, 0x5740),
+            )
+            .manufacturer("STMicroelectronics")
+            .product("STM32 Virtual ComPort")
+            // TODO: Replace this with our EUI48 identifier or other serial number.
+            .serial_number("TODO")
+            .device_class(usbd_serial::USB_CLASS_CDC)
+            .build();
+
+            SerialTerminal::new(usb_device, usb_serial)
+        };
+
         info!("Startup complete");
 
-        // Kick-start the monitor and telemetry tasks.
+        // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
         c.schedule.telemetry(c.start).unwrap();
         c.schedule.button(c.start).unwrap();
@@ -402,12 +405,11 @@ const APP: () = {
             buttons: buttons,
             leds: leds,
             mqtt_client,
-            usb_serial,
-            usb_device,
+            usb_terminal,
         }
     }
 
-    #[task(priority = 2, schedule = [channel_monitor], resources=[channels, leds])]
+    #[task(priority = 3, schedule = [channel_monitor], resources=[channels, leds])]
     fn channel_monitor(c: channel_monitor::Context) {
         // Potentially update the state of any channels.
         c.resources.channels.update();
@@ -497,7 +499,7 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(spawn=[button], schedule = [button], resources=[channels, buttons])]
+    #[task(priority = 2, spawn=[button], schedule = [button], resources=[channels, buttons])]
     fn button(mut c: button::Context) {
         if let Some(event) = c.resources.buttons.update() {
             match event {
@@ -538,12 +540,14 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[channels, mqtt_client])]
+    #[idle(resources=[channels, mqtt_client, usb_terminal])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = mqtt_control::ControlState::new();
 
         loop {
-            manager.update(&mut c.resources);
+            // Handle the USB terminal and MQTT control interface.
+            //manager.update(&mut c.resources);
+            c.resources.usb_terminal.process();
 
             // TODO: Properly sleep here until there's something to process.
             cortex_m::asm::nop();
