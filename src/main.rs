@@ -14,7 +14,7 @@ use core::fmt::Write;
 
 use enum_iterator::IntoEnumIterator;
 use heapless::String;
-use minimq::{MqttClient, QoS};
+use minimq::QoS;
 use panic_halt as _;
 use stm32f4xx_hal as hal;
 
@@ -61,6 +61,7 @@ type SPI = hal::spi::Spi<
 
 type Ethernet =
     w5500::Interface<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
+type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
 type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
@@ -132,7 +133,7 @@ const APP: () = {
         leds: UserLeds,
         fans: ChassisFans,
         usb_terminal: SerialTerminal,
-        mqtt_client: MqttClient<minimq::consts::U1024, Ethernet>,
+        mqtt_client: MqttClient,
     }
 
     #[init(schedule = [telemetry, channel_monitor, button])]
@@ -338,7 +339,7 @@ const APP: () = {
                 w5500::Interface::new(w5500)
             };
 
-            MqttClient::<minimq::consts::U1024, Ethernet>::new(
+            minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
                 minimq::embedded_nal::IpAddr::V4(minimq::embedded_nal::Ipv4Addr::new(10, 0, 0, 2)),
                 "booster",
                 interface,
@@ -547,7 +548,7 @@ const APP: () = {
         loop {
             // Handle the USB terminal and MQTT control interface.
             //manager.update(&mut c.resources);
-            c.resources.usb_terminal.process();
+            serial_terminal::process(&mut c.resources);
 
             // TODO: Properly sleep here until there's something to process.
             cortex_m::asm::nop();

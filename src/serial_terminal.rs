@@ -1,9 +1,10 @@
-use super::{Error, UsbBus};
-use heapless::{consts, Vec};
+use super::{idle, Error, UsbBus};
+use heapless::{consts, Vec, String};
 use logos::Logos;
 use usbd_serial::UsbError;
 
 use w5500::Ipv4Addr;
+use core::fmt::Write;
 
 #[derive(Logos)]
 enum Token {
@@ -39,13 +40,13 @@ enum Token {
     IpAddress(Ipv4Addr),
 }
 
-enum Property {
+pub enum Property {
     Mac,
     SelfAddress,
     BrokerAddress,
 }
 
-enum Request {
+pub enum Request {
     Reset,
     Upgrade,
     Help,
@@ -125,6 +126,76 @@ pub struct SerialTerminal {
     output_buffer: RingBuffer,
 }
 
+pub fn process(resources: &mut idle::Resources) {
+    use rtic::Mutex as _;
+
+    let client = &mut resources.mqtt_client;
+
+    let mut interface = &mut resources.usb_terminal;
+
+    if let Some(request) = interface.poll() {
+        match request {
+            Request::Help => interface.print_help(),
+
+            Request::Reset => {
+                interface.write("WouldReset\n".as_bytes());
+            }
+
+            Request::Upgrade => {
+                interface.write("WouldUpgrade\n".as_bytes());
+            }
+
+            Request::WriteIpAddress(prop, addr) => {
+                match prop {
+                    Property::SelfAddress => {
+                        client.lock(|client| {
+                            // TODO: Updating our IP address may require us to reset all of our
+                            // current sockets.
+                            client.network_stack.w5500.borrow_mut().set_ip(addr).unwrap();
+                        });
+                    }
+                    Property::BrokerAddress => {
+                        client.lock(|client| {
+                            client.set_broker(minimq::embedded_nal::IpAddr::V4(addr)).unwrap();
+                        });
+                    }
+                    _ => interface.write("Invalid property write\n".as_bytes())
+                }
+            }
+
+            Request::Read(Property::Mac) => {
+                client.lock(|client| {
+                    let mut msg = String::<consts::U128>::new();
+                    write!(&mut msg, "{}\n",
+                            client.network_stack.w5500.borrow_mut().get_mac().unwrap()
+                    ).unwrap();
+                    interface.write(msg.as_bytes());
+                });
+            }
+            Request::Read(Property::SelfAddress) => {
+                client.lock(|client| {
+                    let mut msg = String::<consts::U128>::new();
+                    write!(&mut msg, "{}\n",
+                            client.network_stack.w5500.borrow_mut().get_ip().unwrap()
+                    ).unwrap();
+                    interface.write(msg.as_bytes());
+                });
+            }
+
+            Request::Read(Property::BrokerAddress) => {
+                client.lock(|client| {
+                    let mut msg = String::<consts::U128>::new();
+                    write!(&mut msg, "{}\n", client.get_broker()).unwrap();
+                    interface.write(msg.as_bytes());
+                });
+            }
+        }
+
+        interface.reset();
+    }
+
+}
+
 impl SerialTerminal {
     pub fn new(
         usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
@@ -135,30 +206,6 @@ impl SerialTerminal {
             usb_serial,
             input_buffer: Vec::new(),
             output_buffer: RingBuffer::new(),
-        }
-    }
-
-    pub fn process(&mut self) {
-        if let Some(request) = self.poll() {
-            match request {
-                Request::Reset => {
-                    self.usb_serial.write("WouldReset\n".as_bytes()).ok();
-                }
-                Request::Upgrade => {
-                    self.usb_serial.write("WouldUpgrade\n".as_bytes()).ok();
-                }
-                Request::WriteIpAddress(prop, addr) => {
-                    self.usb_serial.write("WriteRequest\n".as_bytes()).ok();
-                }
-                Request::Read(prop) => {
-                    self.usb_serial.write("ReadRequest\n".as_bytes()).ok();
-                }
-                Request::Help => {
-                    self.print_help();
-                }
-            }
-
-            self.reset();
         }
     }
 
@@ -194,14 +241,14 @@ impl SerialTerminal {
         }
     }
 
-    fn write(&mut self, data: &[u8]) {
+    pub fn write(&mut self, data: &[u8]) {
         // If we overflow the output buffer, allow the write to be silently truncated. The issue
         // will likely be cleared up as data is processed.
         self.output_buffer.push(data);
         self.flush();
     }
 
-    fn poll(&mut self) -> Option<Request> {
+    pub fn poll(&mut self) -> Option<Request> {
         // Update the USB serial port.
         if self.usb_device.poll(&mut [&mut self.usb_serial]) == false {
             return None;

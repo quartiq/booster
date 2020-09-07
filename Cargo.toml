@@ -26,7 +26,8 @@ logos = { version = "0.11.4", default-features = false, features = ["export_deri
 shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
 
 [dependencies.minimq]
-git = "https://github.com/quartiq/minimq"
+git = "https://github.com/ryan-summers/minimq"
+branch = "feature/configurable-broker"
 
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/quartiq/stm32f4xx-hal"
