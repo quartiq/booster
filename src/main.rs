@@ -7,10 +7,10 @@
 #![no_std]
 #![no_main]
 
-use core::fmt::Write;
-
 #[macro_use]
 extern crate log;
+
+use core::fmt::Write;
 
 use enum_iterator::IntoEnumIterator;
 use heapless::String;
@@ -25,6 +25,7 @@ mod chassis_fans;
 mod delay;
 mod error;
 mod linear_transformation;
+mod mqtt_control;
 mod mutex;
 mod rf_channel;
 mod user_interface;
@@ -386,7 +387,8 @@ const APP: () = {
             };
 
             let powered = match state {
-                ChannelState::Powerup(_)
+                ChannelState::Powerup(_, _)
+                | ChannelState::Powered
                 | ChannelState::Powerdown(_)
                 | ChannelState::Enabled
                 | ChannelState::Tripped(_) => true,
@@ -498,14 +500,10 @@ const APP: () = {
 
     #[idle(resources=[channels, mqtt_client])]
     fn idle(mut c: idle::Context) -> ! {
+        let mut manager = mqtt_control::ControlState::new();
+
         loop {
-            c.resources.mqtt_client.lock(|client| {
-                client
-                    .poll(|_client, _topic, _message, _properties| {
-                        // TODO: Handle topics.
-                    })
-                    .unwrap()
-            });
+            manager.update(&mut c.resources);
 
             // TODO: Properly sleep here until there's something to process.
             cortex_m::asm::nop();

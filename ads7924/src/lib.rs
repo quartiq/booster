@@ -28,6 +28,7 @@ where
 #[doc(hidden)]
 enum OperationMode {
     Active = 0b100000,
+    ManualSingle = 0b110000,
     AutoscanWithSleep = 0b111011,
 }
 
@@ -60,6 +61,7 @@ enum Register {
 }
 
 /// Indicates an ADC sample channel.
+#[derive(Copy, Clone)]
 pub enum Channel {
     Zero = 0,
     One = 1,
@@ -105,7 +107,7 @@ where
         ads7924.write(Register::IntConfig, &[interrupt_config])?;
 
         // Configure the ADC to operate in auto-scan (with sleep) mode.
-        ads7924.set_mode(OperationMode::AutoscanWithSleep)?;
+        ads7924.set_mode(OperationMode::AutoscanWithSleep, None)?;
 
         Ok(ads7924)
     }
@@ -122,7 +124,7 @@ where
         Ads7924::new(i2c, 0x49, 3.434, delay)
     }
 
-    fn set_mode(&mut self, mode: OperationMode) -> Result<(), Error> {
+    fn set_mode(&mut self, mode: OperationMode, channel: Option<Channel>) -> Result<(), Error> {
         let mut mode_control: [u8; 1] = [0];
         self.read(Register::ModeCntrl, &mut mode_control)?;
 
@@ -131,6 +133,10 @@ where
         if mode != OperationMode::Active {
             mode_control[0].set_bits(2..8, OperationMode::Active as u8);
             self.write(Register::ModeCntrl, &mode_control)?;
+        }
+
+        if let Some(channel) = channel {
+            mode_control[0].set_bits(0..3, channel as u8);
         }
 
         mode_control[0].set_bits(2..8, mode as u8);
@@ -274,5 +280,27 @@ where
         let code = u16::from_be_bytes(voltage_register) >> 4;
 
         Ok(code as f32 * self.volts_per_lsb)
+    }
+
+    /// Get an up-to-date analog voltage of a channel.
+    ///
+    /// # Note
+    /// This function will force the ADC to perform a new analog conversion, so results will be as
+    /// up-to-date as possible.
+    ///
+    /// # Args
+    /// * `channel` - The channel to get the voltage of.
+    ///
+    /// # Returns
+    /// The analog measurement of the specified channel in volts.
+    pub fn measure_voltage(&mut self, channel: Channel) -> Result<f32, Error> {
+        // First, update the mode to be manual-single.
+        self.set_mode(OperationMode::ManualSingle, Some(channel))?;
+
+        let voltage = self.get_voltage(channel)?;
+
+        self.set_mode(OperationMode::AutoscanWithSleep, None)?;
+
+        Ok(voltage)
     }
 }
