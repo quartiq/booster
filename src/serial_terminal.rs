@@ -1,10 +1,10 @@
-use super::{idle, Error, UsbBus};
-use heapless::{consts, Vec, String};
+use super::{Error, Settings, UsbBus};
+use heapless::{consts, String, Vec};
 use logos::Logos;
 use usbd_serial::UsbError;
 
-use w5500::Ipv4Addr;
 use core::fmt::Write;
+use w5500::Ipv4Addr;
 
 #[derive(Logos)]
 enum Token {
@@ -120,92 +120,79 @@ impl RingBuffer {
 }
 
 pub struct SerialTerminal {
+    settings: Settings,
     usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
     usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
     input_buffer: Vec<u8, consts::U128>,
     output_buffer: RingBuffer,
 }
 
-pub fn process(resources: &mut idle::Resources) {
-    use rtic::Mutex as _;
-
-    let client = &mut resources.mqtt_client;
-
-    let mut interface = &mut resources.usb_terminal;
-
-    if let Some(request) = interface.poll() {
-        match request {
-            Request::Help => interface.print_help(),
-
-            Request::Reset => {
-                interface.write("WouldReset\n".as_bytes());
-            }
-
-            Request::Upgrade => {
-                interface.write("WouldUpgrade\n".as_bytes());
-            }
-
-            Request::WriteIpAddress(prop, addr) => {
-                match prop {
-                    Property::SelfAddress => {
-                        client.lock(|client| {
-                            // TODO: Updating our IP address may require us to reset all of our
-                            // current sockets.
-                            client.network_stack.w5500.borrow_mut().set_ip(addr).unwrap();
-                        });
-                    }
-                    Property::BrokerAddress => {
-                        client.lock(|client| {
-                            client.set_broker(minimq::embedded_nal::IpAddr::V4(addr)).unwrap();
-                        });
-                    }
-                    _ => interface.write("Invalid property write\n".as_bytes())
-                }
-            }
-
-            Request::Read(Property::Mac) => {
-                client.lock(|client| {
-                    let mut msg = String::<consts::U128>::new();
-                    write!(&mut msg, "{}\n",
-                            client.network_stack.w5500.borrow_mut().get_mac().unwrap()
-                    ).unwrap();
-                    interface.write(msg.as_bytes());
-                });
-            }
-            Request::Read(Property::SelfAddress) => {
-                client.lock(|client| {
-                    let mut msg = String::<consts::U128>::new();
-                    write!(&mut msg, "{}\n",
-                            client.network_stack.w5500.borrow_mut().get_ip().unwrap()
-                    ).unwrap();
-                    interface.write(msg.as_bytes());
-                });
-            }
-
-            Request::Read(Property::BrokerAddress) => {
-                client.lock(|client| {
-                    let mut msg = String::<consts::U128>::new();
-                    write!(&mut msg, "{}\n", client.get_broker()).unwrap();
-                    interface.write(msg.as_bytes());
-                });
-            }
-        }
-
-        interface.reset();
-    }
-
-}
-
 impl SerialTerminal {
     pub fn new(
         usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
         usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
+        settings: Settings,
     ) -> Self {
         Self {
+            settings,
             usb_device,
             usb_serial,
             input_buffer: Vec::new(),
             output_buffer: RingBuffer::new(),
+        }
+    }
+    pub fn process(&mut self) {
+        if let Some(request) = self.poll() {
+            match request {
+                Request::Help => self.print_help(),
+
+                Request::Reset => {
+                    self.write("WouldReset\n".as_bytes());
+                }
+
+                Request::Upgrade => {
+                    self.write("WouldUpgrade\n".as_bytes());
+                }
+
+                Request::WriteIpAddress(prop, addr) => match prop {
+                    Property::SelfAddress => {
+                        self.settings.set_ip_address(addr);
+                    }
+                    Property::BrokerAddress => {
+                        self.settings.set_broker(addr);
+                    }
+                    _ => self.write("Invalid property write\n".as_bytes()),
+                },
+
+                Request::Read(Property::Mac) => {
+                    let mut msg = String::<consts::U128>::new();
+                    write!(&mut msg, "{}\n", self.settings.mac_address).unwrap();
+                    self.write(msg.as_bytes());
+                }
+                Request::Read(Property::SelfAddress) => {
+                    let mut msg = String::<consts::U128>::new();
+                    write!(&mut msg, "{}\n", self.settings.ip_address).unwrap();
+                    self.write(msg.as_bytes());
+                }
+
+                Request::Read(Property::BrokerAddress) => {
+                    let mut msg = String::<consts::U128>::new();
+                    write!(&mut msg, "{}\n", self.settings.broker_address).unwrap();
+                    self.write(msg.as_bytes());
+                }
+            }
+
+            // TODO: Warn the user if there are settings in memory that differ from those that are
+            // currently operating.
+            if self.settings.are_dirty() {
+                self.write(
+                    "Settings in memory may differ from currently operating settings. \
+                           Reset the device to apply settings.\n"
+                        .as_bytes(),
+                );
+            }
+
+            self.reset();
         }
     }
 

@@ -30,6 +30,7 @@ mod mqtt_control;
 mod mutex;
 mod rf_channel;
 mod serial_terminal;
+mod settings;
 mod user_interface;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
@@ -37,6 +38,7 @@ use delay::AsmDelay;
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
 use serial_terminal::SerialTerminal;
+use settings::Settings;
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
 
 use rtic::cyccnt::Duration;
@@ -47,6 +49,14 @@ type I2C = hal::i2c::I2c<
     (
         hal::gpio::gpiob::PB6<hal::gpio::AlternateOD<hal::gpio::AF4>>,
         hal::gpio::gpiob::PB7<hal::gpio::AlternateOD<hal::gpio::AF4>>,
+    ),
+>;
+
+type I2C2 = hal::i2c::I2c<
+    hal::stm32::I2C2,
+    (
+        hal::gpio::gpiob::PB10<hal::gpio::AlternateOD<hal::gpio::AF4>>,
+        hal::gpio::gpiob::PB11<hal::gpio::AlternateOD<hal::gpio::AF4>>,
     ),
 >;
 
@@ -67,6 +77,7 @@ type I2cBusManager = mutex::AtomicCheckManager<I2C>;
 type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
 
 type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;
+type Eeprom = microchip_24aa02e48::Microchip24AA02E48<I2C2>;
 
 /// Construct ADC pins associated with an RF channel.
 ///
@@ -136,7 +147,7 @@ const APP: () = {
         mqtt_client: MqttClient,
     }
 
-    #[init(schedule = [telemetry, channel_monitor, button])]
+    #[init(schedule = [telemetry, channel_monitor, button, usb])]
     fn init(mut c: init::Context) -> init::LateResources {
         static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None;
 
@@ -277,14 +288,17 @@ const APP: () = {
 
         info!("Startup complete");
 
-        let i2c2 = {
-            let scl = gpiob.pb10.into_alternate_af4_open_drain();
-            let sda = gpiob.pb11.into_alternate_af4_open_drain();
-            hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
-        };
-
         // Read the EUI48 identifier and configure the ethernet MAC address.
-        let mut eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
+        let settings = {
+            let i2c2 = {
+                let scl = gpiob.pb10.into_alternate_af4_open_drain();
+                let sda = gpiob.pb11.into_alternate_af4_open_drain();
+                hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
+            };
+
+            let eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
+            Settings::load(eui)
+        };
 
         let mqtt_client = {
             let interface = {
@@ -323,25 +337,19 @@ const APP: () = {
                 )
                 .unwrap();
 
-                let mut eui48: [u8; 6] = [0; 6];
-                eui.read_eui48(&mut eui48).unwrap();
-                w5500.set_mac(w5500::MacAddress::from_bytes(eui48)).unwrap();
+                w5500.set_mac(settings.mac_address).unwrap();
 
                 // Set default netmask and gateway.
-                w5500
-                    .set_gateway(w5500::Ipv4Addr::new(10, 0, 0, 0))
-                    .unwrap();
-                w5500
-                    .set_subnet(w5500::Ipv4Addr::new(255, 255, 255, 0))
-                    .unwrap();
-                w5500.set_ip(w5500::Ipv4Addr::new(10, 0, 0, 1)).unwrap();
+                w5500.set_gateway(settings.gateway).unwrap();
+                w5500.set_subnet(settings.netmask).unwrap();
+                w5500.set_ip(settings.ip_address).unwrap();
 
                 w5500::Interface::new(w5500)
             };
 
             minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
-                minimq::embedded_nal::IpAddr::V4(minimq::embedded_nal::Ipv4Addr::new(10, 0, 0, 2)),
-                "booster",
+                minimq::embedded_nal::IpAddr::V4(settings.broker_address),
+                settings.identifier,
                 interface,
             )
             .unwrap()
@@ -361,7 +369,7 @@ const APP: () = {
             ChassisFans::new([fan1, fan2, fan3])
         };
 
-        assert!(fans.self_test(&mut delay));
+        //assert!(fans.self_test(&mut delay));
 
         // Set up the USB bus.
         let usb_terminal = {
@@ -390,7 +398,7 @@ const APP: () = {
             .device_class(usbd_serial::USB_CLASS_CDC)
             .build();
 
-            SerialTerminal::new(usb_device, usb_serial)
+            SerialTerminal::new(usb_device, usb_serial, settings)
         };
 
         info!("Startup complete");
@@ -399,6 +407,7 @@ const APP: () = {
         c.schedule.channel_monitor(c.start).unwrap();
         c.schedule.telemetry(c.start).unwrap();
         c.schedule.button(c.start).unwrap();
+        c.schedule.usb(c.start).unwrap();
 
         init::LateResources {
             channels: channels,
@@ -541,14 +550,21 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[channels, mqtt_client, usb_terminal])]
+    #[task(priority = 9, schedule=[usb], resources=[usb_terminal])]
+    fn usb(c: usb::Context) {
+        c.resources.usb_terminal.process();
+        c.schedule
+            .usb(c.scheduled + Duration::from_cycles(10000 * (168_000_000 / 1_000_000)))
+            .unwrap();
+    }
+
+    #[idle(resources=[channels, mqtt_client])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = mqtt_control::ControlState::new();
 
         loop {
-            // Handle the USB terminal and MQTT control interface.
-            //manager.update(&mut c.resources);
-            serial_terminal::process(&mut c.resources);
+            // Handle the MQTT control interface.
+            manager.update(&mut c.resources);
 
             // TODO: Properly sleep here until there's something to process.
             cortex_m::asm::nop();
