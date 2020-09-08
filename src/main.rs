@@ -38,7 +38,7 @@ use delay::AsmDelay;
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
 use serial_terminal::SerialTerminal;
-use settings::Settings;
+use settings::BoosterSettings;
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
 
 use rtic::cyccnt::Duration;
@@ -297,7 +297,7 @@ const APP: () = {
             };
 
             let eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
-            Settings::load(eui)
+            BoosterSettings::load(eui)
         };
 
         let mqtt_client = {
@@ -337,19 +337,19 @@ const APP: () = {
                 )
                 .unwrap();
 
-                w5500.set_mac(settings.mac_address).unwrap();
+                w5500.set_mac(settings.mac()).unwrap();
 
                 // Set default netmask and gateway.
-                w5500.set_gateway(settings.gateway).unwrap();
-                w5500.set_subnet(settings.netmask).unwrap();
-                w5500.set_ip(settings.ip_address).unwrap();
+                w5500.set_gateway(settings.gateway()).unwrap();
+                w5500.set_subnet(settings.subnet()).unwrap();
+                w5500.set_ip(settings.ip()).unwrap();
 
                 w5500::Interface::new(w5500)
             };
 
             minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
-                minimq::embedded_nal::IpAddr::V4(settings.broker_address),
-                settings.identifier,
+                minimq::embedded_nal::IpAddr::V4(settings.broker()),
+                settings.id(),
                 interface,
             )
             .unwrap()
@@ -369,7 +369,7 @@ const APP: () = {
             ChassisFans::new([fan1, fan2, fan3])
         };
 
-        //assert!(fans.self_test(&mut delay));
+        assert!(fans.self_test(&mut delay));
 
         // Set up the USB bus.
         let usb_terminal = {
@@ -550,11 +550,14 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 9, schedule=[usb], resources=[usb_terminal])]
+    #[task(priority = 2, schedule=[usb], resources=[usb_terminal])]
     fn usb(c: usb::Context) {
         c.resources.usb_terminal.process();
+
+        // TODO: Replace hard-coded CPU cycles here.
+        // Schedule to run this task every 10ms.
         c.schedule
-            .usb(c.scheduled + Duration::from_cycles(10000 * (168_000_000 / 1_000_000)))
+            .usb(c.scheduled + Duration::from_cycles(10 * (168_000_000 / 1_000)))
             .unwrap();
     }
 

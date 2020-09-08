@@ -1,4 +1,10 @@
-use super::{Error, Settings, UsbBus};
+//! Booster NGFW Application
+//!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
+use super::{BoosterSettings, Error, UsbBus};
 use heapless::{consts, String, Vec};
 use logos::Logos;
 use usbd_serial::UsbError;
@@ -17,9 +23,6 @@ enum Token {
 
     #[token("help")]
     Help,
-
-    #[token("upgrade")]
-    Upgrade,
 
     #[token("read")]
     Read,
@@ -48,7 +51,6 @@ pub enum Property {
 
 pub enum Request {
     Reset,
-    Upgrade,
     Help,
     Read(Property),
     WriteIpAddress(Property, Ipv4Addr),
@@ -120,7 +122,7 @@ impl RingBuffer {
 }
 
 pub struct SerialTerminal {
-    settings: Settings,
+    settings: BoosterSettings,
     usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
     usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
     input_buffer: Vec<u8, consts::U128>,
@@ -128,10 +130,11 @@ pub struct SerialTerminal {
 }
 
 impl SerialTerminal {
+    /// Construct a terminal for interacting with the user.
     pub fn new(
         usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
         usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
-        settings: Settings,
+        settings: BoosterSettings,
     ) -> Self {
         Self {
             settings,
@@ -141,17 +144,15 @@ impl SerialTerminal {
             output_buffer: RingBuffer::new(),
         }
     }
+
+    /// Poll the serial terminal and process any necessary updates.
     pub fn process(&mut self) {
         if let Some(request) = self.poll() {
             match request {
                 Request::Help => self.print_help(),
 
                 Request::Reset => {
-                    self.write("WouldReset\n".as_bytes());
-                }
-
-                Request::Upgrade => {
-                    self.write("WouldUpgrade\n".as_bytes());
+                    cortex_m::peripheral::SCB::sys_reset();
                 }
 
                 Request::WriteIpAddress(prop, addr) => match prop {
@@ -166,23 +167,23 @@ impl SerialTerminal {
 
                 Request::Read(Property::Mac) => {
                     let mut msg = String::<consts::U128>::new();
-                    write!(&mut msg, "{}\n", self.settings.mac_address).unwrap();
+                    write!(&mut msg, "{}\n", self.settings.mac()).unwrap();
                     self.write(msg.as_bytes());
                 }
                 Request::Read(Property::SelfAddress) => {
                     let mut msg = String::<consts::U128>::new();
-                    write!(&mut msg, "{}\n", self.settings.ip_address).unwrap();
+                    write!(&mut msg, "{}\n", self.settings.ip()).unwrap();
                     self.write(msg.as_bytes());
                 }
 
                 Request::Read(Property::BrokerAddress) => {
                     let mut msg = String::<consts::U128>::new();
-                    write!(&mut msg, "{}\n", self.settings.broker_address).unwrap();
+                    write!(&mut msg, "{}\n", self.settings.broker()).unwrap();
                     self.write(msg.as_bytes());
                 }
             }
 
-            // TODO: Warn the user if there are settings in memory that differ from those that are
+            // Warn the user if there are settings in memory that differ from those that are
             // currently operating.
             if self.settings.are_dirty() {
                 self.write(
@@ -228,6 +229,10 @@ impl SerialTerminal {
         }
     }
 
+    /// Write data to the serial terminal.
+    ///
+    /// # Note
+    /// The terminal uses an internal buffer. Overflows of the output buffer are silently ignored.
     pub fn write(&mut self, data: &[u8]) {
         // If we overflow the output buffer, allow the write to be silently truncated. The issue
         // will likely be cleared up as data is processed.
@@ -235,7 +240,8 @@ impl SerialTerminal {
         self.flush();
     }
 
-    pub fn poll(&mut self) -> Option<Request> {
+    /// Poll the serial interface for any pending requests from the user.
+    fn poll(&mut self) -> Option<Request> {
         // Update the USB serial port.
         if self.usb_device.poll(&mut [&mut self.usb_serial]) == false {
             return None;
@@ -300,7 +306,6 @@ impl SerialTerminal {
 | Booster Command Help :
 +----------------------+
 * `reset` - Resets the device
-* `upgrade`  - Resets the device into DFU mode
 * `read <PROP>` - Reads the value of PROP. PROP may be [ip-address, broker-address, mac]
 * `write <PROP> <VAL>` - Writes the value of VAL to PROP. PROP may be [ip-address, broker-address] \
 and VAL must be an IP address (e.g.  192.168.1.1)\n"
@@ -325,7 +330,6 @@ and VAL must be an IP address (e.g.  192.168.1.1)\n"
         let command = lex.next().ok_or("Invalid command")?;
         let request = match command {
             Token::Reset => Request::Reset,
-            Token::Upgrade => Request::Upgrade,
             Token::Help => Request::Help,
             Token::Read => {
                 // Validate that there is one valid token following.
