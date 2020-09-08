@@ -349,7 +349,7 @@ const APP: () = {
 
             minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
                 minimq::embedded_nal::IpAddr::V4(settings.broker()),
-                settings.id(),
+                settings.id().as_str(),
                 interface,
             )
             .unwrap()

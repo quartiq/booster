@@ -33,6 +33,15 @@ enum Token {
     #[token("mac")]
     Mac,
 
+    #[token("id")]
+    Identifier,
+
+    #[token("netmask")]
+    Netmask,
+
+    #[token("gateway")]
+    Gateway,
+
     #[token("ip-address")]
     SelfAddress,
 
@@ -41,12 +50,19 @@ enum Token {
 
     #[regex(r"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", |lex| lex.slice().parse())]
     IpAddress(Ipv4Addr),
+
+    #[regex(r"[a-zA-Z0-9]+")]
+    DeviceIdentifier,
 }
 
+#[derive(PartialEq)]
 pub enum Property {
     Mac,
     SelfAddress,
     BrokerAddress,
+    Netmask,
+    Gateway,
+    Identifier,
 }
 
 pub enum Request {
@@ -54,8 +70,10 @@ pub enum Request {
     Help,
     Read(Property),
     WriteIpAddress(Property, Ipv4Addr),
+    WriteIdentifier(String<consts::U32>),
 }
 
+/// A ring-buffer for storing data that is pending transmission.
 struct RingBuffer {
     data: [u8; 512],
     head: usize,
@@ -63,6 +81,7 @@ struct RingBuffer {
 }
 
 impl RingBuffer {
+    /// Construct a new ring buffer.
     pub fn new() -> Self {
         Self {
             data: [0; 512],
@@ -115,12 +134,27 @@ impl RingBuffer {
         }
     }
 
+    /// Clear all data from the ring buffer.
     pub fn clear(&mut self) {
         self.head = 0;
         self.tail = 0;
     }
 }
 
+fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<consts::U128> {
+    let mut msg = String::<consts::U128>::new();
+    match prop {
+        Property::Identifier => write!(&mut msg, "{}\n", settings.id()).unwrap(),
+        Property::Mac => write!(&mut msg, "{}\n", settings.mac()).unwrap(),
+        Property::SelfAddress => write!(&mut msg, "{}\n", settings.ip()).unwrap(),
+        Property::BrokerAddress => write!(&mut msg, "{}\n", settings.broker()).unwrap(),
+        Property::Netmask => write!(&mut msg, "{}\n", settings.subnet()).unwrap(),
+        Property::Gateway => write!(&mut msg, "{}\n", settings.gateway()).unwrap(),
+    };
+    msg
+}
+
+/// A serial terminal for allowing the user to interact with Booster over USB.
 pub struct SerialTerminal {
     settings: BoosterSettings,
     usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
@@ -156,29 +190,21 @@ impl SerialTerminal {
                 }
 
                 Request::WriteIpAddress(prop, addr) => match prop {
-                    Property::SelfAddress => {
-                        self.settings.set_ip_address(addr);
-                    }
-                    Property::BrokerAddress => {
-                        self.settings.set_broker(addr);
-                    }
+                    Property::SelfAddress => self.settings.set_ip_address(addr),
+                    Property::BrokerAddress => self.settings.set_broker(addr),
+                    Property::Gateway => self.settings.set_gateway(addr),
+                    Property::Netmask => self.settings.set_netmask(addr),
                     _ => self.write("Invalid property write\n".as_bytes()),
                 },
 
-                Request::Read(Property::Mac) => {
-                    let mut msg = String::<consts::U128>::new();
-                    write!(&mut msg, "{}\n", self.settings.mac()).unwrap();
-                    self.write(msg.as_bytes());
-                }
-                Request::Read(Property::SelfAddress) => {
-                    let mut msg = String::<consts::U128>::new();
-                    write!(&mut msg, "{}\n", self.settings.ip()).unwrap();
-                    self.write(msg.as_bytes());
+                Request::WriteIdentifier(id) => {
+                    if self.settings.set_id(id.as_str()) == false {
+                        self.write("Invalid identifier\n".as_bytes());
+                    }
                 }
 
-                Request::Read(Property::BrokerAddress) => {
-                    let mut msg = String::<consts::U128>::new();
-                    write!(&mut msg, "{}\n", self.settings.broker()).unwrap();
+                Request::Read(prop) => {
+                    let msg = get_property_string(prop, &self.settings);
                     self.write(msg.as_bytes());
                 }
             }
@@ -301,15 +327,18 @@ impl SerialTerminal {
 
     fn print_help(&mut self) {
         self.write(
-            "\n
+"\n
 +----------------------+
 | Booster Command Help :
 +----------------------+
 * `reset` - Resets the device
-* `read <PROP>` - Reads the value of PROP. PROP may be [ip-address, broker-address, mac]
-* `write <PROP> <VAL>` - Writes the value of VAL to PROP. PROP may be [ip-address, broker-address] \
-and VAL must be an IP address (e.g.  192.168.1.1)\n"
-                .as_bytes(),
+* `read <PROP>` - Reads the value of PROP. PROP may be [ip-address, broker-address, mac, id, \
+gateway, netmask]
+* `write <PROP> <IP>` - Writes the value of <IP> to <PROP>. <PROP> may be [ip-address, broker-address, \
+netmask, gateway] and <IP> must be an IP address (e.g.  192.168.1.1)
+* `write id <ID>` - Write the MQTT client ID of the device. <ID> must be 23 or less ASCII \
+characters.
+".as_bytes(),
         );
     }
 
@@ -340,6 +369,9 @@ and VAL must be an IP address (e.g.  192.168.1.1)\n"
                     Token::Mac => Property::Mac,
                     Token::SelfAddress => Property::SelfAddress,
                     Token::BrokerAddress => Property::BrokerAddress,
+                    Token::Gateway => Property::Gateway,
+                    Token::Netmask => Property::Netmask,
+                    Token::Identifier => Property::Identifier,
                     _ => return Err("Invalid property read"),
                 };
 
@@ -353,13 +385,31 @@ and VAL must be an IP address (e.g.  192.168.1.1)\n"
                 let property = match property_token {
                     Token::SelfAddress => Property::SelfAddress,
                     Token::BrokerAddress => Property::BrokerAddress,
+                    Token::Gateway => Property::Gateway,
+                    Token::Netmask => Property::Netmask,
+                    Token::Identifier => Property::Identifier,
                     _ => return Err("Invalid property write"),
                 };
 
-                if let Some(Token::IpAddress(addr)) = lex.next() {
-                    Request::WriteIpAddress(property, addr)
-                } else {
-                    return Err("Invalid IP address write");
+                let value_token = lex.next().ok_or("Malformed property")?;
+
+                match value_token {
+                    Token::IpAddress(addr) => Request::WriteIpAddress(property, addr),
+                    Token::DeviceIdentifier if property == Property::Identifier => {
+                        if lex.slice().len() < 23 {
+                            let vec =
+                                Vec::<u8, consts::U32>::from_slice(lex.slice().as_bytes()).unwrap();
+
+                            // The regex on this capture allow us to assume it is valid utf8, since
+                            // we know it is alphanumeric.
+                            let id = String::<consts::U32>::from_utf8(vec).unwrap();
+
+                            Request::WriteIdentifier(id)
+                        } else {
+                            return Err("ID too long");
+                        }
+                    }
+                    _ => return Err("Invalid write request"),
                 }
             }
             _ => return Err("Invalid command"),
