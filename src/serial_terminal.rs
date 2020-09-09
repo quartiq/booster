@@ -4,7 +4,7 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::{BoosterSettings, UsbBus};
+use super::{platform, BoosterSettings, UsbBus};
 use bbqueue::BBBuffer;
 use heapless::{consts, String, Vec};
 use logos::Logos;
@@ -125,6 +125,8 @@ impl SerialTerminal {
                 Request::Help => self.print_help(),
 
                 Request::Reset => {
+                    // Power off all output channels and reset the MCU.
+                    platform::shutdown_channels();
                     cortex_m::peripheral::SCB::sys_reset();
                 }
 

@@ -28,6 +28,7 @@ mod error;
 mod linear_transformation;
 mod mqtt_control;
 mod mutex;
+mod platform;
 mod rf_channel;
 mod serial_terminal;
 mod settings;
@@ -150,6 +151,7 @@ const APP: () = {
     #[init(schedule = [telemetry, channel_monitor, button, usb])]
     fn init(mut c: init::Context) -> init::LateResources {
         static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None;
+        static mut USB_SERIAL: Option<String<heapless::consts::U64>> = None;
 
         c.core.DWT.enable_cycle_counter();
         c.core.DCB.enable_trace();
@@ -386,6 +388,19 @@ const APP: () = {
 
             let usb_serial = usbd_serial::SerialPort::new(USB_BUS.as_ref().unwrap());
 
+            // Generate a device serial number from the MAC address.
+            *USB_SERIAL = {
+                let mut serial_string: String<heapless::consts::U64> = String::new();
+                let octets = settings.mac().octets;
+                write!(
+                    &mut serial_string,
+                    "{}-{}-{}-{}-{}-{}",
+                    octets[0], octets[1], octets[2], octets[3], octets[4], octets[5]
+                )
+                .unwrap();
+                Some(serial_string)
+            };
+
             let usb_device = UsbDeviceBuilder::new(
                 USB_BUS.as_ref().unwrap(),
                 // TODO: Look into sub-licensing from ST.
@@ -393,8 +408,7 @@ const APP: () = {
             )
             .manufacturer("ARTIQ/Sinara")
             .product("Booster")
-            // TODO: Replace this with our lower case EUI48 identifier with dashes
-            .serial_number("TODO")
+            .serial_number(USB_SERIAL.as_ref().unwrap().as_str())
             .device_class(usbd_serial::USB_CLASS_CDC)
             .build();
 
