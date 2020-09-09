@@ -4,7 +4,8 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::{BoosterSettings, Error, UsbBus};
+use super::{BoosterSettings, UsbBus};
+use bbqueue::BBBuffer;
 use heapless::{consts, String, Vec};
 use logos::Logos;
 use usbd_serial::UsbError;
@@ -73,74 +74,6 @@ pub enum Request {
     WriteIdentifier(String<consts::U32>),
 }
 
-/// A ring-buffer for storing data that is pending transmission.
-struct RingBuffer {
-    data: [u8; 512],
-    head: usize,
-    tail: usize,
-}
-
-impl RingBuffer {
-    /// Construct a new ring buffer.
-    pub fn new() -> Self {
-        Self {
-            data: [0; 512],
-            head: 0,
-            tail: 0,
-        }
-    }
-
-    fn size(&mut self) -> usize {
-        if self.head > self.tail {
-            self.data[self.head..].len() + self.data[..self.tail].len()
-        } else {
-            self.data[self.head..self.tail].len()
-        }
-    }
-
-    /// Push data into the ring buffer tail.
-    pub fn push(&mut self, data: &[u8]) -> usize {
-        for (count, byte) in data.iter().enumerate() {
-            // Check if the next byte will overflow.
-            let next_tail = (self.tail + 1) % self.data.len();
-            if self.head == next_tail {
-                return count;
-            }
-
-            self.data[self.tail] = *byte;
-            self.tail = next_tail;
-        }
-
-        data.len()
-    }
-
-    /// Remove data from the ring buffer head.
-    pub fn pop(&mut self, count: usize) -> Result<(), Error> {
-        if self.size() < count {
-            return Err(Error::Bounds);
-        }
-
-        // Move the head forward to simulate removing data from the FIFO.
-        self.head = (self.head + count) % self.data.len();
-        Ok(())
-    }
-
-    /// Access the underlying memory of the ring buffer.
-    pub fn as_slices<'a>(&'a self) -> (&'a [u8], &'a [u8]) {
-        if self.head > self.tail {
-            (&self.data[self.head..], &self.data[..self.tail])
-        } else {
-            (&self.data[self.head..self.tail], &[])
-        }
-    }
-
-    /// Clear all data from the ring buffer.
-    pub fn clear(&mut self) {
-        self.head = 0;
-        self.tail = 0;
-    }
-}
-
 fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<consts::U128> {
     let mut msg = String::<consts::U128>::new();
     match prop {
@@ -154,13 +87,17 @@ fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<con
     msg
 }
 
+/// A static-scope BBqueue for handling serial output buffering.
+static OUTPUT_BUFFER: BBBuffer<bbqueue::consts::U1024> = BBBuffer(bbqueue::ConstBBBuffer::new());
+
 /// A serial terminal for allowing the user to interact with Booster over USB.
 pub struct SerialTerminal {
     settings: BoosterSettings,
     usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
     usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
     input_buffer: Vec<u8, consts::U128>,
-    output_buffer: RingBuffer,
+    output_buffer_producer: bbqueue::Producer<'static, bbqueue::consts::U1024>,
+    output_buffer_consumer: bbqueue::Consumer<'static, bbqueue::consts::U1024>,
 }
 
 impl SerialTerminal {
@@ -170,12 +107,14 @@ impl SerialTerminal {
         usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
         settings: BoosterSettings,
     ) -> Self {
+        let (producer, consumer) = OUTPUT_BUFFER.try_split().unwrap();
         Self {
             settings,
             usb_device,
             usb_serial,
             input_buffer: Vec::new(),
-            output_buffer: RingBuffer::new(),
+            output_buffer_producer: producer,
+            output_buffer_consumer: consumer,
         }
     }
 
@@ -224,35 +163,26 @@ impl SerialTerminal {
     }
 
     fn flush(&mut self) {
-        // Write as much data as possible.
-        let (head, tail) = self.output_buffer.as_slices();
-
-        // TODO: Properly handle wouldblock/USB errors here.
-        let num_written = match self.usb_serial.write(head) {
-            Ok(count) => count,
-            Err(UsbError::WouldBlock) => 0,
-            Err(_) => 0,
+        let read = match self.output_buffer_consumer.read() {
+            Ok(grant) => grant,
+            Err(bbqueue::Error::InsufficientSize) => return,
+            error => error.unwrap(),
         };
 
-        if num_written < head.len() {
-            self.output_buffer.pop(num_written).unwrap();
-        } else {
-            // If we wrote the whole head, try writing the tail as well.
-            let num_written = match self.usb_serial.write(tail) {
-                Ok(count) => count,
-                Err(UsbError::WouldBlock) => 0,
-                // If USB encountered an error, it's likely the port was disconnected. Reset our
-                // buffers.
-                Err(_) => {
-                    self.input_buffer.clear();
-                    self.output_buffer.clear();
-                    return;
-                }
-            };
-
-            let head_length = head.len();
-            self.output_buffer.pop(head_length + num_written).unwrap();
-        }
+        match self.usb_serial.write(read.buf()) {
+            Ok(count) => {
+                // Release the processed bytes from the buffer.
+                read.release(count);
+            }
+            Err(UsbError::WouldBlock) => {
+                read.release(0);
+            }
+            Err(_) => {
+                self.input_buffer.clear();
+                let len = read.buf().len();
+                read.release(len);
+            }
+        };
     }
 
     /// Write data to the serial terminal.
@@ -262,7 +192,19 @@ impl SerialTerminal {
     pub fn write(&mut self, data: &[u8]) {
         // If we overflow the output buffer, allow the write to be silently truncated. The issue
         // will likely be cleared up as data is processed.
-        self.output_buffer.push(data);
+        let mut grant = self
+            .output_buffer_producer
+            .grant_max_remaining(data.len())
+            .unwrap();
+        let len = grant.buf().len();
+
+        if len < data.len() {
+            info!("Short grant!");
+        } else {
+            grant.buf().copy_from_slice(&data[..len]);
+        }
+        grant.commit(len);
+
         self.flush();
     }
 
@@ -313,8 +255,15 @@ impl SerialTerminal {
             // If USB encountered an error, it's likely the port was disconnected. Reset our
             // buffers.
             Err(_) => {
-                self.output_buffer.clear();
                 self.input_buffer.clear();
+                self.output_buffer_consumer
+                    .read()
+                    .and_then(|grant| {
+                        let len = grant.buf().len();
+                        grant.release(len);
+                        Ok(())
+                    })
+                    .ok();
                 None
             }
         }
