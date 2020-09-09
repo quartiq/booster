@@ -391,9 +391,9 @@ const APP: () = {
                 // TODO: Look into sub-licensing from ST.
                 UsbVidPid(0x0483, 0x5740),
             )
-            .manufacturer("STMicroelectronics")
-            .product("STM32 Virtual ComPort")
-            // TODO: Replace this with our EUI48 identifier or other serial number.
+            .manufacturer("ARTIQ/Sinara")
+            .product("Booster")
+            // TODO: Replace this with our lower case EUI48 identifier with dashes
             .serial_number("TODO")
             .device_class(usbd_serial::USB_CLASS_CDC)
             .build();
