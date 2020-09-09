@@ -342,30 +342,35 @@ impl BoosterSettings {
     pub fn set_broker(&mut self, addr: Ipv4Addr) {
         self.dirty = true;
         self.board_data.set_broker(addr);
+        self.save();
     }
 
     /// Update the Booster IP address.
     pub fn set_ip_address(&mut self, addr: Ipv4Addr) {
         self.dirty = true;
-        self.board_data.set_ip_address(addr)
+        self.board_data.set_ip_address(addr);
+        self.save();
     }
 
     /// Update the booster gateway.
     pub fn set_gateway(&mut self, addr: Ipv4Addr) {
         self.dirty = true;
-        self.board_data.set_gateway(addr)
+        self.board_data.set_gateway(addr);
+        self.save();
     }
 
     /// Update the booster net mask.
     pub fn set_netmask(&mut self, addr: Ipv4Addr) {
         self.dirty = true;
-        self.board_data.set_netmask(addr)
+        self.board_data.set_netmask(addr);
+        self.save();
     }
 
     /// Update the booster MQTT client identifier.
     pub fn set_id<'a>(&mut self, id: &'a str) -> bool {
         if self.board_data.set_id(id) {
             self.dirty = true;
+            self.save();
             true
         } else {
             false
