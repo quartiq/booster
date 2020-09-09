@@ -14,11 +14,12 @@ use core::fmt::Write;
 
 use enum_iterator::IntoEnumIterator;
 use heapless::String;
-use minimq::{MqttClient, QoS};
+use minimq::QoS;
 use panic_halt as _;
 use stm32f4xx_hal as hal;
 
 use hal::prelude::*;
+use usb_device::prelude::*;
 
 mod booster_channels;
 mod chassis_fans;
@@ -27,13 +28,18 @@ mod error;
 mod linear_transformation;
 mod mqtt_control;
 mod mutex;
+mod platform;
 mod rf_channel;
+mod serial_terminal;
+mod settings;
 mod user_interface;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
 use error::Error;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
+use serial_terminal::SerialTerminal;
+use settings::BoosterSettings;
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
 
 use rtic::cyccnt::Duration;
@@ -44,6 +50,14 @@ type I2C = hal::i2c::I2c<
     (
         hal::gpio::gpiob::PB6<hal::gpio::AlternateOD<hal::gpio::AF4>>,
         hal::gpio::gpiob::PB7<hal::gpio::AlternateOD<hal::gpio::AF4>>,
+    ),
+>;
+
+type I2C2 = hal::i2c::I2c<
+    hal::stm32::I2C2,
+    (
+        hal::gpio::gpiob::PB10<hal::gpio::AlternateOD<hal::gpio::AF4>>,
+        hal::gpio::gpiob::PB11<hal::gpio::AlternateOD<hal::gpio::AF4>>,
     ),
 >;
 
@@ -58,9 +72,13 @@ type SPI = hal::spi::Spi<
 
 type Ethernet =
     w5500::Interface<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
+type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
 type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
+
+type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;
+type Eeprom = microchip_24aa02e48::Microchip24AA02E48<I2C2>;
 
 /// Construct ADC pins associated with an RF channel.
 ///
@@ -116,6 +134,9 @@ macro_rules! channel_pins {
     }};
 }
 
+// USB end-point memory.
+static mut USB_EP_MEMORY: [u32; 1024] = [0; 1024];
+
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
@@ -123,11 +144,15 @@ const APP: () = {
         buttons: UserButtons,
         leds: UserLeds,
         fans: ChassisFans,
-        mqtt_client: MqttClient<minimq::consts::U1024, Ethernet>,
+        usb_terminal: SerialTerminal,
+        mqtt_client: MqttClient,
     }
 
-    #[init(schedule = [telemetry, channel_monitor, button])]
+    #[init(schedule = [telemetry, channel_monitor, button, usb])]
     fn init(mut c: init::Context) -> init::LateResources {
+        static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None;
+        static mut USB_SERIAL: Option<String<heapless::consts::U64>> = None;
+
         c.core.DWT.enable_cycle_counter();
         c.core.DCB.enable_trace();
 
@@ -265,14 +290,17 @@ const APP: () = {
 
         info!("Startup complete");
 
-        let i2c2 = {
-            let scl = gpiob.pb10.into_alternate_af4_open_drain();
-            let sda = gpiob.pb11.into_alternate_af4_open_drain();
-            hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
-        };
-
         // Read the EUI48 identifier and configure the ethernet MAC address.
-        let mut eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
+        let settings = {
+            let i2c2 = {
+                let scl = gpiob.pb10.into_alternate_af4_open_drain();
+                let sda = gpiob.pb11.into_alternate_af4_open_drain();
+                hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
+            };
+
+            let eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
+            BoosterSettings::load(eui)
+        };
 
         let mqtt_client = {
             let interface = {
@@ -311,25 +339,19 @@ const APP: () = {
                 )
                 .unwrap();
 
-                let mut eui48: [u8; 6] = [0; 6];
-                eui.read_eui48(&mut eui48).unwrap();
-                w5500.set_mac(w5500::MacAddress::from_bytes(eui48)).unwrap();
+                w5500.set_mac(settings.mac()).unwrap();
 
                 // Set default netmask and gateway.
-                w5500
-                    .set_gateway(w5500::Ipv4Addr::new(10, 0, 0, 0))
-                    .unwrap();
-                w5500
-                    .set_subnet(w5500::Ipv4Addr::new(255, 255, 255, 0))
-                    .unwrap();
-                w5500.set_ip(w5500::Ipv4Addr::new(10, 0, 0, 1)).unwrap();
+                w5500.set_gateway(settings.gateway()).unwrap();
+                w5500.set_subnet(settings.subnet()).unwrap();
+                w5500.set_ip(settings.ip()).unwrap();
 
                 w5500::Interface::new(w5500)
             };
 
-            MqttClient::<minimq::consts::U1024, Ethernet>::new(
-                minimq::embedded_nal::IpAddr::V4(minimq::embedded_nal::Ipv4Addr::new(10, 0, 0, 2)),
-                "booster",
+            minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
+                minimq::embedded_nal::IpAddr::V4(settings.broker()),
+                settings.id().as_str(),
                 interface,
             )
             .unwrap()
@@ -351,12 +373,55 @@ const APP: () = {
 
         assert!(fans.self_test(&mut delay));
 
+        // Set up the USB bus.
+        let usb_terminal = {
+            let usb = hal::otg_fs::USB {
+                usb_global: c.device.OTG_FS_GLOBAL,
+                usb_device: c.device.OTG_FS_DEVICE,
+                usb_pwrclk: c.device.OTG_FS_PWRCLK,
+                pin_dm: gpioa.pa11.into_alternate_af10(),
+                pin_dp: gpioa.pa12.into_alternate_af10(),
+                hclk: clocks.hclk(),
+            };
+
+            *USB_BUS = Some(hal::otg_fs::UsbBus::new(usb, unsafe { &mut USB_EP_MEMORY }));
+
+            let usb_serial = usbd_serial::SerialPort::new(USB_BUS.as_ref().unwrap());
+
+            // Generate a device serial number from the MAC address.
+            *USB_SERIAL = {
+                let mut serial_string: String<heapless::consts::U64> = String::new();
+                let octets = settings.mac().octets;
+                write!(
+                    &mut serial_string,
+                    "{}-{}-{}-{}-{}-{}",
+                    octets[0], octets[1], octets[2], octets[3], octets[4], octets[5]
+                )
+                .unwrap();
+                Some(serial_string)
+            };
+
+            let usb_device = UsbDeviceBuilder::new(
+                USB_BUS.as_ref().unwrap(),
+                // TODO: Look into sub-licensing from ST.
+                UsbVidPid(0x0483, 0x5740),
+            )
+            .manufacturer("ARTIQ/Sinara")
+            .product("Booster")
+            .serial_number(USB_SERIAL.as_ref().unwrap().as_str())
+            .device_class(usbd_serial::USB_CLASS_CDC)
+            .build();
+
+            SerialTerminal::new(usb_device, usb_serial, settings)
+        };
+
         info!("Startup complete");
 
-        // Kick-start the monitor and telemetry tasks.
+        // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
         c.schedule.telemetry(c.start).unwrap();
         c.schedule.button(c.start).unwrap();
+        c.schedule.usb(c.start).unwrap();
 
         init::LateResources {
             channels: channels,
@@ -364,10 +429,11 @@ const APP: () = {
             buttons: buttons,
             leds: leds,
             mqtt_client,
+            usb_terminal,
         }
     }
 
-    #[task(priority = 2, schedule = [channel_monitor], resources=[channels, leds])]
+    #[task(priority = 3, schedule = [channel_monitor], resources=[channels, leds])]
     fn channel_monitor(c: channel_monitor::Context) {
         // Potentially update the state of any channels.
         c.resources.channels.update();
@@ -457,7 +523,7 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(spawn=[button], schedule = [button], resources=[channels, buttons])]
+    #[task(priority = 2, spawn=[button], schedule = [button], resources=[channels, buttons])]
     fn button(mut c: button::Context) {
         if let Some(event) = c.resources.buttons.update() {
             match event {
@@ -498,11 +564,23 @@ const APP: () = {
             .unwrap();
     }
 
+    #[task(priority = 2, schedule=[usb], resources=[usb_terminal])]
+    fn usb(c: usb::Context) {
+        c.resources.usb_terminal.process();
+
+        // TODO: Replace hard-coded CPU cycles here.
+        // Schedule to run this task every 10ms.
+        c.schedule
+            .usb(c.scheduled + Duration::from_cycles(10 * (168_000_000 / 1_000)))
+            .unwrap();
+    }
+
     #[idle(resources=[channels, mqtt_client])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = mqtt_control::ControlState::new();
 
         loop {
+            // Handle the MQTT control interface.
             manager.update(&mut c.resources);
 
             // TODO: Properly sleep here until there's something to process.
