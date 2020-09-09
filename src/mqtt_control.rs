@@ -141,16 +141,20 @@ impl ControlState {
             });
         }
 
-        let channels = &mut resources.channels;
+        let main_bus = &mut resources.main_bus;
 
         resources.mqtt_client.lock(|client| {
             match client.poll(|client, topic, message, properties| {
-                channels.lock(|channels| {
+                main_bus.lock(|main_bus| {
                     let response = match topic {
-                        "booster/channel/state" => handle_channel_update(message, channels),
-                        "booster/channel/tune" => handle_channel_tune(message, channels),
+                        "booster/channel/state" => {
+                            handle_channel_update(message, &mut main_bus.channels)
+                        }
+                        "booster/channel/tune" => {
+                            handle_channel_tune(message, &mut main_bus.channels)
+                        }
                         "booster/channel/thresholds" => {
-                            handle_channel_thresholds(message, channels)
+                            handle_channel_thresholds(message, &mut main_bus.channels)
                         }
                         _ => Response::error_msg("Unexpected topic"),
                     };

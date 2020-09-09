@@ -137,13 +137,18 @@ macro_rules! channel_pins {
 // USB end-point memory.
 static mut USB_EP_MEMORY: [u32; 1024] = [0; 1024];
 
+/// Container method for all devices on the main I2C bus.
+pub struct MainBus {
+    pub channels: BoosterChannels,
+    pub fans: ChassisFans,
+}
+
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        channels: BoosterChannels,
+        main_bus: MainBus,
         buttons: UserButtons,
         leds: UserLeds,
-        fans: ChassisFans,
         usb_terminal: SerialTerminal,
         mqtt_client: MqttClient,
     }
@@ -425,8 +430,8 @@ const APP: () = {
         c.schedule.fans(c.start).unwrap();
 
         init::LateResources {
-            channels: channels,
-            fans: fans,
+            // Note that these share a resource because they both exist on the same I2C bus.
+            main_bus: MainBus { fans, channels },
             buttons: buttons,
             leds: leds,
             mqtt_client,
@@ -434,14 +439,14 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 3, schedule = [channel_monitor], resources=[channels, leds])]
+    #[task(priority = 3, schedule = [channel_monitor], resources=[main_bus, leds])]
     fn channel_monitor(c: channel_monitor::Context) {
         // Potentially update the state of any channels.
-        c.resources.channels.update();
+        c.resources.main_bus.channels.update();
 
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
-            let state = match c.resources.channels.get_channel_state(channel) {
+            let state = match c.resources.main_bus.channels.get_channel_state(channel) {
                 Err(Error::NotPresent) => {
                     // Clear all LEDs for this channel.
                     c.resources.leds.set_led(Color::Red, channel, false);
@@ -493,7 +498,7 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [fans], resources=[channels, fans])]
+    #[task(priority = 1, schedule = [fans], resources=[main_bus])]
     fn fans(mut c: fans::Context) {
         // Determine the maximum channel temperature.
         let mut temperatures: [f32; 8] = [0.0; 8];
@@ -501,8 +506,8 @@ const APP: () = {
         for channel in Channel::into_enum_iter() {
             temperatures[channel as usize] = match c
                 .resources
-                .channels
-                .lock(|booster_channels| booster_channels.get_temperature(channel))
+                .main_bus
+                .lock(|main_bus| main_bus.channels.get_temperature(channel))
             {
                 Ok(temp) => temp,
                 Err(Error::NotPresent) => 0.0,
@@ -511,7 +516,9 @@ const APP: () = {
         }
 
         // Update the fan speeds.
-        c.resources.fans.update(temperatures);
+        c.resources
+            .main_bus
+            .lock(|main_bus| main_bus.fans.update(temperatures));
 
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 1Hz.
@@ -520,14 +527,14 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[channels, mqtt_client])]
+    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, mqtt_client])]
     fn telemetry(mut c: telemetry::Context) {
         // Gather telemetry for all of the channels.
         for channel in Channel::into_enum_iter() {
             let measurements = c
                 .resources
-                .channels
-                .lock(|booster_channels| booster_channels.get_status(channel));
+                .main_bus
+                .lock(|main_bus| main_bus.channels.get_status(channel));
 
             if let Ok(measurements) = measurements {
                 // Broadcast the measured data over the telemetry interface.
@@ -551,14 +558,14 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 2, spawn=[button], schedule = [button], resources=[channels, buttons])]
+    #[task(priority = 2, spawn=[button], schedule = [button], resources=[main_bus, buttons])]
     fn button(mut c: button::Context) {
         if let Some(event) = c.resources.buttons.update() {
             match event {
                 ButtonEvent::InterlockReset => {
                     for chan in Channel::into_enum_iter() {
-                        c.resources.channels.lock(|channels| {
-                            match channels.enable_channel(chan) {
+                        c.resources.main_bus.lock(|main_bus| {
+                            match main_bus.channels.enable_channel(chan) {
                                 Ok(_) | Err(Error::NotPresent) => {}
 
                                 // It is possible to attempt to re-enable the channel before it was
@@ -574,12 +581,12 @@ const APP: () = {
 
                 ButtonEvent::Standby => {
                     for chan in Channel::into_enum_iter() {
-                        c.resources
-                            .channels
-                            .lock(|channels| match channels.disable_channel(chan) {
+                        c.resources.main_bus.lock(|main_bus| {
+                            match main_bus.channels.disable_channel(chan) {
                                 Ok(_) | Err(Error::NotPresent) => {}
                                 Err(e) => panic!("Standby failed on {:?}: {:?}", chan, e),
-                            })
+                            }
+                        })
                     }
                 }
             }
@@ -603,7 +610,7 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[channels, mqtt_client])]
+    #[idle(resources=[main_bus, mqtt_client])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = mqtt_control::ControlState::new();
 
