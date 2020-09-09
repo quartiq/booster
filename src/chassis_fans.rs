@@ -10,6 +10,8 @@ use max6639::Max6639;
 /// Provides control of the chassis-mounted cooling fans.
 pub struct ChassisFans {
     fans: [Max6639<I2cProxy>; 3],
+    threshold_temperature: f32,
+    proportional_gain: f32,
 }
 
 impl ChassisFans {
@@ -21,7 +23,66 @@ impl ChassisFans {
     /// # Returns
     /// A new fan controller.
     pub fn new(fans: [Max6639<I2cProxy>; 3]) -> Self {
-        ChassisFans { fans }
+        ChassisFans {
+            fans,
+            threshold_temperature: 30.0,
+
+            // Set the Kp parameter such that fans will be at 100% speed when 30.0 *C above the
+            // temperature threshold.
+            proportional_gain: 1.0 / 30.0,
+        }
+    }
+
+    /// Update the fans based on the current channel temperatures.
+    ///
+    /// # Args
+    /// * `channel_temps` - The current channel temperatures in degrees celsius.
+    pub fn update(&mut self, channel_temps: [f32; 8]) {
+        let max_temperature =
+            channel_temps.iter().fold(
+                f32::NEG_INFINITY,
+                |acc, &temp| {
+                    if acc > temp {
+                        acc
+                    } else {
+                        temp
+                    }
+                },
+            );
+
+        let temperature_error = {
+            let error = max_temperature - self.threshold_temperature;
+            if error > 0.0 {
+                error
+            } else {
+                0.0
+            }
+        };
+
+        // Calculate the desired duty cycle based on the temperature error.
+        let duty_cycle = {
+            let duty = self.proportional_gain * temperature_error;
+
+            // Cap the duty cycle to 100%
+            if duty > 1.0 {
+                1.0
+            } else {
+                duty
+            }
+        };
+
+        // Ensure that fan speed is always greater than 15% to prevent clicking.
+        let final_duty = if duty_cycle > 0.0 {
+            if duty_cycle < 0.15 {
+                0.15
+            } else {
+                duty_cycle
+            }
+        } else {
+            0.0
+        };
+
+        self.set_duty_cycles(final_duty);
     }
 
     fn set_duty_cycles(&mut self, duty_cycle: f32) {

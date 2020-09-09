@@ -148,7 +148,7 @@ const APP: () = {
         mqtt_client: MqttClient,
     }
 
-    #[init(schedule = [telemetry, channel_monitor, button, usb])]
+    #[init(schedule = [telemetry, channel_monitor, button, usb, fans])]
     fn init(mut c: init::Context) -> init::LateResources {
         static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None;
         static mut USB_SERIAL: Option<String<heapless::consts::U64>> = None;
@@ -422,6 +422,7 @@ const APP: () = {
         c.schedule.telemetry(c.start).unwrap();
         c.schedule.button(c.start).unwrap();
         c.schedule.usb(c.start).unwrap();
+        c.schedule.fans(c.start).unwrap();
 
         init::LateResources {
             channels: channels,
@@ -489,6 +490,33 @@ const APP: () = {
         // Schedule to run this task periodically at 50Hz.
         c.schedule
             .channel_monitor(c.scheduled + Duration::from_cycles(168_000_000 / 50))
+            .unwrap();
+    }
+
+    #[task(priority = 1, schedule = [fans], resources=[channels, fans])]
+    fn fans(mut c: fans::Context) {
+        // Determine the maximum channel temperature.
+        let mut temperatures: [f32; 8] = [0.0; 8];
+
+        for channel in Channel::into_enum_iter() {
+            temperatures[channel as usize] = match c
+                .resources
+                .channels
+                .lock(|booster_channels| booster_channels.get_temperature(channel))
+            {
+                Ok(temp) => temp,
+                Err(Error::NotPresent) => 0.0,
+                err => err.unwrap(),
+            };
+        }
+
+        // Update the fan speeds.
+        c.resources.fans.update(temperatures);
+
+        // TODO: Replace hard-coded CPU cycles here.
+        // Schedule to run this task periodically at 1Hz.
+        c.schedule
+            .fans(c.scheduled + Duration::from_cycles(168_000_000))
             .unwrap();
     }
 
