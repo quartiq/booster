@@ -299,7 +299,7 @@ const APP: () = {
             };
 
             let eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
-            BoosterSettings::load(eui)
+            BoosterSettings::new(eui)
         };
 
         let mqtt_client = {
@@ -351,7 +351,7 @@ const APP: () = {
 
             minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
                 minimq::embedded_nal::IpAddr::V4(settings.broker()),
-                settings.id().as_str(),
+                settings.id(),
                 interface,
             )
             .unwrap()

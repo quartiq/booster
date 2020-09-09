@@ -24,6 +24,8 @@ bbqueue = "0.4.10"
 usbd-serial = "0.1.0"
 shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
 usb-device = "0.2.5"
+postcard = "0.5.1"
+serde-big-array = "0.3.0"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq"
