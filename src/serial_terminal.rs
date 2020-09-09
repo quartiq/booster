@@ -192,7 +192,8 @@ impl SerialTerminal {
     pub fn write(&mut self, data: &[u8]) {
         // If we overflow the output buffer, allow the write to be silently truncated. The issue
         // will likely be cleared up as data is processed.
-        match self.output_buffer_producer
+        match self
+            .output_buffer_producer
             .grant_exact(data.len())
             .or_else(|_| self.output_buffer_producer.grant_max_remaining(data.len()))
         {
@@ -200,7 +201,7 @@ impl SerialTerminal {
                 let len = grant.buf().len();
                 grant.buf().copy_from_slice(&data[..len]);
                 grant.commit(len);
-            },
+            }
             Err(_) => return,
         };
 
