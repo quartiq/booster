@@ -10,6 +10,9 @@ use max6639::Max6639;
 /// Provides control of the chassis-mounted cooling fans.
 pub struct ChassisFans {
     fans: [Max6639<I2cProxy>; 3],
+    threshold_temperature: f32,
+    proportional_gain: f32,
+    fans_spinning: bool,
 }
 
 impl ChassisFans {
@@ -21,7 +24,84 @@ impl ChassisFans {
     /// # Returns
     /// A new fan controller.
     pub fn new(fans: [Max6639<I2cProxy>; 3]) -> Self {
-        ChassisFans { fans }
+        ChassisFans {
+            fans,
+            threshold_temperature: 30.0,
+
+            // Set the Kp parameter such that fans will be at 100% speed when 30.0 *C above the
+            // temperature threshold.
+            proportional_gain: 1.0 / 30.0,
+
+            fans_spinning: false,
+        }
+    }
+
+    /// Update the fans based on the current channel temperatures.
+    ///
+    /// # Args
+    /// * `channel_temps` - The current channel temperatures in degrees celsius.
+    pub fn update(&mut self, channel_temps: [f32; 8]) {
+        // Calculate the maximum temperature encountered across all of the channels.
+        let max_temperature =
+            channel_temps.iter().fold(
+                f32::NEG_INFINITY,
+                |acc, &temp| {
+                    if acc > temp {
+                        acc
+                    } else {
+                        temp
+                    }
+                },
+            );
+
+        // Determine the maximum temperature error from the hottest channel to use in the fan
+        // control algorithm.
+        let temperature_error = {
+            let error = max_temperature - self.threshold_temperature;
+            if error > 0.0 {
+                error
+            } else {
+                0.0
+            }
+        };
+
+        // Calculate the desired duty cycle based on the temperature error.
+        let duty_cycle = {
+            let duty = self.proportional_gain * temperature_error;
+
+            // Cap the duty cycle to 100%
+            if duty > 1.0 {
+                1.0
+            } else {
+                duty
+            }
+        };
+
+        // Only turn on the fans if temperature has been exceeded by at least 3 degrees. Fan speeds
+        // at below 20% can cause clicking. This algorithm ensures that fans will turn on once
+        // temperatures reach 34.5 *C (with 30 *C threshold and 30 *C range to 100% cycle) and will
+        // not disable until temperature falls below 30 *C (while maintaining at least 20% duty
+        // cycle).
+
+        // This algorithm is intended to prevent issues with the fan turning on/off constantly when
+        // right at the temperature threshold.
+        let final_duty = if temperature_error > 3.0 {
+            // When the temperature is above threshold, turn on the fans to at least 20% duty cycle.
+            if duty_cycle > 0.20 {
+                duty_cycle
+            } else {
+                0.20
+            }
+        } else if temperature_error > 0.01 && self.fans_spinning {
+            // If the temperature error is above 0 and the fans are currently spinning, we
+            // need to continue driving the fans at least a minimum drive to prevent clicking.
+            // Comparison is done to 0.01 degrees to avoid floating-point comparison issues.
+            0.20
+        } else {
+            0.0
+        };
+
+        self.set_duty_cycles(final_duty);
     }
 
     fn set_duty_cycles(&mut self, duty_cycle: f32) {
@@ -29,6 +109,11 @@ impl ChassisFans {
             fan.set_duty_cycle(max6639::Fan::Fan1, duty_cycle).unwrap();
             fan.set_duty_cycle(max6639::Fan::Fan2, duty_cycle).unwrap();
         }
+
+        // Deem the fans to be spinning if the duty cycle is greater than 5%. This is to avoid
+        // floating-point comparison errors at near-zero duty cycle. The driver should not be
+        // configuring fans to a non-zero duty cycle below 20%.
+        self.fans_spinning = duty_cycle > 0.05;
     }
 
     fn read_rpms(&mut self) -> [u16; 6] {
