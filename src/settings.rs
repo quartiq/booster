@@ -17,6 +17,8 @@ big_array! {
     +122,
 }
 
+/// The standard EEPROM layout for all Sinara hardware. Booster-specific configuration is stored in
+/// `board_data`.
 #[derive(Serialize, Deserialize)]
 struct SinaraConfiguration {
     crc32: u32,
@@ -40,6 +42,10 @@ struct SinaraConfiguration {
 }
 
 impl SinaraConfiguration {
+    /// Attempt to deserialize sinara configuration data from the raw EEPROM content.
+    ///
+    /// # Returns
+    /// The configuration if it was properly decoded. Otherwise, an error.
     pub fn deserialize(data: [u8; 256]) -> Result<SinaraConfiguration, Error> {
         let config: SinaraConfiguration = postcard::from_bytes(&data).unwrap();
 
@@ -50,6 +56,10 @@ impl SinaraConfiguration {
         }
     }
 
+    /// Generate a default sinara EEPROM configuration.
+    ///
+    /// # Args
+    /// * `name` - The name to store in the EEPOM configuration.
     pub fn default(name: &[u8]) -> SinaraConfiguration {
         assert!(name.len() <= 10);
 
@@ -87,12 +97,21 @@ impl SinaraConfiguration {
         config
     }
 
+    /// Serialize the configuration into an EEPROM buffer.
+    ///
+    /// # Args
+    /// * `buf` - The buffer to serialize into.
+    ///
+    /// # Returns
+    /// The 128 byte writable portion of the configuration. This should be written to the first page
+    /// of EEPROM.
     pub fn serialize_into<'a>(&self, buf: &'a mut [u8; 256]) -> &'a [u8] {
         // The configuration only actually allows the first 128 bytes to be programmed. The second
         // 128 bytes are ROM.
         &postcard::to_slice(&self, buf).unwrap()[..128]
     }
 
+    /// Update the internal CRC32 of the configuration.
     pub fn update_crc32(&mut self) {
         self.crc32 = self.calculate_crc32()
     }
@@ -108,6 +127,11 @@ fn array_to_addr(addr: &[u8; 4]) -> Ipv4Addr {
     Ipv4Addr::new(addr[0], addr[1], addr[2], addr[3])
 }
 
+fn identifier_is_valid<'a>(id: &'a str) -> bool {
+    id.len() == 23 && id.chars().all(|x| x.is_alphanumeric())
+}
+
+/// Represents booster mainboard-specific configuration values.
 #[derive(serde::Serialize, serde::Deserialize)]
 struct BoosterMainBoardData {
     ip_address: [u8; 4],
@@ -119,6 +143,10 @@ struct BoosterMainBoardData {
 }
 
 impl BoosterMainBoardData {
+    /// Generate default booster configuration data given the device EUI48.
+    ///
+    /// # Args
+    /// * `eui48` - The EUI48 identifier of the booster mainboard.
     pub fn default(eui48: &[u8; 6]) -> Self {
         let mut name: String<consts::U23> = String::new();
         write!(
@@ -141,69 +169,98 @@ impl BoosterMainBoardData {
         }
     }
 
+    /// Construct booster configuration data from serialized `board_data` from a
+    /// SinaraConfiguration.
+    ///
+    /// # Args
+    /// * `data` - The data to deserialize from.
+    ///
+    /// # Returns
+    /// The configuration if deserialization was successful. Otherwise, returns an error.
     pub fn deserialize(data: &[u8; 64]) -> Result<Self, Error> {
         let config: BoosterMainBoardData = postcard::from_bytes(data).unwrap();
 
-        // TODO: Validate configuration parameters.
+        // Validate configuration parameters.
+        let identifier = core::str::from_utf8(config.id()).map_err(|_| Error::Invalid)?;
+        if identifier_is_valid(identifier) == false {
+            return Err(Error::Invalid);
+        }
 
         Ok(config)
     }
 
+    /// Serialize the booster config into a sinara configuration for storage into EEPROM.
+    ///
+    /// # Args
+    /// * `config` - The sinara configuration to serialize the booster configuration into.
     pub fn serialize_into(&self, config: &mut SinaraConfiguration) {
         let mut buffer: [u8; 64] = [0; 64];
         let serialized = postcard::to_slice(self, &mut buffer).unwrap();
         config.board_data[..serialized.len()].copy_from_slice(serialized);
     }
 
+    /// Get the IP address of the Booster.
     pub fn ip(&self) -> Ipv4Addr {
         array_to_addr(&self.ip_address)
     }
 
+    /// Get the MQTT broker address of Booster.
     pub fn broker(&self) -> Ipv4Addr {
         array_to_addr(&self.broker_address)
     }
 
+    /// Get the gateway address of Booster.
     pub fn gateway(&self) -> Ipv4Addr {
         array_to_addr(&self.gateway_address)
     }
 
+    /// Get the subnet mask of Booster.
     pub fn subnet(&self) -> Ipv4Addr {
         array_to_addr(&self.netmask)
     }
 
+    /// Get the MQTT identifier of Booster.
     pub fn id<'a>(&'a self) -> &'a [u8] {
         &self.identifier[..self.id_size]
     }
 
-    pub fn set_id<'a>(&mut self, id: &'a str) -> bool {
+    /// Set the MQTT ID of Booster.
+    ///
+    /// # Args
+    /// * `id` - The new MQTT id. This must conform with MQTT identifier standards. That means that
+    ///   it must be 23 characters or shorter and contain only alphanumeric values.
+    ///
+    /// # Returns
+    /// Ok if the update was successful. Otherwise, returns an error.
+    pub fn set_id<'a>(&mut self, id: &'a str) -> Result<(), Error> {
         // TODO: Verify the ID is valid.
-        if id.as_bytes().len() > 23 {
-            return false;
-        }
-
-        if id.chars().all(|x| x.is_alphanumeric()) == false {
-            return false;
+        if identifier_is_valid(id) == false {
+            return Err(Error::Invalid);
         }
 
         let len = id.as_bytes().len();
         self.identifier[..len].copy_from_slice(id.as_bytes());
         self.id_size = len;
 
-        true
+        Ok(())
     }
 
+    /// Update the MQTT broker IP address of Booster.
     pub fn set_broker(&mut self, addr: Ipv4Addr) {
         self.broker_address = addr.octets();
     }
 
+    /// Update the IP address of Booster.
     pub fn set_ip_address(&mut self, addr: Ipv4Addr) {
         self.ip_address = addr.octets();
     }
 
+    /// Update the IP address of the gateway.
     pub fn set_gateway(&mut self, addr: Ipv4Addr) {
         self.gateway_address = addr.octets();
     }
 
+    /// Update the subnet mask of Booster.
     pub fn set_netmask(&mut self, addr: Ipv4Addr) {
         self.netmask = addr.octets();
     }
@@ -367,13 +424,11 @@ impl BoosterSettings {
     }
 
     /// Update the booster MQTT client identifier.
-    pub fn set_id<'a>(&mut self, id: &'a str) -> bool {
-        if self.board_data.set_id(id) {
+    pub fn set_id<'a>(&mut self, id: &'a str) -> Result<(), Error> {
+        self.board_data.set_id(id).and_then(|_| {
             self.dirty = true;
             self.save();
-            true
-        } else {
-            false
-        }
+            Ok(())
+        })
     }
 }
