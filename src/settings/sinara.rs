@@ -33,6 +33,7 @@ impl<'s> Serializer<'s> {
         if remainder.len() >= data.len() {
             let (head, _) = remainder.split_at_mut(data.len());
             head.copy_from_slice(data);
+            self.index += data.len();
             Ok(())
         } else {
             Err(Error::Invalid)
@@ -52,6 +53,18 @@ impl<'s> Serializer<'s> {
     /// Serialize 32-bit integer.
     pub fn serialize_u32(&mut self, value: u32) -> Result<(), Error> {
         self.serialize_data(&value.to_be_bytes())
+    }
+
+    /// Finish the serialization process.
+    ///
+    /// # Returns
+    /// The serialized buffer.
+    pub fn finish(self) -> Result<&'s [u8], Error> {
+        if self.index != self.input.len() {
+            Err(Error::Invalid)
+        } else {
+            Ok(self.input)
+        }
     }
 }
 
@@ -171,7 +184,7 @@ impl SinaraConfiguration {
     ///
     /// # Args
     /// * `buf` - The buffer to serialize into.
-    pub fn serialize_into<'a>(&self, buf: &'a mut [u8; 128]) {
+    pub fn serialize_into<'a>(&self, buf: &'a mut [u8; 128]) -> &'a [u8] {
         let mut serializer = Serializer::new(buf);
 
         serializer.serialize_u32(self.crc32).unwrap();
@@ -186,6 +199,9 @@ impl SinaraConfiguration {
         serializer.serialize_u8(self.vendor).unwrap();
         serializer.serialize_data(&self.vendor_data).unwrap();
         serializer.serialize_data(&self.project_data).unwrap();
+        serializer.serialize_data(&self.user_data).unwrap();
+        serializer.serialize_data(&self.board_data).unwrap();
+        serializer.finish().unwrap()
     }
 
     /// Generate a default sinara EEPROM configuration.
