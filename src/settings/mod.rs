@@ -1,138 +1,29 @@
-//! Booster NGFW Application
+//! Booster NGFW NVM settings
 //!
 //! # Copyright
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::{Eeprom, Error};
+use crate::{Eeprom, Error};
 use heapless::{consts, String};
 use serde::{Deserialize, Serialize};
-use serde_big_array::big_array;
 use w5500::{Ipv4Addr, MacAddress};
 
+mod sinara;
+use sinara::SinaraConfiguration;
+
 use core::fmt::Write;
-
-big_array! {
-    BigArray;
-    +122,
-}
-
-/// The standard EEPROM layout for all Sinara hardware. Booster-specific configuration is stored in
-/// `board_data`.
-#[derive(Serialize, Deserialize)]
-struct SinaraConfiguration {
-    crc32: u32,
-    magic: u16,
-    pub name: [u8; 10],
-    pub board_id: u16,
-    pub format_rev: u8,
-    pub major: u8,
-    pub minor: u8,
-    pub variant: u8,
-    pub port: u8,
-    pub vendor: u8,
-    pub vendor_data: [u8; 8],
-    pub project_data: [u8; 16],
-    pub user_data: [u8; 16],
-    #[serde(with = "BigArray")]
-    pub board_data: [u8; 64],
-    #[serde(with = "BigArray")]
-    _padding: [u8; 122],
-    pub eui48: [u8; 6],
-}
-
-impl SinaraConfiguration {
-    /// Attempt to deserialize sinara configuration data from the raw EEPROM content.
-    ///
-    /// # Returns
-    /// The configuration if it was properly decoded. Otherwise, an error.
-    pub fn deserialize(data: [u8; 256]) -> Result<SinaraConfiguration, Error> {
-        let config: SinaraConfiguration = postcard::from_bytes(&data).unwrap();
-
-        if config.crc32 != config.calculate_crc32() || config.magic != 0x391e {
-            Err(Error::Invalid)
-        } else {
-            Ok(config)
-        }
-    }
-
-    /// Generate a default sinara EEPROM configuration.
-    ///
-    /// # Args
-    /// * `name` - The name to store in the EEPOM configuration.
-    pub fn default(name: &[u8]) -> SinaraConfiguration {
-        assert!(name.len() <= 10);
-
-        let mut name_info: [u8; 10] = [0; 10];
-        name_info[..name.len()].copy_from_slice(name);
-
-        let mut config = SinaraConfiguration {
-            // Will be updated later.
-            crc32: 0,
-
-            magic: 0x391e,
-            name: name_info,
-            board_id: 0,
-            format_rev: 0,
-            major: 1,
-            minor: 0,
-            variant: 0,
-            port: 0,
-
-            // Specifies QUARTIQ
-            vendor: 3,
-            vendor_data: [0; 8],
-
-            project_data: [0; 16],
-            user_data: [0; 16],
-            board_data: [0; 64],
-
-            // Padding and EUI48 are DONT-CARE - this is a read-only memory region.
-            _padding: [0xFF; 122],
-            eui48: [0xFF; 6],
-        };
-
-        config.update_crc32();
-
-        config
-    }
-
-    /// Serialize the configuration into an EEPROM buffer.
-    ///
-    /// # Args
-    /// * `buf` - The buffer to serialize into.
-    ///
-    /// # Returns
-    /// The 128 byte writable portion of the configuration. This should be written to the first page
-    /// of EEPROM.
-    pub fn serialize_into<'a>(&self, buf: &'a mut [u8; 256]) -> &'a [u8] {
-        // The configuration only actually allows the first 128 bytes to be programmed. The second
-        // 128 bytes are ROM.
-        &postcard::to_slice(&self, buf).unwrap()[..128]
-    }
-
-    /// Update the internal CRC32 of the configuration.
-    pub fn update_crc32(&mut self) {
-        self.crc32 = self.calculate_crc32()
-    }
-
-    fn calculate_crc32(&self) -> u32 {
-        // TODO: Calculate using the zlib.crc32 algorithm at
-        // https://github.com/madler/zlib/blob/master/crc32.c#L202-L234
-        0xAAAA_BBBB
-    }
-}
 
 fn array_to_addr(addr: &[u8; 4]) -> Ipv4Addr {
     Ipv4Addr::new(addr[0], addr[1], addr[2], addr[3])
 }
 
 fn identifier_is_valid<'a>(id: &'a str) -> bool {
-    id.len() == 23 && id.chars().all(|x| x.is_alphanumeric())
+    id.len() <= 23 && id.chars().all(|x| x.is_alphanumeric())
 }
 
 /// Represents booster mainboard-specific configuration values.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct BoosterMainBoardData {
     ip_address: [u8; 4],
     broker_address: [u8; 4],
@@ -339,7 +230,7 @@ impl BoosterSettings {
         let mut sinara_config: [u8; 256] = [0; 256];
         self.eeprom.read(0, &mut sinara_config).unwrap();
 
-        match SinaraConfiguration::deserialize(sinara_config) {
+        match SinaraConfiguration::try_deserialize(sinara_config) {
             Ok(config) => Ok(config),
 
             // If we failed to load data, provide default values.
@@ -354,10 +245,9 @@ impl BoosterSettings {
 
     fn save_config(&mut self, config: &SinaraConfiguration) {
         // Save the updated configuration to EEPROM.
-        let mut serialized: [u8; 256] = [0; 256];
-        self.eeprom
-            .write(0, config.serialize_into(&mut serialized))
-            .unwrap();
+        let mut serialized = [0u8; 128];
+        config.serialize_into(&mut serialized);
+        self.eeprom.write(0, &serialized).unwrap();
     }
 
     /// Get the Booster unique identifier.
