@@ -489,6 +489,11 @@ impl RfChannel {
         }
     }
 
+    /// Save the current channel configuration.
+    pub fn save_configuration(&mut self) {
+        self.settings.save();
+    }
+
     /// Set the interlock thresholds for the channel.
     ///
     /// # Args

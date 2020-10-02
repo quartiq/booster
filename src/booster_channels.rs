@@ -296,6 +296,19 @@ impl BoosterChannels {
         }
     }
 
+    /// Save the current channel configuration in channel EEPROM.
+    pub fn save_configuration(&mut self, channel: Channel) -> Result<(), Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => {
+                rf_channel.save_configuration();
+                Ok(())
+            }
+            None => Err(Error::NotPresent),
+        }
+    }
+
     /// Update the states of RF channels as necessary.
     pub fn update(&mut self) {
         for channel in Channel::into_enum_iter() {
