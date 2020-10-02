@@ -100,7 +100,7 @@ impl BoosterChannels {
         adc: hal::adc::Adc<hal::stm32::ADC3>,
         manager: &'static I2cBusManager,
         mut pins: [Option<RfChannelPins>; 8],
-        delay: &mut impl DelayUs<u8>,
+        delay: &mut impl DelayUs<u16>,
     ) -> Self {
         let mut rf_channels: [Option<RfChannel>; 8] =
             [None, None, None, None, None, None, None, None];
