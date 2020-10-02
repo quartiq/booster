@@ -5,9 +5,13 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
+use super::SinaraConfiguration;
+use crate::{linear_transformation::LinearTransformation, Error, I2cProxy};
+use microchip_24aa02e48::Microchip24AA02E48;
+
 /// Represents booster channel-specific configuration values.
-#[derive(Serialize, Deserialize)]
-struct BoosterChannelData {
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct BoosterChannelData {
     reflected_interlock_threshold: f32,
     output_interlock_threshold: f32,
     bias_voltage: f32,
@@ -34,14 +38,8 @@ impl BoosterChannelData {
             //
             // All of the power meters are preceded by attenuators which are incorporated in
             // the offset.
-            output_power_transform: LinearTransformation::new(
-                1.0 / 0.035,
-                -35.6 + 19.8 + 10.0,
-            ),
-            reflected_power_transform: LinearTransformation::new(
-                1.5 / 0.035,
-                -35.6 + 19.8 + 10.0,
-            ),
+            output_power_transform: LinearTransformation::new(1.0 / 0.035, -35.6 + 19.8 + 10.0),
+            reflected_power_transform: LinearTransformation::new(1.5 / 0.035, -35.6 + 19.8 + 10.0),
 
             // The input power and reflected power detectors are then passed through an
             // op-amp with gain 1.5x - this modifies the slope from 35mV/dB to 52.5mV/dB
@@ -81,5 +79,5 @@ impl BoosterChannelData {
 
 pub struct BoosterChannelSettings {
     eeprom: Microchip24AA02E48<I2cProxy>,
-    pub settings: BoosterChannelData
+    pub settings: BoosterChannelData,
 }
