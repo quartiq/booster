@@ -70,6 +70,9 @@ pub enum ChannelState {
 
     /// The channel is in the process of shutting down.
     Powerdown(Instant),
+
+    /// The channel should begin powerup and enabling as soon as possible.
+    WillPowerupEnable,
 }
 
 impl serde::Serialize for ChannelState {
@@ -101,6 +104,9 @@ impl serde::Serialize for ChannelState {
             }
             ChannelState::Powerdown(_) => {
                 serializer.serialize_unit_variant("ChannelState", 6, "Powerdown")
+            }
+            ChannelState::WillPowerupEnable => {
+                serializer.serialize_unit_variant("ChannelState", 7, "WillPowerupEnable")
             }
         }
     }
@@ -138,7 +144,9 @@ impl StateMachine {
 
             // It is only valid to transition from disabled into the power-up state.
             ChannelState::Disabled => match new_state {
-                ChannelState::Disabled | ChannelState::Powerup(_, _) => new_state,
+                ChannelState::Disabled
+                | ChannelState::Powerup(_, _)
+                | ChannelState::WillPowerupEnable => new_state,
                 _ => return Err(Error::InvalidState),
             },
 
@@ -171,6 +179,13 @@ impl StateMachine {
             // When powering down, it is only possible to finish the power-down process.
             ChannelState::Powerdown(_) => match new_state {
                 ChannelState::Disabled => new_state,
+                _ => return Err(Error::InvalidState),
+            },
+
+            // When in the WillPowerUpEnable state, it is only valid to enter the `PowerUp` state
+            // with the enable flag asserted.
+            ChannelState::WillPowerupEnable => match new_state {
+                ChannelState::Powerup(_, true) => new_state,
                 _ => return Err(Error::InvalidState),
             },
 
@@ -468,7 +483,10 @@ impl RfChannel {
                 // If the channel configuration specifies the channel as enabled, power up the
                 // channel now.
                 if channel.settings.data.enabled {
-                    channel.start_powerup(true).unwrap();
+                    channel
+                        .state_machine
+                        .transition(ChannelState::WillPowerupEnable)
+                        .unwrap();
                 }
 
                 // Configure alerts/alarms for the power monitor.
@@ -609,6 +627,9 @@ impl RfChannel {
                         .unwrap();
                 }
             }
+
+            // Begin the power-up and enabling process immediately.
+            ChannelState::WillPowerupEnable => self.start_powerup(true).unwrap(),
 
             // There's no active transitions in the following states.
             ChannelState::Disabled
