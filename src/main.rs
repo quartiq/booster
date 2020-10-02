@@ -406,7 +406,7 @@ const APP: () = {
                 let octets = settings.mac().octets;
                 write!(
                     &mut serial_string,
-                    "{}-{}-{}-{}-{}-{}",
+                    "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
                     octets[0], octets[1], octets[2], octets[3], octets[4], octets[5]
                 )
                 .unwrap();
