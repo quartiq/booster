@@ -5,20 +5,20 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
-use super::{SinaraConfiguration, SinaraBoardId};
+use super::{SinaraBoardId, SinaraConfiguration};
 use crate::{linear_transformation::LinearTransformation, Error, I2cProxy};
 use microchip_24aa02e48::Microchip24AA02E48;
 
 /// Represents booster channel-specific configuration values.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct BoosterChannelData {
-    reflected_interlock_threshold: f32,
-    output_interlock_threshold: f32,
-    bias_voltage: f32,
-    enabled: bool,
-    input_power_transform: LinearTransformation,
-    output_power_transform: LinearTransformation,
-    reflected_power_transform: LinearTransformation,
+    pub reflected_interlock_threshold: f32,
+    pub output_interlock_threshold: f32,
+    pub bias_voltage: f32,
+    pub enabled: bool,
+    pub input_power_transform: LinearTransformation,
+    pub output_power_transform: LinearTransformation,
+    pub reflected_power_transform: LinearTransformation,
 }
 
 impl BoosterChannelData {
@@ -83,7 +83,6 @@ pub struct BoosterChannelSettings {
 }
 
 impl BoosterChannelSettings {
-
     pub fn new(eeprom: Microchip24AA02E48<I2cProxy>) -> Self {
         let mut settings = Self {
             eeprom,
@@ -101,8 +100,7 @@ impl BoosterChannelSettings {
                         settings.save();
                     }
                 }
-
-            },
+            }
 
             // If we failed to load configuration, use a default config.
             Err(_) => {
@@ -129,8 +127,7 @@ impl BoosterChannelSettings {
     /// Load device settings from EEPROM.
     ///
     /// # Returns
-    /// Ok(settings) if the settings loaded successfully. Otherwise, Err(settings), where `settings`
-    /// are default values.
+    /// The loaded sinara configuration.
     fn load_config(&mut self) -> Result<SinaraConfiguration, Error> {
         // Read the sinara-config from memory.
         let mut sinara_config: [u8; 256] = [0; 256];

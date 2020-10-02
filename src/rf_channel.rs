@@ -4,7 +4,6 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use crate::linear_transformation::LinearTransformation;
 use ad5627::{self, Ad5627};
 use ads7924::Ads7924;
 use dac7571::Dac7571;
@@ -13,7 +12,7 @@ use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
 
 use super::{I2cBusManager, I2cProxy};
-use crate::error::Error;
+use crate::{settings::BoosterChannelSettings, Error};
 use embedded_hal::blocking::delay::DelayUs;
 use stm32f4xx_hal::{
     self as hal,
@@ -286,7 +285,6 @@ pub struct Devices {
     temperature_monitor: Max6642<I2cProxy>,
     bias_dac: Dac7571<I2cProxy>,
     power_monitor: Ads7924<I2cProxy>,
-    pub eui48: Microchip24AA02E48<I2cProxy>,
 }
 
 impl Devices {
@@ -302,8 +300,11 @@ impl Devices {
     ///
     /// # Returns
     /// An option containing the devices if they were discovered on the bus. If any device did not
-    /// properly enumerate, the option will be empty.
-    fn new(manager: &'static I2cBusManager, delay: &mut impl DelayUs<u8>) -> Option<Self> {
+    /// properly enumerate, the option will be empty. The returend tuple will be (devices, eeprom).
+    fn new(
+        manager: &'static I2cBusManager,
+        delay: &mut impl DelayUs<u8>,
+    ) -> Option<(Self, Microchip24AA02E48<I2cProxy>)> {
         // The ADS7924 and DAC7571 are present on the booster mainboard, so instantiation
         // and communication should never fail.
         let mut dac7571 = Dac7571::default(manager.acquire_i2c());
@@ -339,14 +340,16 @@ impl Devices {
                     return None;
                 }
 
-                return Some(Self {
-                    interlock_thresholds_dac: ad5627,
-                    input_power_adc: mcp3221,
-                    temperature_monitor: max6642,
-                    bias_dac: dac7571,
-                    power_monitor: ads7924,
-                    eui48: eui48,
-                });
+                return Some((
+                    Self {
+                        interlock_thresholds_dac: ad5627,
+                        input_power_adc: mcp3221,
+                        temperature_monitor: max6642,
+                        bias_dac: dac7571,
+                        power_monitor: ads7924,
+                    },
+                    eui48,
+                ));
             }
         }
 
@@ -416,12 +419,7 @@ impl ChannelPins {
 pub struct RfChannel {
     pub i2c_devices: Devices,
     pub pins: ChannelPins,
-    output_interlock_threshold: f32,
-    reflected_interlock_threshold: f32,
-    bias_voltage: f32,
-    input_power_transform: LinearTransformation,
-    reflected_power_transform: LinearTransformation,
-    output_power_transform: LinearTransformation,
+    settings: BoosterChannelSettings,
     state_machine: StateMachine,
 }
 
@@ -445,41 +443,33 @@ impl RfChannel {
     ) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
         match Devices::new(manager, delay) {
-            Some(devices) => {
+            Some((devices, eeprom)) => {
                 let mut channel = Self {
                     i2c_devices: devices,
                     pins: control_pins,
-                    output_interlock_threshold: f32::NAN,
-                    reflected_interlock_threshold: f32::NAN,
-                    bias_voltage: -3.2,
-
-                    // When operating at 100MHz, the power detectors specify the following output
-                    // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
-                    // for different power levels and frequencies):
-                    //
-                    // dBm = V(Vout) / .035 V/dB - 35.6 dBm
-                    //
-                    // All of the power meters are preceded by attenuators which are incorporated in
-                    // the offset.
-                    output_power_transform: LinearTransformation::new(
-                        1.0 / 0.035,
-                        -35.6 + 19.8 + 10.0,
-                    ),
-
-                    // The input power and reflected power detectors are then passed through an
-                    // op-amp with gain 1.5x - this modifies the slope from 35mV/dB to 52.5mV/dB
-                    input_power_transform: LinearTransformation::new(1.5 / 0.035, -35.6 + 8.9),
-                    reflected_power_transform: LinearTransformation::new(
-                        1.5 / 0.035,
-                        -35.6 + 19.8 + 10.0,
-                    ),
-
-                    // TODO: Set the initial state based on NVM-based settings.
+                    settings: BoosterChannelSettings::new(eeprom),
                     state_machine: StateMachine::new(ChannelState::Disabled),
                 };
 
-                channel.set_interlock_thresholds(0.0, 0.0).unwrap();
-                channel.set_bias(-3.2).unwrap();
+                channel
+                    .set_interlock_thresholds(
+                        channel.settings.data.output_interlock_threshold,
+                        channel.settings.data.reflected_interlock_threshold,
+                    )
+                    .unwrap();
+
+                // Place the bias DAC to drive the RF amplifier into pinch-off.
+                channel
+                    .i2c_devices
+                    .bias_dac
+                    .set_voltage(3.2)
+                    .expect("Failed to disable RF bias voltage");
+
+                // If the channel configuration specifies the channel as enabled, power up the
+                // channel now.
+                if channel.settings.data.enabled {
+                    channel.start_powerup(true).unwrap();
+                }
 
                 // Configure alerts/alarms for the power monitor.
 
@@ -510,24 +500,32 @@ impl RfChannel {
         reflected_power: f32,
     ) -> Result<(), Error> {
         match self.i2c_devices.interlock_thresholds_dac.set_voltage(
-            self.reflected_power_transform.invert(reflected_power),
+            self.settings
+                .data
+                .reflected_power_transform
+                .invert(reflected_power),
             ad5627::Dac::A,
         ) {
             Err(ad5627::Error::Range) => return Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
             Ok(voltage) => {
-                self.reflected_interlock_threshold = self.reflected_power_transform.map(voltage);
+                self.settings.data.reflected_interlock_threshold =
+                    self.settings.data.reflected_power_transform.map(voltage);
             }
         }
 
         match self.i2c_devices.interlock_thresholds_dac.set_voltage(
-            self.output_power_transform.invert(output_power),
+            self.settings
+                .data
+                .output_power_transform
+                .invert(output_power),
             ad5627::Dac::B,
         ) {
             Err(ad5627::Error::Range) => return Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
             Ok(voltage) => {
-                self.output_interlock_threshold = self.output_power_transform.map(voltage);
+                self.settings.data.output_interlock_threshold =
+                    self.settings.data.output_power_transform.map(voltage);
             }
         }
 
@@ -693,8 +691,10 @@ impl RfChannel {
         // As a workaround, we need to ensure that the interlock level is above the output power
         // detector level. When RF is disabled, the power detectors output a near-zero value, so
         // 100mV should be a sufficient level.
-        if (self.reflected_interlock_threshold < self.reflected_power_transform.map(0.100))
-            || (self.output_interlock_threshold < self.output_power_transform.map(0.100))
+        if (self.settings.data.reflected_interlock_threshold
+            < self.settings.data.reflected_power_transform.map(0.100))
+            || (self.settings.data.output_interlock_threshold
+                < self.settings.data.output_power_transform.map(0.100))
         {
             self.start_disable();
             return Err(Error::Invalid);
@@ -702,10 +702,12 @@ impl RfChannel {
 
         self.i2c_devices
             .bias_dac
-            .set_voltage(-1.0 * self.bias_voltage)
+            .set_voltage(-1.0 * self.settings.data.bias_voltage)
             .expect("Failed to configure RF bias voltage");
 
         self.pins.signal_on.set_high().unwrap();
+
+        self.settings.data.enabled = true;
 
         self.state_machine
             .transition(ChannelState::Enabled)
@@ -717,6 +719,8 @@ impl RfChannel {
     /// Disable the channel and power it off.
     pub fn start_disable(&mut self) {
         let channel_was_powered = self.pins.enable_power.is_high().unwrap();
+
+        self.settings.data.enabled = false;
 
         // The RF channel may be unconditionally disabled at any point to aid in preventing damage.
         // The effect of this is that we must assume worst-case power-down timing, which increases
@@ -763,7 +767,7 @@ impl RfChannel {
             Err(dac7571::Error::Bounds) => return Err(Error::Bounds),
             Err(_) => panic!("Failed to set DAC bias voltage"),
             Ok(voltage) => {
-                self.bias_voltage = -voltage;
+                self.settings.data.bias_voltage = -voltage;
             }
         };
 
@@ -854,7 +858,7 @@ impl RfChannel {
     pub fn get_input_power(&mut self) -> f32 {
         let voltage = self.i2c_devices.input_power_adc.get_voltage().unwrap();
 
-        self.input_power_transform.map(voltage)
+        self.settings.data.input_power_transform.map(voltage)
     }
 
     /// Get the current reflected power measurement.
@@ -872,7 +876,7 @@ impl RfChannel {
             .convert(&mut adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
-        self.reflected_power_transform.map(voltage)
+        self.settings.data.reflected_power_transform.map(voltage)
     }
 
     /// Get the current output power measurement.
@@ -890,7 +894,7 @@ impl RfChannel {
             .convert(&mut adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
-        self.output_power_transform.map(voltage)
+        self.settings.data.output_power_transform.map(voltage)
     }
 
     /// Get the current output power interlock threshold.
@@ -898,7 +902,7 @@ impl RfChannel {
     /// # Returns
     /// The current output interlock threshold in dBm.
     pub fn get_output_interlock_threshold(&self) -> f32 {
-        self.output_interlock_threshold
+        self.settings.data.output_interlock_threshold
     }
 
     /// Get the current reflected power interlock threshold.
@@ -906,12 +910,12 @@ impl RfChannel {
     /// # Returns
     /// The current reflected interlock threshold in dBm.
     pub fn get_reflected_interlock_threshold(&self) -> f32 {
-        self.reflected_interlock_threshold
+        self.settings.data.reflected_interlock_threshold
     }
 
     /// Get the current bias voltage programmed to the RF amplification transistor.
     pub fn get_bias_voltage(&self) -> f32 {
-        self.bias_voltage
+        self.settings.data.bias_voltage
     }
 
     /// Get the current state of the channel.
@@ -990,6 +994,6 @@ impl RfChannel {
         // Note that we're returning the actual bias voltage as calculated by the DAC as opposed to
         // the voltage we used in the algorithm because the voltage reported by the DAC is more
         // accurate.
-        Ok((self.bias_voltage, last_current))
+        Ok((self.settings.data.bias_voltage, last_current))
     }
 }

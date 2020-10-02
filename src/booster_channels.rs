@@ -14,18 +14,6 @@ use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, ChannelState, RfChannel};
 use embedded_hal::blocking::delay::DelayUs;
 
-/// A EUI-48 identifier for a given channel.
-pub struct ChannelIdentifier {
-    pub data: [u8; 6],
-}
-
-impl ChannelIdentifier {
-    /// Construct a new channel identifier.
-    pub fn new(identifier: [u8; 6]) -> Self {
-        Self { data: identifier }
-    }
-}
-
 /// Contains channel status information in SI base units.
 #[derive(Debug, serde::Serialize)]
 pub struct ChannelStatus {
@@ -158,30 +146,6 @@ impl BoosterChannels {
                     }
                     x => x,
                 }
-            }
-            None => Err(Error::NotPresent),
-        }
-    }
-
-    /// Get a channel's EUI-48 identifier.
-    ///
-    /// # Args
-    /// * `channel` - The channel to get the identifier from.
-    ///
-    /// # Returns
-    /// The channel identifier.
-    pub fn get_identifier(&mut self, channel: Channel) -> Result<ChannelIdentifier, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => {
-                let mut identifier: [u8; 6] = [0; 6];
-                rf_channel
-                    .i2c_devices
-                    .eui48
-                    .read_eui48(&mut identifier)
-                    .unwrap();
-                Ok(ChannelIdentifier::new(identifier))
             }
             None => Err(Error::NotPresent),
         }

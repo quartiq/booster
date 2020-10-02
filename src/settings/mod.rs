@@ -9,7 +9,7 @@ mod channel_settings;
 mod global_settings;
 mod sinara;
 
-use sinara::{SinaraConfiguration, BoardId as SinaraBoardId};
+use sinara::{BoardId as SinaraBoardId, SinaraConfiguration};
 
 pub use channel_settings::BoosterChannelSettings;
 pub use global_settings::BoosterSettings;

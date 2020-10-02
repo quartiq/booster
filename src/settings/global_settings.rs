@@ -182,16 +182,13 @@ impl BoosterSettings {
 
         // Load the sinara configuration from EEPROM.
         match settings.load_config() {
-            Ok(config) => {
-                match BoosterMainBoardData::deserialize(&config.board_data) {
-                    Ok(data) => settings.board_data = data,
+            Ok(config) => match BoosterMainBoardData::deserialize(&config.board_data) {
+                Ok(data) => settings.board_data = data,
 
-                    Err(_) => {
-                        settings.board_data = BoosterMainBoardData::default(&settings.eui48);
-                        settings.save();
-                    }
+                Err(_) => {
+                    settings.board_data = BoosterMainBoardData::default(&settings.eui48);
+                    settings.save();
                 }
-
             },
 
             // If we failed to load configuration, use a default config.
