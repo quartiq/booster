@@ -468,7 +468,10 @@ impl RfChannel {
 
                     // The input power and reflected power detectors are then passed through an
                     // op-amp with gain 1.5x - this modifies the slope from 35mV/dB to 52.5mV/dB
-                    input_power_transform: LinearTransformation::new(1.0 / 1.5 / 0.035, -35.6 + 8.9),
+                    input_power_transform: LinearTransformation::new(
+                        1.0 / 1.5 / 0.035,
+                        -35.6 + 8.9,
+                    ),
                     reflected_power_transform: LinearTransformation::new(
                         1.0 / 1.5 / 0.035,
                         -35.6 + 19.8 + 10.0,
