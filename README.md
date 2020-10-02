@@ -1,4 +1,4 @@
-# booster
+# Booster NGFW (Next-Generation Firmware)
 
 Updated firmware for the Sinara Booster hardware
 
@@ -21,3 +21,31 @@ Proprietary and confidential.
 
 You may purchase a [license](LICENSE) to use this software from
 [QUARTIQ](mailto:sales@quartiq.com).
+
+
+# DFU Instructions
+
+**Prerequisites**
+* Ensure `dfu-util` is installed. On Ubuntu, install it from `apt` using `sudo apt-get install
+dfu-util`
+
+The following instructions describe the process of uploading a new firmware image over the DFU
+Bootloader USB interface.
+
+1. Generate the firmware image: `cargo build`
+    - Note: You may append `--release` to build the firmware in `Release` mode.
+    - Note: You may also use the latest release instead of building firmware.
+
+1. Generate the DFU file for your firmware build: `dfu-tool convert target/thumbv7em-none-eabihf/debug/booster booster.dfu`
+    - Note: If you are generating a `Release` build, replace `debug` with `release` in the above command.
+
+1. Reset Booster into DFU mode:
+    - Insert a pin into the DFU Bootloader hole to press the DFU button
+    - Power cycle booster by turning off the power switch for at least 10 seconds and then turn the
+    power switch on.
+
+1. Verify Booster is in DFU mode: `dfu-util -l` should show 4 entries beginning with `Found DFU: [0483:df11]`
+1. Upload the DFU file to Booster:
+```
+dfu-util -d 0483:df11 -a 0 --download booster.dfu
+```
