@@ -4,11 +4,12 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::sinara::SinaraConfiguration;
 use crate::{Eeprom, Error};
 use heapless::{consts, String};
 use serde::{Deserialize, Serialize};
 use w5500::{Ipv4Addr, MacAddress};
+
+use super::sinara::SinaraConfiguration;
 
 use core::fmt::Write;
 
