@@ -41,7 +41,7 @@ Bootloader USB interface.
 
 1. Reset Booster into DFU mode:
     - Insert a pin into the DFU Bootloader hole to press the DFU button
-    - Power cycle booster by turning off the power switch for at least 10 seconds and then turn the
+    - While the DFU button is pressed, power cycle booster by turning off the power switch for at least 10 seconds and then turn the
     power switch on.
 
 1. Verify Booster is in DFU mode: `dfu-util -l` should show 4 entries beginning with `Found DFU: [0483:df11]`
