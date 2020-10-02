@@ -23,7 +23,8 @@ logos = { version = "0.11.4", default-features = false, features = ["export_deri
 bbqueue = "0.4.10"
 usbd-serial = "0.1.0"
 shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
-usb-device = "0.2.5"
+usb-device = "0.2.6"
+postcard = "0.5.1"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq"
@@ -35,9 +36,6 @@ features = ["stm32f407", "rt", "usb_fs"]
 [dependencies.w5500]
 git = "https://github.com/quartiq/w5500"
 branch = "feature/tcp-nal"
-
-[patch.crates-io]
-usb-device = { git = "https://github.com/ryan-summers/usb-device", branch = "rs/periodic-poll-bug/race-condition-fix" }
 
 [dependencies.ad5627]
 path = "ad5627"

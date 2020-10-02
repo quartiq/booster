@@ -139,7 +139,7 @@ impl SerialTerminal {
                 },
 
                 Request::WriteIdentifier(id) => {
-                    if self.settings.set_id(id.as_str()) == false {
+                    if self.settings.set_id(id.as_str()).is_err() {
                         self.write("Invalid identifier\n".as_bytes());
                     }
                 }
