@@ -14,18 +14,6 @@ use crate::error::Error;
 use crate::rf_channel::{ChannelPins as RfChannelPins, ChannelState, RfChannel};
 use embedded_hal::blocking::delay::DelayUs;
 
-/// A EUI-48 identifier for a given channel.
-pub struct ChannelIdentifier {
-    pub data: [u8; 6],
-}
-
-impl ChannelIdentifier {
-    /// Construct a new channel identifier.
-    pub fn new(identifier: [u8; 6]) -> Self {
-        Self { data: identifier }
-    }
-}
-
 /// Contains channel status information in SI base units.
 #[derive(Debug, serde::Serialize)]
 pub struct ChannelStatus {
@@ -115,10 +103,7 @@ impl BoosterChannels {
                 .expect("Channel pins not available");
 
             match RfChannel::new(&manager, control_pins, delay) {
-                Some(mut rf_channel) => {
-                    // Setting interlock thresholds should not fail here as we have verified the
-                    // device is on the bus.
-                    rf_channel.set_interlock_thresholds(0.0, 0.0).unwrap();
+                Some(rf_channel) => {
                     rf_channels[channel as usize].replace(rf_channel);
                 }
                 None => {
@@ -158,30 +143,6 @@ impl BoosterChannels {
                     }
                     x => x,
                 }
-            }
-            None => Err(Error::NotPresent),
-        }
-    }
-
-    /// Get a channel's EUI-48 identifier.
-    ///
-    /// # Args
-    /// * `channel` - The channel to get the identifier from.
-    ///
-    /// # Returns
-    /// The channel identifier.
-    pub fn get_identifier(&mut self, channel: Channel) -> Result<ChannelIdentifier, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => {
-                let mut identifier: [u8; 6] = [0; 6];
-                rf_channel
-                    .i2c_devices
-                    .eui48
-                    .read_eui48(&mut identifier)
-                    .unwrap();
-                Ok(ChannelIdentifier::new(identifier))
             }
             None => Err(Error::NotPresent),
         }
@@ -327,6 +288,19 @@ impl BoosterChannels {
                 };
 
                 Ok(status)
+            }
+            None => Err(Error::NotPresent),
+        }
+    }
+
+    /// Save the current channel configuration in channel EEPROM.
+    pub fn save_configuration(&mut self, channel: Channel) -> Result<(), Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => {
+                rf_channel.save_configuration();
+                Ok(())
             }
             None => Err(Error::NotPresent),
         }

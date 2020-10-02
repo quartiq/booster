@@ -438,6 +438,9 @@ const APP: () = {
         c.schedule.usb(c.start).unwrap();
         c.schedule.fans(c.start).unwrap();
 
+        // Clear the reset flags now that initialization has completed.
+        platform::clear_reset_flags();
+
         init::LateResources {
             // Note that these share a resource because they both exist on the same I2C bus.
             main_bus: MainBus { fans, channels },
