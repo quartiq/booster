@@ -33,6 +33,7 @@ mod rf_channel;
 mod serial_terminal;
 mod settings;
 mod user_interface;
+mod watchdog;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
@@ -41,6 +42,7 @@ use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, Ch
 use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
+use watchdog::{WatchdogClient, WatchdogManager};
 
 use rtic::cyccnt::Duration;
 
@@ -151,6 +153,7 @@ const APP: () = {
         leds: UserLeds,
         usb_terminal: SerialTerminal,
         mqtt_client: MqttClient,
+        watchdog: WatchdogManager,
     }
 
     #[init(schedule = [telemetry, channel_monitor, button, usb, fans])]
@@ -173,6 +176,10 @@ const APP: () = {
             .pclk1(42.mhz())
             .require_pll48clk()
             .freeze();
+
+        // Start the watchdog during the initialization process.
+        let mut watchdog = hal::watchdog::IndependentWatchdog::new(c.device.IWDG);
+        watchdog.start(30_000_u32.ms());
 
         let mut delay = AsmDelay::new(clocks.sysclk().0);
 
@@ -422,6 +429,8 @@ const APP: () = {
 
         info!("Startup complete");
 
+        let watchdog_manager = WatchdogManager::new(watchdog);
+
         // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
         c.schedule.telemetry(c.start).unwrap();
@@ -436,11 +445,15 @@ const APP: () = {
             leds: leds,
             mqtt_client,
             usb_terminal,
+            watchdog: watchdog_manager,
         }
     }
 
-    #[task(priority = 3, schedule = [channel_monitor], resources=[main_bus, leds])]
+    #[task(priority = 3, schedule = [channel_monitor], resources=[main_bus, leds, watchdog])]
     fn channel_monitor(c: channel_monitor::Context) {
+        // Check in with the watchdog.
+        c.resources.watchdog.check_in(WatchdogClient::MonitorTask);
+
         // Potentially update the state of any channels.
         c.resources.main_bus.channels.update();
 
@@ -498,8 +511,13 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [fans], resources=[main_bus])]
+    #[task(priority = 1, schedule = [fans], resources=[main_bus, watchdog])]
     fn fans(mut c: fans::Context) {
+        // Check in with the watchdog.
+        c.resources
+            .watchdog
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::FanTask));
+
         // Determine the maximum channel temperature.
         let mut temperatures: [f32; 8] = [0.0; 8];
 
@@ -527,8 +545,13 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, mqtt_client])]
+    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, mqtt_client, watchdog])]
     fn telemetry(mut c: telemetry::Context) {
+        // Check in with the watchdog.
+        c.resources
+            .watchdog
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::TelemetryTask));
+
         // Gather telemetry for all of the channels.
         for channel in Channel::into_enum_iter() {
             let measurements = c
@@ -558,8 +581,13 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 2, spawn=[button], schedule = [button], resources=[main_bus, buttons])]
+    #[task(priority = 2, spawn=[button], schedule = [button], resources=[main_bus, buttons, watchdog])]
     fn button(mut c: button::Context) {
+        // Check in with the watchdog.
+        c.resources
+            .watchdog
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::ButtonTask));
+
         if let Some(event) = c.resources.buttons.update() {
             match event {
                 ButtonEvent::InterlockReset => {
@@ -599,8 +627,13 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 2, schedule=[usb], resources=[usb_terminal])]
-    fn usb(c: usb::Context) {
+    #[task(priority = 2, schedule=[usb], resources=[usb_terminal, watchdog])]
+    fn usb(mut c: usb::Context) {
+        // Check in with the watchdog.
+        c.resources
+            .watchdog
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::UsbTask));
+
         c.resources.usb_terminal.process();
 
         // TODO: Replace hard-coded CPU cycles here.
@@ -610,11 +643,16 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[main_bus, mqtt_client])]
+    #[idle(resources=[main_bus, mqtt_client, watchdog])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = mqtt_control::ControlState::new();
 
         loop {
+            // Check in with the watchdog.
+            c.resources
+                .watchdog
+                .lock(|watchdog| watchdog.check_in(WatchdogClient::IdleTask));
+
             // Handle the MQTT control interface.
             manager.update(&mut c.resources);
 
