@@ -25,8 +25,8 @@ impl BoosterChannelData {
     /// Generate default booster channel data.
     pub fn default() -> Self {
         Self {
-            reflected_interlock_threshold: f32::NAN,
-            output_interlock_threshold: f32::NAN,
+            reflected_interlock_threshold: 0.0,
+            output_interlock_threshold: 0.0,
             bias_voltage: -3.2,
             enabled: false,
 
