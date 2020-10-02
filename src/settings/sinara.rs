@@ -220,7 +220,9 @@ impl SinaraConfiguration {
 
             magic: 0x391e,
             name: name_info,
-            board_id: 0,
+
+            // Specifies "Booster mainboard"
+            board_id: 21,
             format_rev: 0,
             major: 1,
             minor: 0,
