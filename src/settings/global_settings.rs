@@ -41,7 +41,7 @@ impl BoosterMainBoardData {
         let mut name: String<consts::U23> = String::new();
         write!(
             &mut name,
-            "booster-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            "booster{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
             eui48[0], eui48[1], eui48[2], eui48[3], eui48[4], eui48[5]
         )
         .unwrap();
