@@ -5,7 +5,7 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
-use super::SinaraConfiguration;
+use super::{SinaraConfiguration, SinaraBoardId};
 use crate::{linear_transformation::LinearTransformation, Error, I2cProxy};
 use microchip_24aa02e48::Microchip24AA02E48;
 
@@ -79,5 +79,70 @@ impl BoosterChannelData {
 
 pub struct BoosterChannelSettings {
     eeprom: Microchip24AA02E48<I2cProxy>,
-    pub settings: BoosterChannelData,
+    pub data: BoosterChannelData,
+}
+
+impl BoosterChannelSettings {
+
+    pub fn new(eeprom: Microchip24AA02E48<I2cProxy>) -> Self {
+        let mut settings = Self {
+            eeprom,
+            data: BoosterChannelData::default(),
+        };
+
+        match settings.load_config() {
+            Ok(config) => {
+                // If we loaded sinara configuration, deserialize the board data.
+                match BoosterChannelData::deserialize(&config.board_data) {
+                    Ok(data) => settings.data = data,
+
+                    Err(_) => {
+                        settings.data = BoosterChannelData::default();
+                        settings.save();
+                    }
+                }
+
+            },
+
+            // If we failed to load configuration, use a default config.
+            Err(_) => {
+                settings.data = BoosterChannelData::default();
+                settings.save();
+            }
+        };
+
+        settings
+    }
+
+    /// Save the configuration settings to EEPROM for retrieval.
+    pub fn save(&mut self) {
+        let mut config = match self.load_config() {
+            Err(_) => SinaraConfiguration::default(SinaraBoardId::RfChannel),
+            Ok(config) => config,
+        };
+
+        self.data.serialize_into(&mut config);
+        config.update_crc32();
+        self.save_config(&config);
+    }
+
+    /// Load device settings from EEPROM.
+    ///
+    /// # Returns
+    /// Ok(settings) if the settings loaded successfully. Otherwise, Err(settings), where `settings`
+    /// are default values.
+    fn load_config(&mut self) -> Result<SinaraConfiguration, Error> {
+        // Read the sinara-config from memory.
+        let mut sinara_config: [u8; 256] = [0; 256];
+        self.eeprom.read(0, &mut sinara_config).unwrap();
+
+        SinaraConfiguration::try_deserialize(sinara_config)
+    }
+
+    fn save_config(&mut self, config: &SinaraConfiguration) {
+        // Save the updated configuration to EEPROM.
+        let mut serialized = [0u8; 128];
+        config.serialize_into(&mut serialized);
+        self.eeprom.write(0, &serialized).unwrap();
+    }
 }

@@ -9,7 +9,7 @@ use heapless::{consts, String};
 use serde::{Deserialize, Serialize};
 use w5500::{Ipv4Addr, MacAddress};
 
-use super::sinara::SinaraConfiguration;
+use super::{SinaraBoardId, SinaraConfiguration};
 
 use core::fmt::Write;
 
@@ -181,23 +181,20 @@ impl BoosterSettings {
         };
 
         // Load the sinara configuration from EEPROM.
-        let sinara_config = match settings.load_config() {
-            Ok(config) => config,
+        match settings.load_config() {
+            Ok(config) => {
+                match BoosterMainBoardData::deserialize(&config.board_data) {
+                    Ok(data) => settings.board_data = data,
 
-            // If we failed to load configuration, we got a default. Save the default and continue
-            // using it.
-            Err(config) => {
-                settings.save_config(&config);
-                config
-            }
-        };
+                    Err(_) => {
+                        settings.board_data = BoosterMainBoardData::default(&settings.eui48);
+                        settings.save();
+                    }
+                }
 
-        // Next, deserialize the board configuration from the sinara configuration.
-        match BoosterMainBoardData::deserialize(&sinara_config.board_data) {
-            Ok(data) => settings.board_data = data,
+            },
 
-            // If the deserialization fails, use default board data and update the sinara
-            // configuration in memory.
+            // If we failed to load configuration, use a default config.
             Err(_) => {
                 settings.board_data = BoosterMainBoardData::default(&settings.eui48);
                 settings.save();
@@ -210,7 +207,7 @@ impl BoosterSettings {
     /// Save the configuration settings to EEPROM for retrieval.
     pub fn save(&mut self) {
         let mut config = match self.load_config() {
-            Err(config) => config,
+            Err(_) => SinaraConfiguration::default(SinaraBoardId::Mainboard),
             Ok(config) => config,
         };
 
@@ -224,22 +221,12 @@ impl BoosterSettings {
     /// # Returns
     /// Ok(settings) if the settings loaded successfully. Otherwise, Err(settings), where `settings`
     /// are default values.
-    fn load_config(&mut self) -> Result<SinaraConfiguration, SinaraConfiguration> {
+    fn load_config(&mut self) -> Result<SinaraConfiguration, Error> {
         // Read the sinara-config from memory.
         let mut sinara_config: [u8; 256] = [0; 256];
         self.eeprom.read(0, &mut sinara_config).unwrap();
 
-        match SinaraConfiguration::try_deserialize(sinara_config) {
-            Ok(config) => Ok(config),
-
-            // If we failed to load data, provide default values.
-            Err(_) => {
-                let board_data = BoosterMainBoardData::default(&self.eui48);
-                let mut config = SinaraConfiguration::default("Booster".as_bytes());
-                board_data.serialize_into(&mut config);
-                Err(config)
-            }
-        }
+        SinaraConfiguration::try_deserialize(sinara_config)
     }
 
     fn save_config(&mut self, config: &SinaraConfiguration) {
