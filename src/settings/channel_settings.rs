@@ -77,12 +77,20 @@ impl BoosterChannelData {
     }
 }
 
+/// Represents the booster RF channel settings.
 pub struct BoosterChannelSettings {
     eeprom: Microchip24AA02E48<I2cProxy>,
     pub data: BoosterChannelData,
 }
 
 impl BoosterChannelSettings {
+    /// Construct the booster RF channel settings from the RF module EEPROM.
+    ///
+    /// # Args
+    /// * `eeprom` - The EEPROM installed on the RF module.
+    ///
+    /// # Returns
+    /// The settings found on the RF module.
     pub fn new(eeprom: Microchip24AA02E48<I2cProxy>) -> Self {
         let mut settings = Self {
             eeprom,
