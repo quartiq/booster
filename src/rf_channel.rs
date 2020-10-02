@@ -318,7 +318,7 @@ impl Devices {
     /// properly enumerate, the option will be empty. The returend tuple will be (devices, eeprom).
     fn new(
         manager: &'static I2cBusManager,
-        delay: &mut impl DelayUs<u8>,
+        delay: &mut impl DelayUs<u16>,
     ) -> Option<(Self, Microchip24AA02E48<I2cProxy>)> {
         // The ADS7924 and DAC7571 are present on the booster mainboard, so instantiation
         // and communication should never fail.
@@ -454,7 +454,7 @@ impl RfChannel {
     pub fn new(
         manager: &'static I2cBusManager,
         control_pins: ChannelPins,
-        delay: &mut impl DelayUs<u8>,
+        delay: &mut impl DelayUs<u16>,
     ) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
         match Devices::new(manager, delay) {

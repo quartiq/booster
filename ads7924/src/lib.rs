@@ -92,7 +92,7 @@ where
         i2c: I2C,
         address: u8,
         avdd: f32,
-        delay: &mut impl DelayUs<u8>,
+        delay: &mut impl DelayUs<u16>,
     ) -> Result<Self, Error> {
         let mut ads7924 = Ads7924 {
             i2c: i2c,
@@ -120,7 +120,7 @@ where
     /// # Args
     /// * `i2c` - The I2C interface to use to communicate with the device.
     /// * `delay` - A means of delaying during initialization.
-    pub fn default(i2c: I2C, delay: &mut impl DelayUs<u8>) -> Result<Self, Error> {
+    pub fn default(i2c: I2C, delay: &mut impl DelayUs<u16>) -> Result<Self, Error> {
         Ads7924::new(i2c, 0x49, 3.434, delay)
     }
 
@@ -145,11 +145,12 @@ where
         Ok(())
     }
 
-    fn reset(&mut self, delay: &mut impl DelayUs<u8>) -> Result<(), Error> {
+    fn reset(&mut self, delay: &mut impl DelayUs<u16>) -> Result<(), Error> {
         self.write(Register::Reset, &[0xAA])?;
-        // The datasheet does not specify any required delay, but experimentally 100uS has been
-        // chosen and observed to behave nominally.
-        delay.delay_us(100u8);
+
+        // Wait a small delay to ensure the device is processing the reset request.
+        delay.delay_us(500_u16);
+
         Ok(())
     }
 
