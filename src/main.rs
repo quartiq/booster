@@ -593,9 +593,9 @@ const APP: () = {
         }
 
         // TODO: Replace hard-coded CPU cycles here.
-        // Schedule to run this task every 10ms.
+        // Schedule to run this task every 3ms.
         c.schedule
-            .button(c.scheduled + Duration::from_cycles(10 * (168_000_000 / 1000)))
+            .button(c.scheduled + Duration::from_cycles(3 * (168_000_000 / 1000)))
             .unwrap();
     }
 
