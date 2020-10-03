@@ -6,6 +6,8 @@
 //! Proprietary and confidential.
 use super::hal;
 
+use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
+
 /// Unconditionally disable and power-off all channels.
 pub fn shutdown_channels() {
     let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
@@ -20,6 +22,48 @@ pub fn shutdown_channels() {
         // reset bits.
         gpiod.bsrr.write(|w| w.bits(0x00FF_0000));
     }
+}
+
+/// Generate a manual I2C bus reset to clear the bus.
+///
+/// # Args
+/// * `sda` - The I2C data line.
+/// * `scl` - The I2C clock line.
+/// * `delay` - A means of delaying time.
+pub fn i2c_bus_reset(
+    sda: &mut impl OutputPin,
+    scl: &mut impl OutputPin,
+    delay: &mut impl DelayUs<u16>,
+) {
+    // Start by pulling SDA/SCL high.
+    scl.set_low().ok();
+    delay.delay_us(5);
+    sda.set_high().ok();
+    delay.delay_us(5);
+    scl.set_high().ok();
+    delay.delay_us(5);
+
+    // Next, send 9 clock pulses on the I2C bus.
+    for _ in 0..9 {
+        scl.set_low().ok();
+        delay.delay_us(5);
+        scl.set_high().ok();
+        delay.delay_us(5);
+    }
+
+    // Generate a stop condition by pulling SDA high while SCL is high.
+
+    // First, get SDA into a low state without generating a start condition.
+    scl.set_low().ok();
+    delay.delay_us(5);
+    sda.set_low().ok();
+    delay.delay_us(5);
+
+    // Next, generate the stop condition.
+    scl.set_high().ok();
+    delay.delay_us(5);
+    sda.set_high().ok();
+    delay.delay_us(5);
 }
 
 /// Check if a watchdog reset has been detected.

@@ -194,11 +194,35 @@ const APP: () = {
         let mut pa_ch_reset_n = gpiob.pb9.into_push_pull_output();
         pa_ch_reset_n.set_high().unwrap();
 
+        // Manually reset all of the I2C buses across the RF channels using a bit-bang reset.
+        let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
+
         let i2c_bus_manager: &'static _ = {
+            let mut mux = {
+                let i2c = {
+                    let scl = gpiob.pb6.into_alternate_af4_open_drain();
+                    let sda = gpiob.pb7.into_alternate_af4_open_drain();
+                    hal::i2c::I2c::i2c1(c.device.I2C1, (scl, sda), 100.khz(), clocks)
+                };
+
+                tca9548::Tca9548::default(i2c, &mut i2c_mux_reset, &mut delay).unwrap()
+            };
+
+            mux.enable(0xFF).unwrap();
+
+            let (i2c_peripheral, pins) = mux.free().release();
+            let (scl, sda) = pins;
+
+            // Configure I2C pins as open-drain outputs.
+            let mut scl = scl.into_open_drain_output();
+            let mut sda = sda.into_open_drain_output();
+
+            platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
+
             let i2c = {
-                let scl = gpiob.pb6.into_alternate_af4_open_drain();
-                let sda = gpiob.pb7.into_alternate_af4_open_drain();
-                hal::i2c::I2c::i2c1(c.device.I2C1, (scl, sda), 100.khz(), clocks)
+                let scl = scl.into_alternate_af4_open_drain();
+                let sda = sda.into_alternate_af4_open_drain();
+                hal::i2c::I2c::i2c1(i2c_peripheral, (scl, sda), 100.khz(), clocks)
             };
 
             new_atomic_check_manager!(I2C = i2c).unwrap()
@@ -247,7 +271,6 @@ const APP: () = {
             };
 
             let mut mux = {
-                let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
                 tca9548::Tca9548::default(
                     i2c_bus_manager.acquire_i2c(),
                     &mut i2c_mux_reset,
@@ -305,8 +328,14 @@ const APP: () = {
         // Read the EUI48 identifier and configure the ethernet MAC address.
         let settings = {
             let i2c2 = {
-                let scl = gpiob.pb10.into_alternate_af4_open_drain();
-                let sda = gpiob.pb11.into_alternate_af4_open_drain();
+                // Manually reset the I2C bus
+                let mut scl = gpiob.pb10.into_open_drain_output();
+                let mut sda = gpiob.pb11.into_open_drain_output();
+                platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
+
+                let scl = scl.into_alternate_af4_open_drain();
+                let sda = sda.into_alternate_af4_open_drain();
+
                 hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
             };
 
