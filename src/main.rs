@@ -598,10 +598,15 @@ const APP: () = {
                 let message: String<heapless::consts::U1024> =
                     serde_json_core::to_string(&measurements).unwrap();
 
-                c.resources
-                    .mqtt_client
-                    .publish(topic.as_str(), &message.into_bytes(), QoS::AtMostOnce, &[])
-                    .unwrap();
+                match c.resources.mqtt_client.publish(
+                    topic.as_str(),
+                    &message.into_bytes(),
+                    QoS::AtMostOnce,
+                    &[],
+                ) {
+                    Err(e) => info!("Telemetry failure: {:?}", e),
+                    Ok(_) => {}
+                }
             }
         }
 
