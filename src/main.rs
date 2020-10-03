@@ -184,7 +184,7 @@ const APP: () = {
         let mut delay = AsmDelay::new(clocks.sysclk().0);
 
         let gpioa = c.device.GPIOA.split();
-        let mut gpiob = c.device.GPIOB.split();
+        let gpiob = c.device.GPIOB.split();
         let gpioc = c.device.GPIOC.split();
         let gpiod = c.device.GPIOD.split();
         let gpioe = c.device.GPIOE.split();
@@ -196,7 +196,8 @@ const APP: () = {
 
         // Manually reset all of the I2C buses across the RF channels using a bit-bang reset.
         let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
-        {
+
+        let i2c_bus_manager: &'static _ = {
             let mut mux = {
                 let i2c = {
                     let scl = gpiob.pb6.into_alternate_af4_open_drain();
@@ -209,12 +210,8 @@ const APP: () = {
 
             mux.enable(0xFF).unwrap();
 
-            let i2c = mux.free();
-            let (i2c, pins) = i2c.release();
+            let (i2c_peripheral, pins) = mux.free().release();
             let (scl, sda) = pins;
-
-            // Restore the I2C peripheral for usage later.
-            c.device.I2C1 = i2c;
 
             // Configure I2C pins as open-drain outputs.
             let mut scl = scl.into_open_drain_output();
@@ -222,16 +219,10 @@ const APP: () = {
 
             platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
 
-            // Return the SDA/SCL pins for future usage.
-            gpiob.pb6 = scl.into_floating_input();
-            gpiob.pb7 = sda.into_floating_input();
-        };
-
-        let i2c_bus_manager: &'static _ = {
             let i2c = {
-                let scl = gpiob.pb6.into_alternate_af4_open_drain();
-                let sda = gpiob.pb7.into_alternate_af4_open_drain();
-                hal::i2c::I2c::i2c1(c.device.I2C1, (scl, sda), 100.khz(), clocks)
+                let scl = scl.into_alternate_af4_open_drain();
+                let sda = sda.into_alternate_af4_open_drain();
+                hal::i2c::I2c::i2c1(i2c_peripheral, (scl, sda), 100.khz(), clocks)
             };
 
             new_atomic_check_manager!(I2C = i2c).unwrap()
