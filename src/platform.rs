@@ -8,6 +8,19 @@ use super::hal;
 
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+
+    // Shutdown all of the RF channels.
+    shutdown_channels();
+
+    // Reset the device in `release` configuration.
+    #[cfg(not(debug_assertions))]
+    cortex_m::peripheral::SCB::sys_reset();
+
+    loop {}
+}
+
 /// Unconditionally disable and power-off all channels.
 pub fn shutdown_channels() {
     let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
