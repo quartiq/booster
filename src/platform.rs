@@ -65,3 +65,20 @@ pub fn i2c_bus_reset(
     sda.set_high().ok();
     delay.delay_us(5);
 }
+
+/// Check if a watchdog reset has been detected.
+///
+/// # Returns
+/// True if a watchdog reset has been detected. False otherwise.
+pub fn watchdog_detected() -> bool {
+    let rcc = unsafe { &*hal::stm32::RCC::ptr() };
+
+    rcc.csr.read().wdgrstf().bit_is_set()
+}
+
+/// Clear all of the reset flags in the device.
+pub fn clear_reset_flags() {
+    let rcc = unsafe { &*hal::stm32::RCC::ptr() };
+
+    rcc.csr.modify(|_, w| w.rmvf().set_bit());
+}

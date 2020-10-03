@@ -8,6 +8,12 @@
 use crate::Error;
 use core::convert::TryInto;
 
+/// The sinara configuration board ID.
+pub enum BoardId {
+    Mainboard = 21,
+    RfChannel = 22,
+}
+
 /// Serialization tool for serializing sinara configurations.
 ///
 /// # Note
@@ -207,12 +213,15 @@ impl SinaraConfiguration {
     /// Generate a default sinara EEPROM configuration.
     ///
     /// # Args
-    /// * `name` - The name to store in the EEPOM configuration.
-    pub fn default(name: &[u8]) -> SinaraConfiguration {
-        assert!(name.len() <= 10);
+    /// * `mainboard` - Specified true if the sinara configuration is for the booster mainboard.
+    pub fn default(board_id: BoardId) -> SinaraConfiguration {
+        let name = match board_id {
+            BoardId::Mainboard => "Booster",
+            BoardId::RfChannel => "Booster_Ch",
+        };
 
         let mut name_info: [u8; 10] = [0; 10];
-        name_info[..name.len()].copy_from_slice(name);
+        name_info[..name.len()].copy_from_slice(name.as_bytes());
 
         let mut config = SinaraConfiguration {
             // Will be updated later.
@@ -220,9 +229,7 @@ impl SinaraConfiguration {
 
             magic: 0x391e,
             name: name_info,
-
-            // Specifies "Booster mainboard"
-            board_id: 21,
+            board_id: board_id as u16,
             format_rev: 0,
             major: 1,
             minor: 0,
