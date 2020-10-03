@@ -18,6 +18,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     #[cfg(not(debug_assertions))]
     cortex_m::peripheral::SCB::sys_reset();
 
+    #[cfg(debug_assertions)]
     loop {}
 }
 
