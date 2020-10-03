@@ -15,7 +15,6 @@ use core::fmt::Write;
 use enum_iterator::IntoEnumIterator;
 use heapless::String;
 use minimq::QoS;
-use panic_halt as _;
 use stm32f4xx_hal as hal;
 
 use hal::prelude::*;
