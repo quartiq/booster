@@ -133,7 +133,7 @@ impl ControlState {
         // Subscribe to any control topics necessary.
         if !self.subscribed {
             resources.mqtt_client.lock(|client| {
-                if client.is_connected() {
+                if client.is_connected().unwrap() {
                     client.subscribe("booster/channel/state", &[]).unwrap();
                     client.subscribe("booster/channel/tune", &[]).unwrap();
                     client.subscribe("booster/channel/thresholds", &[]).unwrap();
