@@ -153,6 +153,7 @@ const APP: () = {
         usb_terminal: SerialTerminal,
         mqtt_client: MqttClient,
         watchdog: WatchdogManager,
+        delay: AsmDelay,
     }
 
     #[init(schedule = [telemetry, channel_monitor, button, usb, fans])]
@@ -477,6 +478,7 @@ const APP: () = {
             mqtt_client,
             usb_terminal,
             watchdog: watchdog_manager,
+            delay: delay,
         }
     }
 
@@ -679,7 +681,7 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[main_bus, mqtt_client, watchdog])]
+    #[idle(resources=[main_bus, mqtt_client, watchdog, delay])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = mqtt_control::ControlState::new();
 

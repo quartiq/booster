@@ -957,7 +957,11 @@ impl RfChannel {
     /// # Returns
     /// A tuple of (Vgs, Ids) where Vgs is the bias voltage on the amplifier gate. Ids is the actual
     /// drain current achieved.
-    pub fn tune_bias(&mut self, desired_current: f32) -> Result<(f32, f32), Error> {
+    pub fn tune_bias(
+        &mut self,
+        desired_current: f32,
+        delay: &mut impl DelayUs<u16>,
+    ) -> Result<(f32, f32), Error> {
         // Verify that the channel is powered, but is not actively outputting for bias calibration.
         match self.state_machine.state() {
             ChannelState::Powered | ChannelState::Tripped(_) => {}
@@ -978,6 +982,8 @@ impl RfChannel {
         // Place the RF channel into pinch-off to start.
         let mut bias_voltage = -3.2;
         self.set_bias(bias_voltage).unwrap();
+        // Settle the bias
+        delay.delay_us(1000_u16);
         let mut last_current = self.measure_p28v_current(true);
 
         // First, increase the bias voltage until we overshoot the desired set current by a small
@@ -991,6 +997,7 @@ impl RfChannel {
             }
 
             self.set_bias(bias_voltage).unwrap();
+            delay.delay_us(1000_u16);
 
             // Re-measure the drain current.
             let new_current = self.measure_p28v_current(true);
@@ -1014,6 +1021,7 @@ impl RfChannel {
 
             // Set the new bias and re-measure the drain current.
             self.set_bias(bias_voltage).unwrap();
+            delay.delay_us(1000_u16);
             last_current = self.measure_p28v_current(true);
         }
 
