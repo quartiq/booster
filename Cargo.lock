@@ -90,6 +90,7 @@ dependencies = [
  "cortex-m-log",
  "cortex-m-rt",
  "cortex-m-rtic",
+ "crc-any",
  "dac7571",
  "debounced-pin",
  "embedded-hal",
@@ -102,7 +103,6 @@ dependencies = [
  "mcp3221",
  "microchip-24aa02e48",
  "minimq",
- "panic-halt",
  "postcard",
  "serde",
  "serde-json-core",
@@ -203,6 +203,12 @@ dependencies = [
  "rtic-syntax",
  "syn",
 ]
+
+[[package]]
+name = "crc-any"
+version = "2.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3784befdf9469f4d51c69ef0b774f6a99de6bcc655285f746f16e0dd63d9007"
 
 [[package]]
 name = "dac7571"
@@ -460,12 +466,6 @@ dependencies = [
  "quote",
  "syn",
 ]
-
-[[package]]
-name = "panic-halt"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de96540e0ebde571dc55c73d60ef407c653844e6f9a1e2fdbd40c07b9252d812"
 
 [[package]]
 name = "postcard"

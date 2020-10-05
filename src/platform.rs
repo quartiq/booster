@@ -9,7 +9,7 @@ use super::hal;
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
 #[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
+fn panic(_info: &core::panic::PanicInfo) -> ! {
     // Shutdown all of the RF channels.
     shutdown_channels();
 
