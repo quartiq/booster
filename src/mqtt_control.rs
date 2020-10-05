@@ -6,6 +6,7 @@
 //! Proprietary and confidential.
 use super::{idle::Resources, BoosterChannels, Channel, Error};
 use core::fmt::Write;
+use embedded_hal::blocking::delay::DelayUs;
 use heapless::{consts, String};
 use minimq::{Property, QoS};
 
@@ -143,6 +144,7 @@ impl ControlState {
         }
 
         let main_bus = &mut resources.main_bus;
+        let delay = &mut resources.delay;
 
         resources.mqtt_client.lock(|client| {
             match client.poll(|client, topic, message, properties| {
@@ -152,7 +154,7 @@ impl ControlState {
                             handle_channel_update(message, &mut main_bus.channels)
                         }
                         "booster/channel/tune" => {
-                            handle_channel_tune(message, &mut main_bus.channels)
+                            handle_channel_tune(message, &mut main_bus.channels, *delay)
                         }
                         "booster/channel/thresholds" => {
                             handle_channel_thresholds(message, &mut main_bus.channels)
@@ -256,16 +258,21 @@ fn handle_channel_thresholds(
 /// # Args
 /// * `message` - The serialized message request.
 /// * `channels` - The booster RF channels to configure.
+/// * `delay` - A means of delaying during tuning.
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_tune(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
+fn handle_channel_tune(
+    message: &[u8],
+    channels: &mut BoosterChannels,
+    delay: &mut impl DelayUs<u16>,
+) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelTuneRequest>(message) {
         Ok(data) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
 
-    match channels.tune_channel(request.channel, request.current) {
+    match channels.tune_channel(request.channel, request.current, delay) {
         Ok((vgs, ids)) => ChannelTuneResponse::okay(vgs, ids),
         Err(error) => Response::error(error),
     }
