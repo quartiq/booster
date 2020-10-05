@@ -33,11 +33,11 @@ The following instructions describe the process of uploading a new firmware imag
 Bootloader USB interface.
 
 1. Generate the firmware image: `cargo build`
-    - Note: You may append `--release` to build the firmware in `Release` mode.
-    - Note: You may also use the latest release instead of building firmware.
+    - Note: You may append `--release` to build the firmware with more optimization and less debugging information.
+    - Note: You may also use the latest [pre-built](https://github.com/quartiq/booster/releases) assets instead of building firmware.
 
 1. Generate the DFU file for your firmware build: `dfu-tool convert target/thumbv7em-none-eabihf/debug/booster booster.dfu`
-    - Note: If you are generating a `Release` build, replace `debug` with `release` in the above command.
+    - Note: If you built with `--release`, replace `debug` with `release` in the above command.
 
 1. Reset Booster into DFU mode:
     - Insert a pin into the DFU Bootloader hole to press the DFU button
