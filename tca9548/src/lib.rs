@@ -151,4 +151,9 @@ where
 
         Ok(passed)
     }
+
+    /// Deconstruct the mux and return the I2C bus.
+    pub fn free(self) -> I2C {
+        self.i2c
+    }
 }

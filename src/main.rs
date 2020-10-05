@@ -15,7 +15,6 @@ use core::fmt::Write;
 use enum_iterator::IntoEnumIterator;
 use heapless::String;
 use minimq::QoS;
-use panic_halt as _;
 use stm32f4xx_hal as hal;
 
 use hal::prelude::*;
@@ -33,6 +32,7 @@ mod rf_channel;
 mod serial_terminal;
 mod settings;
 mod user_interface;
+mod watchdog;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
@@ -41,6 +41,7 @@ use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, Ch
 use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
+use watchdog::{WatchdogClient, WatchdogManager};
 
 use rtic::cyccnt::Duration;
 
@@ -151,6 +152,7 @@ const APP: () = {
         leds: UserLeds,
         usb_terminal: SerialTerminal,
         mqtt_client: MqttClient,
+        watchdog: WatchdogManager,
     }
 
     #[init(schedule = [telemetry, channel_monitor, button, usb, fans])]
@@ -174,6 +176,10 @@ const APP: () = {
             .require_pll48clk()
             .freeze();
 
+        // Start the watchdog during the initialization process.
+        let mut watchdog = hal::watchdog::IndependentWatchdog::new(c.device.IWDG);
+        watchdog.start(30_000_u32.ms());
+
         let mut delay = AsmDelay::new(clocks.sysclk().0);
 
         let gpioa = c.device.GPIOA.split();
@@ -187,11 +193,35 @@ const APP: () = {
         let mut pa_ch_reset_n = gpiob.pb9.into_push_pull_output();
         pa_ch_reset_n.set_high().unwrap();
 
+        // Manually reset all of the I2C buses across the RF channels using a bit-bang reset.
+        let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
+
         let i2c_bus_manager: &'static _ = {
+            let mut mux = {
+                let i2c = {
+                    let scl = gpiob.pb6.into_alternate_af4_open_drain();
+                    let sda = gpiob.pb7.into_alternate_af4_open_drain();
+                    hal::i2c::I2c::i2c1(c.device.I2C1, (scl, sda), 100.khz(), clocks)
+                };
+
+                tca9548::Tca9548::default(i2c, &mut i2c_mux_reset, &mut delay).unwrap()
+            };
+
+            mux.enable(0xFF).unwrap();
+
+            let (i2c_peripheral, pins) = mux.free().release();
+            let (scl, sda) = pins;
+
+            // Configure I2C pins as open-drain outputs.
+            let mut scl = scl.into_open_drain_output();
+            let mut sda = sda.into_open_drain_output();
+
+            platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
+
             let i2c = {
-                let scl = gpiob.pb6.into_alternate_af4_open_drain();
-                let sda = gpiob.pb7.into_alternate_af4_open_drain();
-                hal::i2c::I2c::i2c1(c.device.I2C1, (scl, sda), 100.khz(), clocks)
+                let scl = scl.into_alternate_af4_open_drain();
+                let sda = sda.into_alternate_af4_open_drain();
+                hal::i2c::I2c::i2c1(i2c_peripheral, (scl, sda), 100.khz(), clocks)
             };
 
             new_atomic_check_manager!(I2C = i2c).unwrap()
@@ -240,7 +270,6 @@ const APP: () = {
             };
 
             let mut mux = {
-                let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
                 tca9548::Tca9548::default(
                     i2c_bus_manager.acquire_i2c(),
                     &mut i2c_mux_reset,
@@ -298,8 +327,14 @@ const APP: () = {
         // Read the EUI48 identifier and configure the ethernet MAC address.
         let settings = {
             let i2c2 = {
-                let scl = gpiob.pb10.into_alternate_af4_open_drain();
-                let sda = gpiob.pb11.into_alternate_af4_open_drain();
+                // Manually reset the I2C bus
+                let mut scl = gpiob.pb10.into_open_drain_output();
+                let mut sda = gpiob.pb11.into_open_drain_output();
+                platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
+
+                let scl = scl.into_alternate_af4_open_drain();
+                let sda = sda.into_alternate_af4_open_drain();
+
                 hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
             };
 
@@ -399,7 +434,7 @@ const APP: () = {
                 let octets = settings.mac().octets;
                 write!(
                     &mut serial_string,
-                    "{}-{}-{}-{}-{}-{}",
+                    "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
                     octets[0], octets[1], octets[2], octets[3], octets[4], octets[5]
                 )
                 .unwrap();
@@ -422,12 +457,17 @@ const APP: () = {
 
         info!("Startup complete");
 
+        let watchdog_manager = WatchdogManager::new(watchdog);
+
         // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
         c.schedule.telemetry(c.start).unwrap();
         c.schedule.button(c.start).unwrap();
         c.schedule.usb(c.start).unwrap();
         c.schedule.fans(c.start).unwrap();
+
+        // Clear the reset flags now that initialization has completed.
+        platform::clear_reset_flags();
 
         init::LateResources {
             // Note that these share a resource because they both exist on the same I2C bus.
@@ -436,11 +476,15 @@ const APP: () = {
             leds: leds,
             mqtt_client,
             usb_terminal,
+            watchdog: watchdog_manager,
         }
     }
 
-    #[task(priority = 3, schedule = [channel_monitor], resources=[main_bus, leds])]
+    #[task(priority = 3, schedule = [channel_monitor], resources=[main_bus, leds, watchdog])]
     fn channel_monitor(c: channel_monitor::Context) {
+        // Check in with the watchdog.
+        c.resources.watchdog.check_in(WatchdogClient::MonitorTask);
+
         // Potentially update the state of any channels.
         c.resources.main_bus.channels.update();
 
@@ -498,8 +542,13 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [fans], resources=[main_bus])]
+    #[task(priority = 1, schedule = [fans], resources=[main_bus, watchdog])]
     fn fans(mut c: fans::Context) {
+        // Check in with the watchdog.
+        c.resources
+            .watchdog
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::FanTask));
+
         // Determine the maximum channel temperature.
         let mut temperatures: [f32; 8] = [0.0; 8];
 
@@ -527,8 +576,13 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, mqtt_client])]
+    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, mqtt_client, watchdog])]
     fn telemetry(mut c: telemetry::Context) {
+        // Check in with the watchdog.
+        c.resources
+            .watchdog
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::TelemetryTask));
+
         // Gather telemetry for all of the channels.
         for channel in Channel::into_enum_iter() {
             let measurements = c
@@ -544,10 +598,15 @@ const APP: () = {
                 let message: String<heapless::consts::U1024> =
                     serde_json_core::to_string(&measurements).unwrap();
 
-                c.resources
-                    .mqtt_client
-                    .publish(topic.as_str(), &message.into_bytes(), QoS::AtMostOnce, &[])
-                    .unwrap();
+                match c.resources.mqtt_client.publish(
+                    topic.as_str(),
+                    &message.into_bytes(),
+                    QoS::AtMostOnce,
+                    &[],
+                ) {
+                    Err(e) => info!("Telemetry failure: {:?}", e),
+                    Ok(_) => {}
+                }
             }
         }
 
@@ -558,8 +617,13 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 2, spawn=[button], schedule = [button], resources=[main_bus, buttons])]
+    #[task(priority = 2, spawn=[button], schedule = [button], resources=[main_bus, buttons, watchdog])]
     fn button(mut c: button::Context) {
+        // Check in with the watchdog.
+        c.resources
+            .watchdog
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::ButtonTask));
+
         if let Some(event) = c.resources.buttons.update() {
             match event {
                 ButtonEvent::InterlockReset => {
@@ -593,14 +657,19 @@ const APP: () = {
         }
 
         // TODO: Replace hard-coded CPU cycles here.
-        // Schedule to run this task every 10ms.
+        // Schedule to run this task every 3ms.
         c.schedule
-            .button(c.scheduled + Duration::from_cycles(10 * (168_000_000 / 1000)))
+            .button(c.scheduled + Duration::from_cycles(3 * (168_000_000 / 1000)))
             .unwrap();
     }
 
-    #[task(priority = 2, schedule=[usb], resources=[usb_terminal])]
-    fn usb(c: usb::Context) {
+    #[task(priority = 2, schedule=[usb], resources=[usb_terminal, watchdog])]
+    fn usb(mut c: usb::Context) {
+        // Check in with the watchdog.
+        c.resources
+            .watchdog
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::UsbTask));
+
         c.resources.usb_terminal.process();
 
         // TODO: Replace hard-coded CPU cycles here.
@@ -610,11 +679,16 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[main_bus, mqtt_client])]
+    #[idle(resources=[main_bus, mqtt_client, watchdog])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = mqtt_control::ControlState::new();
 
         loop {
+            // Check in with the watchdog.
+            c.resources
+                .watchdog
+                .lock(|watchdog| watchdog.check_in(WatchdogClient::IdleTask));
+
             // Handle the MQTT control interface.
             manager.update(&mut c.resources);
 

@@ -650,9 +650,9 @@ dependencies = [
 
 [[package]]
 name = "synopsys-usb-otg"
-version = "0.2.3"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "461676dcf123675b3d3b02e2390e6a690cd186aacf2f439af7673c79e2561d53"
+checksum = "25c7f146100fd844a8bbd4ecf9e825f40e5ddfbf5a6c8af9e15e8623a72c6255"
 dependencies = [
  "cortex-m",
  "usb-device",
@@ -680,15 +680,15 @@ checksum = "f7fe0bb3479651439c9112f72b6c505038574c9fbb575ed1bf3b797fa39dd564"
 
 [[package]]
 name = "usb-device"
-version = "0.2.7"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "849eed9b4dc61a1f17ba1d7a5078ceb095b9410caa38a506eb281ed5eff12fbd"
+checksum = "ca58f6d4fed910f27e7150180ea5dc491ae049a347e627e61b61058961e633eb"
 
 [[package]]
 name = "usbd-serial"
-version = "0.1.1"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db75519b86287f12dcf0d171c7cf4ecc839149fe9f3b720ac4cfce52959e1dfe"
+checksum = "b45051be4bc25e6f85caacb1d3f45ace644fcc6e662b3d976330912542b7f69e"
 dependencies = [
  "embedded-hal",
  "nb 0.1.3",

@@ -29,6 +29,7 @@ class Action(enum.Enum):
     Enable = 'Enable'
     Disable = 'Disable'
     Powerup = 'Powerup'
+    Save = 'Save'
 
 
 def generate_request(**kwargs):
@@ -122,6 +123,15 @@ class BoosterApi:
         await self._update_channel_state(channel, Action.Disable)
 
 
+    async def save_channel(self, channel):
+        """ Save a booster channel state.
+
+        Args:
+            channel: The channel index to save.
+        """
+        await self._update_channel_state(channel, Action.Save)
+
+
     async def _update_channel_state(self, channel, action):
         """ Update the state of a booster RF channel.
 
@@ -193,6 +203,10 @@ async def channel_configuration(args):
         await interface.disable_channel(args.channel)
         print(f'Channel {args.channel} disabled')
 
+    if args.save:
+        await interface.save_channel(args.channel)
+        print(f'Channel {args.channel} configuration saved')
+
     await interface.client.disconnect()
 
 
@@ -210,6 +224,7 @@ def main():
     parser.add_argument('--thresholds', type=float, nargs=2,
                         help='The interlock thresholds in the following order: '
                              '<output> <reflected>')
+    parser.add_argument('--save', action='store_true', help='Save the RF channel configuration')
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(channel_configuration(parser.parse_args()))

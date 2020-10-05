@@ -15,6 +15,7 @@ enum ChannelAction {
     Enable,
     Disable,
     Powerup,
+    Save,
 }
 
 /// Specifies a generic request for a specific channel.
@@ -132,7 +133,7 @@ impl ControlState {
         // Subscribe to any control topics necessary.
         if !self.subscribed {
             resources.mqtt_client.lock(|client| {
-                if client.is_connected() {
+                if client.is_connected().unwrap() {
                     client.subscribe("booster/channel/state", &[]).unwrap();
                     client.subscribe("booster/channel/tune", &[]).unwrap();
                     client.subscribe("booster/channel/thresholds", &[]).unwrap();
@@ -215,6 +216,10 @@ fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> Stri
         ChannelAction::Powerup => channels.power_channel(request.channel).map_or_else(
             |e| Response::error(e),
             |_| Response::okay("Channel powered"),
+        ),
+        ChannelAction::Save => channels.save_configuration(request.channel).map_or_else(
+            |e| Response::error(e),
+            |_| Response::okay("Configuration saved"),
         ),
     }
 }

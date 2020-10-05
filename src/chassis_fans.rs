@@ -139,18 +139,17 @@ impl ChassisFans {
         &mut self,
         delay: &mut impl embedded_hal::blocking::delay::DelayMs<u16>,
     ) -> bool {
-        delay.delay_ms(7000);
-        let dead_rpms = self.read_rpms();
+        self.set_duty_cycles(1.0);
+        delay.delay_ms(5000);
+        let high_rpms = self.read_rpms();
 
         self.set_duty_cycles(0.1);
         delay.delay_ms(7000);
         let low_rpms = self.read_rpms();
 
-        self.set_duty_cycles(1.0);
-        delay.delay_ms(2000);
-        let high_rpms = self.read_rpms();
-
         self.set_duty_cycles(0.0);
+        delay.delay_ms(7000);
+        let dead_rpms = self.read_rpms();
 
         // Check that all dead RPMS are zero.
         let fans_powered_down = dead_rpms.iter().filter(|&rpms| *rpms == 0).count();
