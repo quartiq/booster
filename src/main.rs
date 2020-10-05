@@ -153,6 +153,7 @@ const APP: () = {
         usb_terminal: SerialTerminal,
         mqtt_client: MqttClient,
         watchdog: WatchdogManager,
+        identifier: String<heapless::consts::U32>,
         delay: AsmDelay,
     }
 
@@ -343,6 +344,8 @@ const APP: () = {
             BoosterSettings::new(eui)
         };
 
+        let identifier: String<heapless::consts::U32> = String::from(settings.id());
+
         let mqtt_client = {
             let interface = {
                 let spi = {
@@ -478,6 +481,7 @@ const APP: () = {
             mqtt_client,
             usb_terminal,
             watchdog: watchdog_manager,
+            identifier,
             delay: delay,
         }
     }
@@ -578,8 +582,10 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, mqtt_client, watchdog])]
+    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, mqtt_client, watchdog, identifier])]
     fn telemetry(mut c: telemetry::Context) {
+        let id = &c.resources.identifier;
+
         // Check in with the watchdog.
         c.resources
             .watchdog
@@ -595,7 +601,7 @@ const APP: () = {
             if let Ok(measurements) = measurements {
                 // Broadcast the measured data over the telemetry interface.
                 let mut topic: String<heapless::consts::U32> = String::new();
-                write!(&mut topic, "booster/ch{}", channel as u8).unwrap();
+                write!(&mut topic, "{}/ch{}", id, channel as u8).unwrap();
 
                 let message: String<heapless::consts::U1024> =
                     serde_json_core::to_string(&measurements).unwrap();
@@ -681,9 +687,12 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[main_bus, mqtt_client, watchdog, delay])]
+    #[idle(resources=[main_bus, mqtt_client, watchdog, identifier, delay])]
     fn idle(mut c: idle::Context) -> ! {
-        let mut manager = mqtt_control::ControlState::new();
+        let mut manager = c
+            .resources
+            .identifier
+            .lock(|id| mqtt_control::ControlState::new(&id));
 
         loop {
             // Check in with the watchdog.

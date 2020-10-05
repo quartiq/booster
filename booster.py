@@ -45,21 +45,23 @@ class BoosterApi:
     """ An asynchronous API for controlling booster using the MQTT control interface. """
 
     @classmethod
-    async def create(cls):
+    async def create(cls, booster_id, broker):
         """ Create a connection to MQTT for communication with booster. """
         client = MqttClient(client_id='')
-        await client.connect("10.0.0.2")
-        client.subscribe("booster/control")
-        return cls(client)
+        await client.connect(broker)
+        client.subscribe(f"{booster_id}/control")
+        return cls(client, booster_id)
 
 
-    def __init__(self, client):
+    def __init__(self, client, booster_id):
         """ Consructor.
 
         Args:
             client: A connected MQTT5 client.
+            booster_id: The ID of the booster to control.
         """
         self.client = client
+        self.booster_id = booster_id
         self.command_complete = asyncio.Event()
         self.client.on_message = self._handle_response
         self.response = None
@@ -75,7 +77,7 @@ class BoosterApi:
             qos: The quality-of-service of the message.
             properties: Any properties associated with the message.
         """
-        if topic != 'booster/control':
+        if topic != f'{self.booster_id}/control':
             raise Exception(f'Unknown topic: {topic}')
 
         # Indicate a response was received.
@@ -95,7 +97,8 @@ class BoosterApi:
         """
         self.command_complete.clear()
         self.client.publish(
-            topic, payload=message, qos=0, retain=False, response_topic='booster/control')
+            f'{self.booster_id}/{topic}', payload=message, qos=0, retain=False,
+            response_topic=f'{self.booster_id}/control')
         await self.command_complete.wait()
 
         # Check the response code.
@@ -140,7 +143,7 @@ class BoosterApi:
             action: The action to take on the channel.
         """
         request = generate_request(channel=CHANNEL[channel], action=action.value)
-        await self.command('booster/channel/state', request)
+        await self.command('channel/state', request)
 
 
     async def set_channel_thresholds(self, channel, output_power, reflected_power):
@@ -154,7 +157,7 @@ class BoosterApi:
         request = generate_request(channel=CHANNEL[channel],
                                    output_power=float(output_power),
                                    reflected_power=float(reflected_power))
-        await self.command("booster/channel/thresholds", request)
+        await self.command("channel/thresholds", request)
 
 
     async def tune_bias(self, channel, desired_current):
@@ -175,7 +178,7 @@ class BoosterApi:
 
         request = generate_request(channel=CHANNEL[channel],
                                    current=float(desired_current))
-        response = await self.command("booster/channel/tune", request)
+        response = await self.command("channel/tune", request)
 
         return (response['vgs'], response['ids'])
 
@@ -184,7 +187,7 @@ async def channel_configuration(args):
     """ Configure an RF channel. """
 
     # Establish a communication interface with Booster.
-    interface = await BoosterApi.create()
+    interface = await BoosterApi.create(args.booster_id, args.broker)
 
     if args.enable:
         await interface.enable_channel(args.channel)
@@ -216,7 +219,10 @@ def main():
         description='Modify booster RF channel configuration',
         epilog='*Note*: The positional argument should be the channel index. For example, to '
                'enable channel 0, the call would appear as `python booster.py 0 --enable`')
+    parser.add_argument('--booster-id', required=True, type=str,
+                        help='The identifier of the booster to configure')
     parser.add_argument('channel', type=int, choices=list(range(8)))
+    parser.add_argument('--broker', default='10.0.0.2', type=str, help='The MQTT broker address')
     parser.add_argument('--bias', type=float,
                         help='Tune the RF channel bias current to the provided value')
     parser.add_argument('--enable', action='store_true', help='Enable the RF channel')
