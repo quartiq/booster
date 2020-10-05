@@ -225,6 +225,7 @@ impl BoosterChannels {
     /// # Args
     /// * `channel` - The channel to set the bias voltage of.
     /// * `desired_current` - The desired RF amplifier drain current.
+    /// * `delay` - A means of delaying during tuning.
     pub fn tune_channel(
         &mut self,
         channel: Channel,

@@ -258,6 +258,7 @@ fn handle_channel_thresholds(
 /// # Args
 /// * `message` - The serialized message request.
 /// * `channels` - The booster RF channels to configure.
+/// * `delay` - A means of delaying during tuning.
 ///
 /// # Returns
 /// A String response indicating the result of the request.

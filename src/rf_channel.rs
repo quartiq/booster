@@ -953,6 +953,7 @@ impl RfChannel {
     ///
     /// # Args
     /// * `desired_current` - The desired RF amplifier drain current.
+    /// * `delay` - A means of delaying during tuning.
     ///
     /// # Returns
     /// A tuple of (Vgs, Ids) where Vgs is the bias voltage on the amplifier gate. Ids is the actual
