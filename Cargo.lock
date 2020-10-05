@@ -90,6 +90,7 @@ dependencies = [
  "cortex-m-log",
  "cortex-m-rt",
  "cortex-m-rtic",
+ "crc-any",
  "dac7571",
  "debounced-pin",
  "embedded-hal",
@@ -202,6 +203,12 @@ dependencies = [
  "rtic-syntax",
  "syn",
 ]
+
+[[package]]
+name = "crc-any"
+version = "2.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3784befdf9469f4d51c69ef0b774f6a99de6bcc655285f746f16e0dd63d9007"
 
 [[package]]
 name = "dac7571"

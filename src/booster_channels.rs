@@ -225,15 +225,17 @@ impl BoosterChannels {
     /// # Args
     /// * `channel` - The channel to set the bias voltage of.
     /// * `desired_current` - The desired RF amplifier drain current.
+    /// * `delay` - A means of delaying during tuning.
     pub fn tune_channel(
         &mut self,
         channel: Channel,
         desired_current: f32,
+        delay: &mut impl DelayUs<u16>,
     ) -> Result<(f32, f32), Error> {
         self.mux.select_bus(Some(channel.into())).unwrap();
 
         match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.tune_bias(desired_current),
+            Some(rf_channel) => rf_channel.tune_bias(desired_current, delay),
             None => Err(Error::NotPresent),
         }
     }

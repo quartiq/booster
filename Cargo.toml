@@ -24,6 +24,7 @@ usbd-serial = "0.1.0"
 shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
 usb-device = "0.2.6"
 postcard = "0.5.1"
+crc-any = { version = "2.3.5", default-features = false }
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq"

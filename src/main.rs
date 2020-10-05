@@ -154,6 +154,7 @@ const APP: () = {
         mqtt_client: MqttClient,
         watchdog: WatchdogManager,
         identifier: String<heapless::consts::U32>,
+        delay: AsmDelay,
     }
 
     #[init(schedule = [telemetry, channel_monitor, button, usb, fans])]
@@ -481,6 +482,7 @@ const APP: () = {
             usb_terminal,
             watchdog: watchdog_manager,
             identifier,
+            delay: delay,
         }
     }
 
@@ -685,7 +687,7 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[main_bus, mqtt_client, watchdog, identifier])]
+    #[idle(resources=[main_bus, mqtt_client, watchdog, identifier, delay])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = c
             .resources
