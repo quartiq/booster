@@ -163,11 +163,6 @@ const APP: () = {
         static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None;
         static mut USB_SERIAL: Option<String<heapless::consts::U64>> = None;
 
-        if platform::reset_to_dfu_bootloader_is_requested(&c.device) {
-            #[cfg(feature = "unstable")]
-            platform::reset_to_dfu_bootloader(&c.device);
-        }
-
         c.core.DWT.enable_cycle_counter();
         c.core.DCB.enable_trace();
 

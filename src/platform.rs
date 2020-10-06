@@ -98,79 +98,32 @@ pub fn clear_reset_flags() {
     rcc.csr.modify(|_, w| w.rmvf().set_bit());
 }
 
-/// Check if the device should reset to the DFU bootloader.
-///
-/// # Notes
-/// This function checks to see if the backup SRAM is enabled. This is used a sa flag by the
-/// application to indicate that the device should reset to the DFU bootloader.
-///
-/// # Args
-/// * `device` - The device peripherals.
-///
-/// # Returns
-/// True if a reset to DFU has been requested.
-pub fn reset_to_dfu_bootloader_is_requested(device: &hal::stm32::Peripherals) -> bool {
-    // Enable the PWR peripheral.
-    let pwr_was_enabled = device.RCC.apb1enr.read().pwren().bit_is_set();
-    if pwr_was_enabled == false {
-        device.RCC.apb1enr.modify(|_, w| w.pwren().set_bit());
-    }
-
-    // Check if the backup ram is enabled. If it is, this indicates we need to jump to the
-    // bootloader.
-    let is_requested = if device.PWR.csr.read().bre().bit_is_set() {
-        // Disable the backup regulator.
-        device.PWR.cr.modify(|_, w| w.dbp().set_bit());
-        device.PWR.csr.modify(|_, w| w.bre().clear_bit());
-        true
-    } else {
-        false
-    };
-
-    // Power down the PWR peripheral if it wasn't being used.
-    if pwr_was_enabled == false {
-        device.RCC.apb1enr.modify(|_, w| w.pwren().clear_bit());
-    }
-
-    is_requested
-}
-
-/// Initiate a reset to DFU bootloader mode.
-///
-/// # Notes
-/// This enables the backup SRAM as a means of flagging that the device should reboot to DFU mode on
-/// the next reboot cycle. A reboot is used to ensure the device is in a default state before
-/// executing the DFU bootloader.
-///
-/// This function resets the device.
-pub fn initiate_reset_to_dfu_bootloader() -> ! {
-    // Enable control of the PWR peripheral.
-    let rcc = unsafe { &*hal::stm32::RCC::ptr() };
-    rcc.apb1enr.modify(|_, w| w.pwren().set_bit());
-
-    // Enable the backup SRAM
-    let pwr = unsafe { &*hal::stm32::PWR::ptr() };
-    pwr.cr.modify(|_, w| w.dbp().set_bit());
-    pwr.csr.modify(|_, w| w.bre().set_bit());
-
-    // Wait for BRR to be set.
-    while pwr.csr.read().brr().bit_is_clear() {}
-
-    cortex_m::peripheral::SCB::sys_reset();
-}
-
 #[cfg(feature = "unstable")]
 /// Reset the device to the internal DFU bootloader.
-///
-/// # Args
-/// * `device` - The device peripherals.
-pub fn reset_to_dfu_bootloader(device: &hal::stm32::Peripherals) {
+pub fn reset_to_dfu_bootloader() {
+    // Disable the SysTick peripheral.
+    let systick = unsafe { &*cortex_m::peripheral::SYST::ptr() };
+    unsafe {
+        systick.csr.write(0);
+        systick.rvr.write(0);
+        systick.cvr.write(0);
+    }
+
+    // Disable the USB peripheral.
+    let usb_otg = unsafe { &*hal::stm32::OTG_FS_GLOBAL::ptr() };
+    usb_otg.gccfg.write(|w| unsafe { w.bits(0) });
+
+    // Reset the RCC configuration.
+    let rcc = unsafe { &*hal::stm32::RCC::ptr() };
+    rcc.cr.reset();
+    rcc.pllcfgr.reset();
+    rcc.cfgr.reset();
+
     // Remap to system memory.
-    device.RCC.apb2enr.modify(|_, w| w.syscfgen().set_bit());
-    device
-        .SYSCFG
-        .memrm
-        .write(|w| unsafe { w.mem_mode().bits(0b01) });
+    rcc.apb2enr.modify(|_, w| w.syscfgen().set_bit());
+
+    let syscfg = unsafe { &*hal::stm32::SYSCFG::ptr() };
+    syscfg.memrm.write(|w| unsafe { w.mem_mode().bits(0b01) });
 
     // Now that the remap is complete, impose instruction and memory barriers on the
     // CPU.

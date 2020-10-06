@@ -142,7 +142,7 @@ impl SerialTerminal {
                     // Power off all output channels and reset the MCU.
                     platform::shutdown_channels();
 
-                    platform::initiate_reset_to_dfu_bootloader();
+                    platform::reset_to_dfu_bootloader();
                 }
 
                 #[cfg(not(feature = "unstable"))]
