@@ -260,8 +260,14 @@ impl SinaraConfiguration {
     }
 
     fn calculate_crc32(&self) -> u32 {
-        // TODO: Calculate using the zlib.crc32 algorithm at
-        // https://github.com/madler/zlib/blob/master/crc32.c#L202-L234
-        0xAAAA_BBBB
+        let mut data = [0u8; 128];
+        self.serialize_into(&mut data);
+
+        // The first 4 bytes of the serialized structure are the CRC itself, so do not include them
+        // in the calculation.
+        let mut crc32 = crc_any::CRC::crc32();
+        crc32.digest(&data[4..]);
+
+        crc32.get_crc() as u32
     }
 }

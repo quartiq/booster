@@ -6,6 +6,7 @@
 //! Proprietary and confidential.
 use super::{idle::Resources, BoosterChannels, Channel, Error};
 use core::fmt::Write;
+use embedded_hal::blocking::delay::DelayUs;
 use heapless::{consts, String};
 use minimq::{Property, QoS};
 
@@ -116,12 +117,22 @@ impl Response {
 /// Represents a means of handling MQTT-based control interface.
 pub struct ControlState {
     subscribed: bool,
+    id: String<heapless::consts::U32>,
 }
 
 impl ControlState {
     /// Construct the MQTT control state manager.
-    pub fn new() -> Self {
-        Self { subscribed: false }
+    pub fn new<'a>(id: &'a str) -> Self {
+        Self {
+            subscribed: false,
+            id: String::from(id),
+        }
+    }
+
+    fn generate_topic_string<'a>(&self, topic_postfix: &'a str) -> String<heapless::consts::U64> {
+        let mut topic_string: String<heapless::consts::U64> = String::new();
+        write!(&mut topic_string, "{}/{}", self.id, topic_postfix).unwrap();
+        topic_string
     }
 
     /// Handle the MQTT-based control interface.
@@ -134,27 +145,40 @@ impl ControlState {
         if !self.subscribed {
             resources.mqtt_client.lock(|client| {
                 if client.is_connected().unwrap() {
-                    client.subscribe("booster/channel/state", &[]).unwrap();
-                    client.subscribe("booster/channel/tune", &[]).unwrap();
-                    client.subscribe("booster/channel/thresholds", &[]).unwrap();
+                    client
+                        .subscribe(&self.generate_topic_string("channel/state"), &[])
+                        .unwrap();
+                    client
+                        .subscribe(&self.generate_topic_string("channel/tune"), &[])
+                        .unwrap();
+                    client
+                        .subscribe(&self.generate_topic_string("channel/thresholds"), &[])
+                        .unwrap();
                     self.subscribed = true;
                 }
             });
         }
 
         let main_bus = &mut resources.main_bus;
+        let delay = &mut resources.delay;
 
         resources.mqtt_client.lock(|client| {
             match client.poll(|client, topic, message, properties| {
                 main_bus.lock(|main_bus| {
-                    let response = match topic {
-                        "booster/channel/state" => {
-                            handle_channel_update(message, &mut main_bus.channels)
+                    let (id, route) = topic.split_at(topic.find('/').unwrap());
+                    let route = &route[1..];
+
+                    if id != self.id {
+                        warn!("Ignoring topic for identifier: {}", id);
+                        return;
+                    }
+
+                    let response = match route {
+                        "channel/state" => handle_channel_update(message, &mut main_bus.channels),
+                        "channel/tune" => {
+                            handle_channel_tune(message, &mut main_bus.channels, *delay)
                         }
-                        "booster/channel/tune" => {
-                            handle_channel_tune(message, &mut main_bus.channels)
-                        }
-                        "booster/channel/thresholds" => {
+                        "channel/thresholds" => {
                             handle_channel_thresholds(message, &mut main_bus.channels)
                         }
                         _ => Response::error_msg("Unexpected topic"),
@@ -169,7 +193,9 @@ impl ControlState {
                                 false
                             }
                         })
-                        .or(Some(&Property::ResponseTopic("booster/log")))
+                        .or(Some(&Property::ResponseTopic(
+                            &self.generate_topic_string("log"),
+                        )))
                         .unwrap()
                     {
                         client
@@ -256,16 +282,21 @@ fn handle_channel_thresholds(
 /// # Args
 /// * `message` - The serialized message request.
 /// * `channels` - The booster RF channels to configure.
+/// * `delay` - A means of delaying during tuning.
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_tune(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
+fn handle_channel_tune(
+    message: &[u8],
+    channels: &mut BoosterChannels,
+    delay: &mut impl DelayUs<u16>,
+) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelTuneRequest>(message) {
         Ok(data) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
 
-    match channels.tune_channel(request.channel, request.current) {
+    match channels.tune_channel(request.channel, request.current, delay) {
         Ok((vgs, ids)) => ChannelTuneResponse::okay(vgs, ids),
         Err(error) => Response::error(error),
     }
