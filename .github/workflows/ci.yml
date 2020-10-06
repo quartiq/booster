@@ -75,7 +75,7 @@ jobs:
 
   compile-unstable:
     runs-on: ubuntu-latest
-    seps:
+    steps:
       - uses: actions/checkout@v2
       - name: Install Rust Nightly
         uses: actions-rs/toolchain@v1
