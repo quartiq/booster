@@ -109,7 +109,7 @@ pub fn clear_reset_flags() {
 ///
 /// # Returns
 /// True if a reset to DFU has been requested.
-pub fn is_reset_to_dfu_bootloader_requested(device: &hal::stm32::Peripherals) -> bool {
+pub fn reset_to_dfu_bootloader_is_requested(device: &hal::stm32::Peripherals) -> bool {
     // Enable the PWR peripheral.
     let pwr_was_enabled = device.RCC.apb1enr.read().pwren().bit_is_set();
     if pwr_was_enabled == false {
