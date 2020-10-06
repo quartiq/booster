@@ -22,6 +22,9 @@ enum Token {
     #[token("reset")]
     Reset,
 
+    #[token("dfu")]
+    Dfu,
+
     #[token("help")]
     Help,
 
@@ -68,6 +71,7 @@ pub enum Property {
 
 pub enum Request {
     Reset,
+    ResetBootloader,
     Help,
     Read(Property),
     WriteIpAddress(Property, Ipv4Addr),
@@ -126,8 +130,26 @@ impl SerialTerminal {
 
                 Request::Reset => {
                     // Power off all output channels and reset the MCU.
+                    cortex_m::interrupt::disable();
                     platform::shutdown_channels();
                     cortex_m::peripheral::SCB::sys_reset();
+                }
+
+                #[cfg(feature = "unstable")]
+                Request::ResetBootloader => {
+                    cortex_m::interrupt::disable();
+
+                    // Power off all output channels and reset the MCU.
+                    platform::shutdown_channels();
+
+                    platform::initiate_reset_to_dfu_bootloader();
+                }
+
+                #[cfg(not(feature = "unstable"))]
+                Request::ResetBootloader => {
+                    self.write(
+                        "Reset to DFU bootloader not supported with stable toolchain".as_bytes(),
+                    );
                 }
 
                 Request::WriteIpAddress(prop, addr) => match prop {
@@ -283,6 +305,7 @@ impl SerialTerminal {
 | Booster Command Help :
 +----------------------+
 * `reset` - Resets the device
+* `dfu` - Resets the device to DFU mode
 * `read <PROP>` - Reads the value of PROP. PROP may be [ip-address, broker-address, mac, id, \
 gateway, netmask]
 * `write <PROP> <IP>` - Writes the value of <IP> to <PROP>. <PROP> may be [ip-address, broker-address, \
@@ -310,6 +333,7 @@ characters.
         let command = lex.next().ok_or("Invalid command")?;
         let request = match command {
             Token::Reset => Request::Reset,
+            Token::Dfu => Request::ResetBootloader,
             Token::Help => Request::Help,
             Token::Read => {
                 // Validate that there is one valid token following.

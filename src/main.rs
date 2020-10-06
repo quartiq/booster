@@ -6,6 +6,7 @@
 //! Proprietary and confidential.
 #![no_std]
 #![no_main]
+#![cfg_attr(feature = "unstable", feature(llvm_asm))]
 
 #[macro_use]
 extern crate log;
@@ -161,6 +162,11 @@ const APP: () = {
     fn init(mut c: init::Context) -> init::LateResources {
         static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None;
         static mut USB_SERIAL: Option<String<heapless::consts::U64>> = None;
+
+        if platform::is_reset_to_dfu_bootloader_requested(&c.device) {
+            #[cfg(feature = "unstable")]
+            platform::reset_to_dfu_bootloader(&c.device);
+        }
 
         c.core.DWT.enable_cycle_counter();
         c.core.DCB.enable_trace();
