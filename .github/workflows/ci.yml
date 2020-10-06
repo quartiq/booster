@@ -74,7 +74,7 @@ jobs:
           args: --release
 
   compile-unstable:
-    runs-on: ubuntu-latest:
+    runs-on: ubuntu-latest
     seps:
       - uses: actions/checkout@v2
       - name: Install Rust Nightly
