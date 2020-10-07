@@ -688,7 +688,7 @@ const APP: () = {
             .lock(|watchdog| watchdog.check_in(WatchdogClient::UsbTask));
 
         // Process any log output.
-        LOGGER.consume(&mut c.resources.usb_terminal);
+        LOGGER.process(&mut c.resources.usb_terminal);
 
         // Handle the USB serial terminal.
         c.resources.usb_terminal.process();
