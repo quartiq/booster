@@ -115,9 +115,18 @@ pub fn reset_to_dfu_bootloader() {
 
     // Reset the RCC configuration.
     let rcc = unsafe { &*hal::stm32::RCC::ptr() };
-    rcc.cr.reset();
-    rcc.pllcfgr.reset();
+
+    // Enable the HSI - we will be switching back to it shortly for the DFU bootloader.
+    rcc.cr.modify(|_, w| w.hsion().set_bit());
+
+    // Reset the CFGR and begin using the HSI for the system bus.
     rcc.cfgr.reset();
+
+    // Reset the configuration register.
+    rcc.cr.reset();
+
+    // Reset the PLL configuration now that PLLs are unused.
+    rcc.pllcfgr.reset();
 
     // Remap to system memory.
     rcc.apb2enr.modify(|_, w| w.syscfgen().set_bit());
@@ -142,10 +151,9 @@ pub fn reset_to_dfu_bootloader() {
     unsafe {
         llvm_asm!(
             "MOV r3, $0\n
-             MSR msp, r4\n
              LDR sp, [r3, #0]\n
              LDR r3, [r3, #4]\n
-             MOV pc, r3\n"
+             BX r3\n"
              :
              : "r"(system_memory_address)
              : "r3","r4"
