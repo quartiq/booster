@@ -10,6 +10,8 @@ use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    cortex_m::interrupt::disable();
+
     // Shutdown all of the RF channels.
     shutdown_channels();
 
@@ -94,4 +96,68 @@ pub fn clear_reset_flags() {
     let rcc = unsafe { &*hal::stm32::RCC::ptr() };
 
     rcc.csr.modify(|_, w| w.rmvf().set_bit());
+}
+
+#[cfg(feature = "unstable")]
+/// Reset the device to the internal DFU bootloader.
+pub fn reset_to_dfu_bootloader() {
+    // Disable the SysTick peripheral.
+    let systick = unsafe { &*cortex_m::peripheral::SYST::ptr() };
+    unsafe {
+        systick.csr.write(0);
+        systick.rvr.write(0);
+        systick.cvr.write(0);
+    }
+
+    // Disable the USB peripheral.
+    let usb_otg = unsafe { &*hal::stm32::OTG_FS_GLOBAL::ptr() };
+    usb_otg.gccfg.write(|w| unsafe { w.bits(0) });
+
+    // Reset the RCC configuration.
+    let rcc = unsafe { &*hal::stm32::RCC::ptr() };
+
+    // Enable the HSI - we will be switching back to it shortly for the DFU bootloader.
+    rcc.cr.modify(|_, w| w.hsion().set_bit());
+
+    // Reset the CFGR and begin using the HSI for the system bus.
+    rcc.cfgr.reset();
+
+    // Reset the configuration register.
+    rcc.cr.reset();
+
+    // Reset the PLL configuration now that PLLs are unused.
+    rcc.pllcfgr.reset();
+
+    // Remap to system memory.
+    rcc.apb2enr.modify(|_, w| w.syscfgen().set_bit());
+
+    let syscfg = unsafe { &*hal::stm32::SYSCFG::ptr() };
+    syscfg.memrm.write(|w| unsafe { w.mem_mode().bits(0b01) });
+
+    // Now that the remap is complete, impose instruction and memory barriers on the
+    // CPU.
+    cortex_m::asm::isb();
+    cortex_m::asm::dsb();
+
+    // It appears that they must be enabled for the USB-based DFU bootloader to operate.
+    unsafe { cortex_m::interrupt::enable() };
+
+    // The STM32F4xx does not provide a means to modify the BOOT pins during
+    // run-time. Instead, we manually load the bootloader stack pointer and start
+    // address from system memory and begin execution. The datasheet indices that
+    // the initial stack pointer is stored at an offset of 0x0000 and the first
+    // instruction begins at an offset of 0x0004.
+    let system_memory_address: u32 = 0x1FFF_0000;
+    unsafe {
+        llvm_asm!(
+            "MOV r3, $0\n
+             LDR sp, [r3, #0]\n
+             LDR r3, [r3, #4]\n
+             BX r3\n"
+             :
+             : "r"(system_memory_address)
+             : "r3","r4"
+             :
+        );
+    }
 }

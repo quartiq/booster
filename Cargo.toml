@@ -61,6 +61,9 @@ path = "microchip-24aa02e48"
 [dependencies.tca9548]
 path = "tca9548"
 
+[features]
+unstable = []
+
 [profile.release]
 codegen-units = 1 # better optimizations
 debug = true # symbols are nice and they don't increase the size on Flash

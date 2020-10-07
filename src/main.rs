@@ -6,6 +6,7 @@
 //! Proprietary and confidential.
 #![no_std]
 #![no_main]
+#![cfg_attr(feature = "unstable", feature(llvm_asm))]
 
 #[macro_use]
 extern crate log;
