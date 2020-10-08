@@ -78,6 +78,10 @@ struct PropertyWriteRequest {
 }
 
 impl PropertyWriteRequest {
+    /// Get the property from the serialized field.
+    ///
+    /// # Returns
+    /// The property if it could be deserialized. Otherwise, an error is returned.
     pub fn property(&self) -> Result<ChannelProperty, Error> {
         // Convert single quotes to double in the property data.
         let mut data: String<consts::U64> = String::new();

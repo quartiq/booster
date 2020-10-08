@@ -213,8 +213,6 @@ async def channel_configuration(args):
     # Establish a communication interface with Booster.
     interface = await BoosterApi.create(args.booster_id, args.broker)
 
-    print(await interface.read_property(args.channel, PropertyId.InterlockThresholds))
-
     if args.enable:
         await interface.enable_channel(args.channel)
         print(f'Channel {args.channel} enabled')
