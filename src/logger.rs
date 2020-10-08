@@ -57,7 +57,12 @@ impl log::Log for BufferedLog {
             source_line,
             record.args()
         ) {
-            Err(_) => warn!("Log buffer overflow"),
+            // If we cannot encode the log entry, note this in the output log to indicate the log
+            // was dropped.
+            Err(_) => {
+                error!("Log entry overflow");
+                return;
+            },
             _ => {}
         };
 
