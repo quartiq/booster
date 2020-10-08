@@ -24,6 +24,14 @@ CHANNEL = [
     "Seven",
 ]
 
+class PropertyId(enum.Enum):
+    """ Represents a property ID for Booster RF channels. """
+    InterlockThresholds = 'InterlockThresholds'
+    OutputPowerTransform = 'OutputPowerTransform'
+    InputPowerTransform = 'InputPowerTransform'
+    ReflectedPowerTransform = 'ReflectedPowerTransform'
+
+
 class Action(enum.Enum):
     """ Represents an action that can be taken on channel state. """
     Enable = 'Enable'
@@ -38,7 +46,7 @@ def generate_request(**kwargs):
     Args:
         kwargs: A list of keyword-value argument pairs to construct the message from.
     """
-    return str(kwargs).replace("'", '"')
+    return json.dumps(kwargs)
 
 
 class BoosterApi:
@@ -67,7 +75,7 @@ class BoosterApi:
         self.response = None
 
 
-    def _handle_response(self, client, topic, payload, qos, properties):
+    def _handle_response(self, client, topic, payload, *_args, **_kwargs):
         """ Callback function for when messages are received over MQTT.
 
         Args:
@@ -146,18 +154,34 @@ class BoosterApi:
         await self.command('channel/state', request)
 
 
-    async def set_channel_thresholds(self, channel, output_power, reflected_power):
-        """ Configure booster channel thresholds.
+    async def read_property(self, channel, prop):
+        """ Read a property from the provided channel.
 
         Args:
-            channel: The channel index to configure.
-            output_power: The desired output power interlock threshold in dBm.
-            reflected_power: The desired reflected power interlock threshold in dBm.
+            channel: The channel to write a property on.
+            prop_id: The ID of the property to read.
+
+        Returns:
+            A dict representing the read property.
         """
-        request = generate_request(channel=CHANNEL[channel],
-                                   output_power=float(output_power),
-                                   reflected_power=float(reflected_power))
-        await self.command("channel/thresholds", request)
+        request = generate_request(prop=prop.value, channel=CHANNEL[channel])
+
+        response = await self.command("channel/read", request)
+        return json.loads(response['data'].replace("'", '"'))
+
+
+    async def write_property(self, channel, prop_id, value):
+        """ Write a property on the provided channel.
+
+        Args:
+            channel: The channel to write a property on.
+            prop_id: The ID of the property to write.
+            value: The value to write to the property.
+        """
+        request = generate_request(prop=prop_id.value, channel=CHANNEL[channel],
+                                   data=json.dumps(value).replace('"', "'"))
+
+        await self.command("channel/write", request)
 
 
     async def tune_bias(self, channel, desired_current):
@@ -189,12 +213,18 @@ async def channel_configuration(args):
     # Establish a communication interface with Booster.
     interface = await BoosterApi.create(args.booster_id, args.broker)
 
+    print(await interface.read_property(args.channel, PropertyId.InterlockThresholds))
+
     if args.enable:
         await interface.enable_channel(args.channel)
         print(f'Channel {args.channel} enabled')
 
     if args.thresholds:
-        await interface.set_channel_thresholds(args.channel, args.thresholds[0], args.thresholds[1])
+        thresholds = {
+            'output': args.thresholds[0],
+            'reflected': args.thresholds[1],
+        }
+        await interface.write_property(args.channel, PropertyId.InterlockThresholds, thresholds)
         print(f'Channel {args.channel}: Output power threshold = {args.thresholds[0]} dBm, '
               f'Reflected power interlock threshold = {args.thresholds[1]} dBm')
 

@@ -11,7 +11,10 @@ use tca9548::{self, Tca9548};
 
 use super::{I2cBusManager, I2cProxy};
 use crate::error::Error;
-use crate::rf_channel::{ChannelPins as RfChannelPins, ChannelState, RfChannel};
+use crate::rf_channel::{
+    ChannelPins as RfChannelPins, ChannelState, Property as RfChannelProperty, PropertyId,
+    RfChannel,
+};
 use embedded_hal::blocking::delay::DelayUs;
 
 /// Contains channel status information in SI base units.
@@ -116,35 +119,6 @@ impl BoosterChannels {
             channels: rf_channels,
             mux: mux,
             adc: core::cell::RefCell::new(adc),
-        }
-    }
-
-    /// Set the interlock thresholds for the channel.
-    ///
-    /// # Args
-    /// * `channel` - The RF channel to set thresholds for.
-    /// * `forward_threshold` - The dBm interlock threshold for forward power.
-    /// * `reflected_threshold` - The dBm interlock threshold for reflected power.
-    pub fn set_interlock_thresholds(
-        &mut self,
-        channel: Channel,
-        forward_threshold: f32,
-        reflected_threshold: f32,
-    ) -> Result<(), Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => {
-                match rf_channel.set_interlock_thresholds(forward_threshold, reflected_threshold) {
-                    // Configuring a present channel should never have an interface failure
-                    // (although the requested value may be out of range).
-                    Err(Error::Interface) => {
-                        panic!("Failed to configure thresholds on CH{}", channel as usize);
-                    }
-                    x => x,
-                }
-            }
-            None => Err(Error::NotPresent),
         }
     }
 
@@ -316,6 +290,45 @@ impl BoosterChannels {
             if let Some(rf_channel) = &mut self.channels[channel as usize] {
                 rf_channel.update().unwrap();
             }
+        }
+    }
+
+    /// Read a property from an RF channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to read the property of.
+    /// * `property` - The identifier of the property to read.
+    ///
+    /// # Returns
+    /// The requested property of the desired channel.
+    pub fn read_property(
+        &mut self,
+        channel: Channel,
+        property: PropertyId,
+    ) -> Result<RfChannelProperty, Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => Ok(rf_channel.get_property(property)),
+            None => Err(Error::NotPresent),
+        }
+    }
+
+    /// Write a property into an RF channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to update the property of.
+    /// * `property` - The property to set.
+    pub fn write_property(
+        &mut self,
+        channel: Channel,
+        property: RfChannelProperty,
+    ) -> Result<(), Error> {
+        self.mux.select_bus(Some(channel.into())).unwrap();
+
+        match &mut self.channels[channel as usize] {
+            Some(rf_channel) => rf_channel.set_property(property),
+            None => Err(Error::NotPresent),
         }
     }
 }

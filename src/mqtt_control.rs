@@ -10,6 +10,109 @@ use embedded_hal::blocking::delay::DelayUs;
 use heapless::{consts, String};
 use minimq::{Property, QoS};
 
+use crate::rf_channel::{
+    InterlockThresholds, Property as ChannelProperty, PropertyId as ChannelPropertyId,
+};
+
+use crate::linear_transformation::LinearTransformation;
+
+#[derive(serde::Deserialize)]
+struct PropertyReadRequest {
+    pub channel: Channel,
+    pub prop: ChannelPropertyId,
+}
+
+#[derive(serde::Serialize)]
+struct PropertyReadResponse {
+    code: u32,
+    data: String<consts::U64>,
+}
+
+impl PropertyReadResponse {
+    /// Indicate that a property read response was successful.
+    ///
+    /// # Args
+    /// * `vgs` - The resulting gate voltage of the RF amplifier.
+    /// * `ids` - The resulting drain current of the RF amplifier.
+    pub fn okay(prop: ChannelProperty) -> String<consts::U256> {
+        // Serialize the property.
+        let data: String<consts::U64> = match prop {
+            ChannelProperty::InterlockThresholds(thresholds) => {
+                serde_json_core::to_string(&thresholds).unwrap()
+            }
+            ChannelProperty::InputPowerTransform(transform) => {
+                serde_json_core::to_string(&transform).unwrap()
+            }
+            ChannelProperty::OutputPowerTransform(transform) => {
+                serde_json_core::to_string(&transform).unwrap()
+            }
+            ChannelProperty::ReflectedPowerTransform(transform) => {
+                serde_json_core::to_string(&transform).unwrap()
+            }
+        };
+
+        let mut response = Self {
+            code: 200,
+            data: String::new(),
+        };
+
+        // Convert double quotes to single in the encoded property. This gets around string escape
+        // sequences.
+        for byte in data.as_str().chars() {
+            if byte == '"' {
+                response.data.push('\'').unwrap();
+            } else {
+                response.data.push(byte).unwrap();
+            }
+        }
+
+        serde_json_core::to_string(&response).unwrap()
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct PropertyWriteRequest {
+    pub channel: Channel,
+    prop: ChannelPropertyId,
+    data: String<consts::U64>,
+}
+
+impl PropertyWriteRequest {
+    pub fn property(&self) -> Result<ChannelProperty, Error> {
+        // Convert single quotes to double in the property data.
+        let mut data: String<consts::U64> = String::new();
+        for byte in self.data.as_str().chars() {
+            if byte == '\'' {
+                data.push('"').unwrap();
+            } else {
+                data.push(byte).unwrap();
+            }
+        }
+
+        // Convert the property
+        let prop = match self.prop {
+            ChannelPropertyId::InterlockThresholds => ChannelProperty::InterlockThresholds(
+                serde_json_core::from_str::<InterlockThresholds>(&data)
+                    .map_err(|_| Error::Invalid)?,
+            ),
+            ChannelPropertyId::OutputPowerTransform => ChannelProperty::OutputPowerTransform(
+                serde_json_core::from_str::<LinearTransformation>(&data)
+                    .map_err(|_| Error::Invalid)?,
+            ),
+            ChannelPropertyId::InputPowerTransform => ChannelProperty::InputPowerTransform(
+                serde_json_core::from_str::<LinearTransformation>(&data)
+                    .map_err(|_| Error::Invalid)?,
+            ),
+            ChannelPropertyId::ReflectedPowerTransform => ChannelProperty::ReflectedPowerTransform(
+                serde_json_core::from_str::<LinearTransformation>(&data)
+                    .map_err(|_| Error::Invalid)?,
+            ),
+        };
+
+        Ok(prop)
+    }
+}
+
 /// Specifies an action to take on a channel.
 #[derive(serde::Deserialize)]
 enum ChannelAction {
@@ -39,14 +142,6 @@ struct ChannelTuneResponse {
     code: u32,
     pub vgs: f32,
     pub ids: f32,
-}
-
-/// Specifies the desired interlock thresholds for a channel.
-#[derive(serde::Deserialize)]
-struct ChannelThresholds {
-    pub channel: Channel,
-    pub reflected_power: f32,
-    pub output_power: f32,
 }
 
 impl ChannelTuneResponse {
@@ -152,7 +247,10 @@ impl ControlState {
                         .subscribe(&self.generate_topic_string("channel/tune"), &[])
                         .unwrap();
                     client
-                        .subscribe(&self.generate_topic_string("channel/thresholds"), &[])
+                        .subscribe(&self.generate_topic_string("channel/read"), &[])
+                        .unwrap();
+                    client
+                        .subscribe(&self.generate_topic_string("channel/write"), &[])
                         .unwrap();
                     self.subscribed = true;
                 }
@@ -178,8 +276,11 @@ impl ControlState {
                         "channel/tune" => {
                             handle_channel_tune(message, &mut main_bus.channels, *delay)
                         }
-                        "channel/thresholds" => {
-                            handle_channel_thresholds(message, &mut main_bus.channels)
+                        "channel/read" => {
+                            handle_channel_property_read(message, &mut main_bus.channels)
+                        }
+                        "channel/write" => {
+                            handle_channel_property_write(message, &mut main_bus.channels)
                         }
                         _ => Response::error_msg("Unexpected topic"),
                     };
@@ -187,7 +288,7 @@ impl ControlState {
                     if let Property::ResponseTopic(topic) = properties
                         .iter()
                         .find(|&prop| {
-                            if let minimq::Property::ResponseTopic(_) = *prop {
+                            if let Property::ResponseTopic(_) = *prop {
                                 true
                             } else {
                                 false
@@ -210,7 +311,7 @@ impl ControlState {
                 // to re-establish them once we reconnect.
                 Err(minimq::Error::Disconnected) => self.subscribed = false,
 
-                Err(e) => panic!("Unexpected error: {:?}", e),
+                Err(e) => error!("Unexpected error: {:?}", e),
             }
         });
     }
@@ -250,29 +351,53 @@ fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> Stri
     }
 }
 
-/// Handle a request to configure interlock thresholds of a channel.
+/// Handle a request to read a property of an RF channel.
 ///
 /// # Args
 /// * `message` - The serialized message request.
-/// * `channels` - The booster RF channels to configure.
+/// * `channels` - The booster RF channels to read.
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_thresholds(
+fn handle_channel_property_read(
     message: &[u8],
     channels: &mut BoosterChannels,
 ) -> String<consts::U256> {
-    let request = match serde_json_core::from_slice::<ChannelThresholds>(message) {
+    let request = match serde_json_core::from_slice::<PropertyReadRequest>(message) {
         Ok(data) => data,
-        Err(_) => return Response::error_msg("Failed to decode data"),
+        Err(_) => return Response::error_msg("Failed to decode read request"),
     };
 
-    match channels.set_interlock_thresholds(
-        request.channel,
-        request.output_power,
-        request.reflected_power,
-    ) {
-        Ok(_) => Response::okay("Thresholds set"),
+    match channels.read_property(request.channel, request.prop) {
+        Ok(prop) => PropertyReadResponse::okay(prop),
+        Err(error) => Response::error(error),
+    }
+}
+
+/// Handle a request to write a property of an RF channel.
+///
+/// # Args
+/// * `message` - The serialized message request.
+/// * `channels` - The booster RF channels to write.
+///
+/// # Returns
+/// A String response indicating the result of the request.
+fn handle_channel_property_write(
+    message: &[u8],
+    channels: &mut BoosterChannels,
+) -> String<consts::U256> {
+    let request = match serde_json_core::from_slice::<PropertyWriteRequest>(message) {
+        Ok(data) => data,
+        Err(_) => return Response::error_msg("Failed to decode read request"),
+    };
+
+    let property = match request.property() {
+        Ok(property) => property,
+        Err(_) => return Response::error_msg("Failed to decode property"),
+    };
+
+    match channels.write_property(request.channel, property) {
+        Ok(_) => Response::okay("Property update successful"),
         Err(error) => Response::error(error),
     }
 }
