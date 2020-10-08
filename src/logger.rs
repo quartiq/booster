@@ -16,17 +16,14 @@ use core::fmt::Write;
 /// intended to be consumed asynchronously. In the case of booster, this log data is consumed in the
 /// USB task.
 pub struct BufferedLog {
-    buffer: core::cell::UnsafeCell<LogBuffer>,
+    logs: heapless::mpmc::Q16<heapless::String<consts::U128>>,
 }
-
-// Critical sections are used to manage the buffer access. This type is safe to share across contexts.
-unsafe impl Sync for BufferedLog {}
 
 impl BufferedLog {
     /// Construct a new buffered log object.
     pub const fn new() -> Self {
         Self {
-            buffer: core::cell::UnsafeCell::new(LogBuffer::new()),
+            logs: heapless::mpmc::Q16::new(),
         }
     }
 
@@ -35,11 +32,17 @@ impl BufferedLog {
     /// # Args
     /// * `terminal` - The serial terminal to write log data into.
     pub fn process(&self, terminal: &mut SerialTerminal) {
-        cortex_m::interrupt::free(|_cs| {
-            let buffer = unsafe { &mut *self.buffer.get() };
-            terminal.write(buffer.data());
-            buffer.clear();
-        });
+        let mut count = 0;
+        while let Some(log) = self.logs.dequeue() {
+            terminal.write(&log.as_bytes());
+            count += 1;
+        }
+
+        if count > 0 {
+            let mut string: String<consts::U32> = String::new();
+            write!(&mut string, "Wrote {} logs\n", count).ok();
+            terminal.write(&string.as_bytes());
+        }
     }
 }
 
@@ -66,54 +69,9 @@ impl log::Log for BufferedLog {
             _ => {}
         };
 
-        cortex_m::interrupt::free(|_cs| {
-            let buffer = unsafe { &mut *self.buffer.get() };
-            buffer.append(&string.into_bytes());
-        });
+        self.logs.enqueue(string).ok();
     }
 
     // The log is not capable of being flushed as it does not own the data consumer.
     fn flush(&self) {}
-}
-
-/// An internal buffer for storing serialized log data. This is essentially a vector of u8.
-struct LogBuffer {
-    data: [u8; 1024],
-    index: usize,
-}
-
-impl LogBuffer {
-    /// Construct the buffer.
-    pub const fn new() -> Self {
-        Self {
-            data: [0u8; 1024],
-            index: 0,
-        }
-    }
-
-    /// Append data into the buffer.
-    ///
-    /// # Args
-    /// * `data` - The data to append. If space isn't available, as much data will be appended as
-    ///   possible.
-    pub fn append(&mut self, data: &[u8]) {
-        let tail = &mut self.data[self.index..];
-        self.index += if data.len() > tail.len() {
-            tail.copy_from_slice(&data[..tail.len()]);
-            tail.len()
-        } else {
-            tail[..data.len()].copy_from_slice(data);
-            data.len()
-        }
-    }
-
-    /// Get the data in the buffer.
-    pub fn data(&self) -> &[u8] {
-        &self.data[..self.index]
-    }
-
-    /// Clear contents of the buffer.
-    pub fn clear(&mut self) {
-        self.index = 0;
-    }
 }
