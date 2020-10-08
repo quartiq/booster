@@ -32,16 +32,8 @@ impl BufferedLog {
     /// # Args
     /// * `terminal` - The serial terminal to write log data into.
     pub fn process(&self, terminal: &mut SerialTerminal) {
-        let mut count = 0;
         while let Some(log) = self.logs.dequeue() {
             terminal.write(&log.as_bytes());
-            count += 1;
-        }
-
-        if count > 0 {
-            let mut string: String<consts::U32> = String::new();
-            write!(&mut string, "Wrote {} logs\n", count).ok();
-            terminal.write(&string.as_bytes());
         }
     }
 }
