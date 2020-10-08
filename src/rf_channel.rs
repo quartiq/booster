@@ -12,7 +12,9 @@ use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
 
 use super::{I2cBusManager, I2cProxy};
-use crate::{platform, settings::BoosterChannelSettings, Error};
+use crate::{
+    linear_transformation::LinearTransformation, platform, settings::BoosterChannelSettings, Error,
+};
 use embedded_hal::blocking::delay::DelayUs;
 use stm32f4xx_hal::{
     self as hal,
@@ -22,6 +24,30 @@ use stm32f4xx_hal::{
 };
 
 use rtic::cyccnt::{Duration, Instant};
+
+#[derive(serde::Deserialize, serde::Serialize)]
+/// Represents the interlock threshold levels.
+pub struct InterlockThresholds {
+    pub output: f32,
+    pub reflected: f32,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+/// Used to identify a specific channel property.
+pub enum PropertyId {
+    InterlockThresholds,
+    OutputPowerTransform,
+    InputPowerTransform,
+    ReflectedPowerTransform,
+}
+
+/// Represents an operation property of an RF channel.
+pub enum Property {
+    InterlockThresholds(InterlockThresholds),
+    OutputPowerTransform(LinearTransformation),
+    InputPowerTransform(LinearTransformation),
+    ReflectedPowerTransform(LinearTransformation),
+}
 
 /// A structure representing power supply measurements of a channel.
 pub struct SupplyMeasurements {
@@ -1030,5 +1056,53 @@ impl RfChannel {
         // the voltage we used in the algorithm because the voltage reported by the DAC is more
         // accurate.
         Ok((self.settings.data.bias_voltage, last_current))
+    }
+
+    /// Set a property for the channel.
+    ///
+    /// # Args
+    /// * `property` - The property to configure on the channel.
+    pub fn set_property(&mut self, property: Property) -> Result<(), Error> {
+        match property {
+            Property::InterlockThresholds(InterlockThresholds { output, reflected }) => {
+                self.set_interlock_thresholds(output, reflected)?;
+            }
+            Property::OutputPowerTransform(transform) => {
+                self.settings.data.output_power_transform = transform;
+            }
+            Property::InputPowerTransform(transform) => {
+                self.settings.data.input_power_transform = transform;
+            }
+            Property::ReflectedPowerTransform(transform) => {
+                self.settings.data.reflected_power_transform = transform;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Get the current value of a channel property.
+    ///
+    /// # Args
+    /// * `property` - The identifier indicating which property to read.
+    ///
+    /// # Returns
+    /// The current channel property.
+    pub fn get_property(&self, property: PropertyId) -> Property {
+        match property {
+            PropertyId::InterlockThresholds => Property::InterlockThresholds(InterlockThresholds {
+                output: self.settings.data.output_interlock_threshold,
+                reflected: self.settings.data.reflected_interlock_threshold,
+            }),
+            PropertyId::OutputPowerTransform => {
+                Property::OutputPowerTransform(self.settings.data.output_power_transform.clone())
+            }
+            PropertyId::InputPowerTransform => {
+                Property::InputPowerTransform(self.settings.data.input_power_transform.clone())
+            }
+            PropertyId::ReflectedPowerTransform => Property::ReflectedPowerTransform(
+                self.settings.data.reflected_power_transform.clone(),
+            ),
+        }
     }
 }

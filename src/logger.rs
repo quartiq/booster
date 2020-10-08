@@ -12,7 +12,7 @@ use core::fmt::Write;
 /// A logging buffer for storing serialized logs pending transmission.
 ///
 /// # Notes
-/// The LoBufferedLog contains a character buffer of the log data waiting to be written. It is
+/// The BufferedLog contains a character buffer of the log data waiting to be written. It is
 /// intended to be consumed asynchronously. In the case of booster, this log data is consumed in the
 /// USB task.
 pub struct BufferedLog {
