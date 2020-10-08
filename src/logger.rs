@@ -62,7 +62,7 @@ impl log::Log for BufferedLog {
             Err(_) => {
                 error!("Log entry overflow");
                 return;
-            },
+            }
             _ => {}
         };
 
