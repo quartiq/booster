@@ -1095,14 +1095,14 @@ impl RfChannel {
                 reflected: self.settings.data.reflected_interlock_threshold,
             }),
             PropertyId::OutputPowerTransform => {
-                Property::OutputPowerTransform(self.settings.data.output_power_transform)
+                Property::OutputPowerTransform(self.settings.data.output_power_transform.clone())
             }
             PropertyId::InputPowerTransform => {
-                Property::InputPowerTransform(self.settings.data.input_power_transform)
+                Property::InputPowerTransform(self.settings.data.input_power_transform.clone())
             }
-            PropertyId::ReflectedPowerTransform => {
-                Property::ReflectedPowerTransform(self.settings.data.reflected_power_transform)
-            }
+            PropertyId::ReflectedPowerTransform => Property::ReflectedPowerTransform(
+                self.settings.data.reflected_power_transform.clone(),
+            ),
         }
     }
 }

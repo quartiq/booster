@@ -6,7 +6,7 @@
 //! Proprietary and confidential.
 
 /// A structure for mapping values between two different domains.
-#[derive(serde::Serialize, serde::Deserialize, Copy, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct LinearTransformation {
     slope: f32,
     offset: f32,
