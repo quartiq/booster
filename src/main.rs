@@ -26,6 +26,7 @@ mod chassis_fans;
 mod delay;
 mod error;
 mod linear_transformation;
+mod logger;
 mod mqtt_control;
 mod mutex;
 mod platform;
@@ -38,6 +39,7 @@ use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
 use error::Error;
+use logger::BufferedLog;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
 use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
@@ -139,6 +141,8 @@ macro_rules! channel_pins {
 // USB end-point memory.
 static mut USB_EP_MEMORY: [u32; 1024] = [0; 1024];
 
+static LOGGER: BufferedLog = BufferedLog::new();
+
 /// Container method for all devices on the main I2C bus.
 pub struct MainBus {
     pub channels: BoosterChannels,
@@ -162,6 +166,11 @@ const APP: () = {
     fn init(mut c: init::Context) -> init::LateResources {
         static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None;
         static mut USB_SERIAL: Option<String<heapless::consts::U64>> = None;
+
+        // Install the logger
+        log::set_logger(&LOGGER)
+            .map(|()| log::set_max_level(log::LevelFilter::Info))
+            .unwrap();
 
         c.core.DWT.enable_cycle_counter();
         c.core.DCB.enable_trace();
@@ -679,6 +688,10 @@ const APP: () = {
             .watchdog
             .lock(|watchdog| watchdog.check_in(WatchdogClient::UsbTask));
 
+        // Process any log output.
+        LOGGER.process(&mut c.resources.usb_terminal);
+
+        // Handle the USB serial terminal.
         c.resources.usb_terminal.process();
 
         // TODO: Replace hard-coded CPU cycles here.
