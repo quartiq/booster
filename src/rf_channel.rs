@@ -833,14 +833,12 @@ impl RfChannel {
     pub fn get_supply_measurements(&mut self) -> SupplyMeasurements {
         // The P5V0 rail goes through a resistor divider of 15K -> 10K. This corresponds with a 2.5x
         // reduction in measured voltage.
-        let p5v_voltage = self
+        let voltages = self
             .i2c_devices
-            .power_monitor
-            .get_voltage(ads7924::Channel::Three)
-            .unwrap();
-        let v_p5v0mp = p5v_voltage * 2.5;
+            .power_monitor.get_voltages().unwrap();
 
-        let i_p28v0ch = self.get_p28v_current();
+        let v_p5v0mp = voltages[3] * 2.5;
+        let i_p28v0ch = voltages[0] * (100.0 / 0.100 / 4300.0);
 
         // The P5V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
         // output resistance on the current sensor is 6.2K Ohm.
@@ -856,12 +854,7 @@ impl RfChannel {
         //
         // Vout = Isns * Rsns * Rout / Rin
         // Isns = (Vout * Rin) / Rsns / Rout
-        let p5v_rail_current_sense = self
-            .i2c_devices
-            .power_monitor
-            .get_voltage(ads7924::Channel::One)
-            .unwrap();
-        let i_p5v0ch = p5v_rail_current_sense * (100.0 / 0.100 / 6200.0);
+        let i_p5v0ch = voltages[1] * (100.0 / 0.100 / 6200.0);
 
         SupplyMeasurements {
             v_p5v0mp,

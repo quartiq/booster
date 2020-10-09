@@ -33,6 +33,7 @@ enum OperationMode {
     AutoscanWithSleep = 0b111011,
 }
 
+#[derive(Copy, Clone)]
 #[doc(hidden)]
 #[allow(dead_code)]
 enum Register {
@@ -292,4 +293,37 @@ where
 
         Ok(code as f32 * self.volts_per_lsb)
     }
+
+    /// Get the analog voltages of all channels.
+    ///
+    /// # Returns
+    /// The analog measurements of all channel in volts.
+    pub fn get_voltages(&mut self) -> Result<[f32; 4], Error> {
+        let mut voltages = [0.; 4];
+
+        let upper_data_registers = [
+            Register::Data0Upper,
+            Register::Data1Upper,
+            Register::Data2Upper,
+            Register::Data3Upper];
+
+        // First, disable Autoscan mode.
+        self.set_mode(OperationMode::Active, None)?;
+
+        for (voltage, reg) in voltages.iter_mut().zip(upper_data_registers.iter()) {
+            let mut data = [0u8; 2];
+            self.read(*reg, &mut data)?;
+            // Convert the voltage register to an ADC code. The code is stored MSB-aligned, so we need
+            // to shift it back into alignment.
+            let code = u16::from_be_bytes(data) >> 4;
+
+            *voltage = code as f32 * self.volts_per_lsb;
+        }
+
+        // Reenable Autoscan.
+        self.set_mode(OperationMode::AutoscanWithSleep, None)?;
+
+        Ok(voltages)
+    }
+
 }
