@@ -18,6 +18,7 @@ jobs:
         with:
           toolchain: stable
           target: thumbv7em-none-eabihf
+          components: llvm-tools-preview
           override: true
 
       - name: Install Binutils
