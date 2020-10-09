@@ -57,14 +57,13 @@ hardware level that likely requires further investigation. Any indication of the
 warrant further investigation of the device.
 
 The yellow LED and the green LED are used to indicate the status of an operational RF amplification
-channel. When the yellow LED is illuminated, the RF output is disabled on the channel. When a
+channel. When the yellow LED is illuminated, the RF input is disabled on the channel. When a
 channel is in standby or powered down, the yellow LED will illuminate without the green LED.
 
-The green LED indicates that the RF channel is powered and operational. Note that this does not
-indicate that the channel is outputting (this is denoted by the yellow LED). If the green LED and
-the yellow LED are both illuminated, this indicates that an RF channel interlock has tripped. The
-channel may be reset from this state by pressing the "Interlock Reset" button. If only the green LED
-is illuminated, the channel is operational and outputting normally.
+The green LED indicates that the RF channel is powered.  If only the green LED is illuminated,
+the channel is operational and outputting normally. If the green LED and the yellow LED are both
+illuminated, this indicates that an RF channel interlock has tripped. The
+channel may be reset from this state by pressing the "Interlock Reset" button. 
 
 The ethernet port contains a green and an orange/yellow LED. The yellow LED illuminates when Booster
 has successfully connected with an ethernet switch. The green LED will flash whenever there is
@@ -73,7 +72,7 @@ ethernet traffic detected.
 ## USB Port
 
 The USB port on booster enumerates as a serial port and can be opened with any terminal emulation
-program (e.g. Pyserial's miniterm, TeraTerm, picoterm, or your desired serial port reader). The USB
+program (e.g. Pyserial's miniterm, TeraTerm, picoterm, putty, or your desired serial port reader). The USB
 port serves two purposes:
 * Logs are generated out the USB port
 * Basic network and MQTT configuration can be completed
@@ -129,10 +128,10 @@ quote (').
 ## Configuring MQTT
 
 Booster utilizes MQTT for much of the configuration, control, and telemetry functionality. In order
-to use MQTT, a broker must be run on a central machine for Booster to connect to.
+to use MQTT, a broker must be run on a central machine for Booster to connect to. The broker must accept connections without authentication and must support MQTT version 5.
 
 The recommended MQTT broker to work with booster is the Mosquitto broker. This can be installed in
-Ubuntu by running: `sudo apt-get install mosquitto`.
+Ubuntu by running: `sudo apt-get install mosquitto`. Note that `mosquitto` in Debian stable/buster does not yet support MQTT version 5.
 
 Because Booster currently works with static IP addresses, it is recommended to operate Booster on a
 closed, internal network. As such, it is likely that you may need to configure IP routing on the
@@ -193,7 +192,7 @@ python booster.py --booster-id <ID> <CHANNEL> --save
 ```
 
 When settings are saved in booster, the current channel configuration will be the default state of
-the channel when Booster boots.
+the channel when Booster boots. Note that saving channel settings overwrites any existing channel configuration and calibrations including those from the old legacy firmware. The legacy firmware settings are incompatible.
 
 
 # DFU Instructions
@@ -221,5 +220,5 @@ Bootloader USB interface.
 1. Verify Booster is in DFU mode: `dfu-util -l` should show 4 entries beginning with `Found DFU: [0483:df11]`
 1. Upload the DFU file to Booster:
 ```
-dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave --download boosterbin.
+dfu-util -a 0 -s 0x08000000:leave --download booster.bin
 ```
