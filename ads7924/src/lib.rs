@@ -26,6 +26,7 @@ where
 
 #[derive(Copy, Clone, PartialEq)]
 #[doc(hidden)]
+#[allow(dead_code)]
 enum OperationMode {
     Active = 0b100000,
     ManualSingle = 0b110000,
@@ -101,6 +102,10 @@ where
         };
 
         ads7924.reset(delay)?;
+
+         // Bring the ADC from idle to awake mode unconditionally.
+        let mode_control = *0u8.set_bits(2..8, OperationMode::Active as u8);
+        ads7924.write(Register::ModeCntrl, &[mode_control])?;
 
         // Configure the interrupt pin to operate in alarm mode when thresholds are exceeded once.
         let interrupt_config = *0u8.set_bits(5..8, 0b1);
@@ -272,36 +277,19 @@ where
             Channel::Two => Register::Data2Upper,
             Channel::Three => Register::Data3Upper,
         };
+        // First, disable Autoscan mode.
+        self.set_mode(OperationMode::Active, None)?;
 
         let mut voltage_register: [u8; 2] = [0; 2];
         self.read(upper_data_register, &mut voltage_register)?;
+
+        // Reenable Autoscan.
+        self.set_mode(OperationMode::AutoscanWithSleep, None)?;
 
         // Convert the voltage register to an ADC code. The code is stored MSB-aligned, so we need
         // to shift it back into alignment.
         let code = u16::from_be_bytes(voltage_register) >> 4;
 
         Ok(code as f32 * self.volts_per_lsb)
-    }
-
-    /// Get an up-to-date analog voltage of a channel.
-    ///
-    /// # Note
-    /// This function will force the ADC to perform a new analog conversion, so results will be as
-    /// up-to-date as possible.
-    ///
-    /// # Args
-    /// * `channel` - The channel to get the voltage of.
-    ///
-    /// # Returns
-    /// The analog measurement of the specified channel in volts.
-    pub fn measure_voltage(&mut self, channel: Channel) -> Result<f32, Error> {
-        // First, update the mode to be manual-single.
-        self.set_mode(OperationMode::ManualSingle, Some(channel))?;
-
-        let voltage = self.get_voltage(channel)?;
-
-        self.set_mode(OperationMode::AutoscanWithSleep, None)?;
-
-        Ok(voltage)
     }
 }
