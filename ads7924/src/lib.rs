@@ -299,7 +299,7 @@ where
     /// # Returns
     /// The analog measurements of all channel in volts.
     pub fn get_voltages(&mut self) -> Result<[f32; 4], Error> {
-        let mut voltages = [0.; 4];
+        let mut voltages = [0f32; 4];
 
         let upper_data_registers = [
             Register::Data0Upper,
