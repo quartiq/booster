@@ -175,8 +175,12 @@ impl BoosterChannels {
     /// # Args
     /// * `channel` - The channel to set the bias voltage of.
     /// * `bias_voltage` - The desired bias voltage to apply to the RF amplification transistor.
-    pub fn set_bias(&mut self, channel: Channel, bias_voltage: f32,
-        delay: &mut impl DelayUs<u16>) -> Result<(f32, f32), Error> {
+    pub fn set_bias(
+        &mut self,
+        channel: Channel,
+        bias_voltage: f32,
+        delay: &mut impl DelayUs<u16>,
+    ) -> Result<(f32, f32), Error> {
         self.map_channel(channel, |ch, _| {
             ch.set_bias(bias_voltage)?;
 
