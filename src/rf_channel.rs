@@ -831,13 +831,27 @@ impl RfChannel {
     /// # Returns
     /// The most recent power supply measurements of the channel.
     pub fn get_supply_measurements(&mut self) -> SupplyMeasurements {
+        // Read the cached (scanned) ADC measurements from the monitor.
+        let voltages = self.i2c_devices.power_monitor.get_voltages().unwrap();
+
         // The P5V0 rail goes through a resistor divider of 15K -> 10K. This corresponds with a 2.5x
         // reduction in measured voltage.
-        let voltages = self
-            .i2c_devices
-            .power_monitor.get_voltages().unwrap();
-
         let v_p5v0mp = voltages[3] * 2.5;
+
+        // The 28V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
+        // output resistance on the current sensor is 4.3K Ohm.
+        //
+        // From the LT6106 (current monitor) datasheet:
+        // Vout = Vsns * Rout / Rin
+        //
+        // Given:
+        // Vsns = Isns * Rsns
+        // Rsns = 100m Ohm
+        // Rin = 100 Ohm
+        // Rout = 4.3K Ohm
+        //
+        // Vout = Isns * Rsns * Rout / Rin
+        // Isns = (Vout * Rin) / Rsns / Rout
         let i_p28v0ch = voltages[0] * (100.0 / 0.100 / 4300.0);
 
         // The P5V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
@@ -863,23 +877,8 @@ impl RfChannel {
         }
     }
 
-    fn get_p28v_current(&mut self) -> f32 {
-        // The 28V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
-        // output resistance on the current sensor is 4.3K Ohm.
-        //
-        // From the LT6106 (current monitor) datasheet:
-        // Vout = Vsns * Rout / Rin
-        //
-        // Given:
-        // Vsns = Isns * Rsns
-        // Rsns = 100m Ohm
-        // Rin = 100 Ohm
-        // Rout = 4.3K Ohm
-        //
-        // Vout = Isns * Rsns * Rout / Rin
-        // Isns = (Vout * Rin) / Rsns / Rout
-
-        // Read the cached (scanned) ADC measurement from the monitor.
+    fn get_p28v_current(&mut self, delay: &mut impl DelayUs<u16>) -> f32 {
+        delay.delay_us(1000);
         let p28v_rail_current_sense = self
             .i2c_devices
             .power_monitor
@@ -906,12 +905,12 @@ impl RfChannel {
     ///
     /// # Returns
     /// The reflected power in dBm.
-    pub fn get_reflected_power(&mut self, mut adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
+    pub fn get_reflected_power(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
         let sample = self
             .pins
             .adc_pins
             .reflected_power
-            .convert(&mut adc, SampleTime::Cycles_480);
+            .convert(adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
         self.settings.data.reflected_power_transform.map(voltage)
@@ -924,12 +923,12 @@ impl RfChannel {
     ///
     /// # Returns
     /// The output power in dBm.
-    pub fn get_output_power(&mut self, mut adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
+    pub fn get_output_power(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
         let sample = self
             .pins
             .adc_pins
             .tx_power
-            .convert(&mut adc, SampleTime::Cycles_480);
+            .convert(adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
         self.settings.data.output_power_transform.map(voltage)
@@ -995,9 +994,7 @@ impl RfChannel {
         // Place the RF channel into pinch-off to start.
         let mut bias_voltage = -3.2;
         self.set_bias(bias_voltage).unwrap();
-        // Settle the bias
-        delay.delay_us(12000);
-        let mut last_current = self.get_p28v_current();
+        let mut last_current = self.get_p28v_current(delay);
 
         // First, increase the bias voltage until we overshoot the desired set current by a small
         // margin.
@@ -1010,10 +1007,9 @@ impl RfChannel {
             }
 
             self.set_bias(bias_voltage).unwrap();
-            delay.delay_us(12000);
 
             // Re-measure the drain current.
-            let new_current = self.get_p28v_current();
+            let new_current = self.get_p28v_current(delay);
 
             // Check that the LDO did not enter fold-back. When the LDO enters fold-back, the
             // current should begin to drop dramatically. For now, a 20mA threshold is used to
@@ -1024,20 +1020,19 @@ impl RfChannel {
             last_current = new_current;
         }
 
-        let high_voltage = bias_voltage;
+        // let high_voltage = bias_voltage;
 
         // Next, decrease the bias voltage until we drop back below the desired set point.
         while last_current > desired_current {
             // Decrease the bias voltage in 1mV steps to decrease the drain current marginally.
             bias_voltage = bias_voltage - 0.001;
-            if bias_voltage <= -3.2 || bias_voltage < high_voltage - 0.040 {
+            if bias_voltage <= -3.2 { // || bias_voltage < high_voltage - 0.040 {
                 return Err(Error::Invalid);
             }
 
             // Set the new bias and re-measure the drain current.
             self.set_bias(bias_voltage).unwrap();
-            delay.delay_us(12000);
-            last_current = self.get_p28v_current();
+            last_current = self.get_p28v_current(delay);
         }
 
         // Note that we're returning the actual bias voltage as calculated by the DAC as opposed to
