@@ -21,33 +21,19 @@ jobs:
           override: true
 
       - name: Install Binutils
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cargo-binutils
+        run: cargo install cargo-binutils
 
       - name: Build Debug
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
+        run: cargo build
 
       - name: Build Release
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release
+        run: cargo build --release
 
       - name: Dump Debug Binary
-        uses: actions-rs/cargo@v1
-        with:
-          command: objcopy
-          args: -- -O binary booster-debug.bin
+        run: cargo objcopy -- -O binary booster-debug.bin
 
       - name: Dump Release Binary
-        uses: actions-rs/cargo@v1
-        with:
-          command: objcopy
-          args: --release -- -O binary booster-release.bin
+        run: cargo objcopy --release -- -O binary booster-release.bin
 
       - uses: marvinpinto/action-automatic-releases@v1.1.0
         with:
