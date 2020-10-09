@@ -133,23 +133,23 @@ struct ChannelRequest {
     pub action: ChannelAction,
 }
 
-/// Specifies the desired channel RF bias current.
+/// Specifies the desired channel RF bias voltage.
 #[derive(serde::Deserialize)]
-struct ChannelTuneRequest {
+struct ChannelBiasRequest {
     pub channel: Channel,
-    pub current: f32,
+    pub voltage: f32,
 }
 
-/// Indicates the result of a channel tuning request.
+/// Indicates the result of a channel bias setting request.
 #[derive(serde::Serialize)]
-struct ChannelTuneResponse {
+struct ChannelBiasResponse {
     code: u32,
     pub vgs: f32,
     pub ids: f32,
 }
 
-impl ChannelTuneResponse {
-    /// Indicate that a channel bias tuning command was successfully processed.
+impl ChannelBiasResponse {
+    /// Indicate that a channel bias setting command was successfully processed.
     ///
     /// # Args
     /// * `vgs` - The resulting gate voltage of the RF amplifier.
@@ -248,7 +248,7 @@ impl ControlState {
                         .subscribe(&self.generate_topic_string("channel/state"), &[])
                         .unwrap();
                     client
-                        .subscribe(&self.generate_topic_string("channel/tune"), &[])
+                        .subscribe(&self.generate_topic_string("channel/bias"), &[])
                         .unwrap();
                     client
                         .subscribe(&self.generate_topic_string("channel/read"), &[])
@@ -277,8 +277,8 @@ impl ControlState {
 
                     let response = match route {
                         "channel/state" => handle_channel_update(message, &mut main_bus.channels),
-                        "channel/tune" => {
-                            handle_channel_tune(message, &mut main_bus.channels, *delay)
+                        "channel/bias" => {
+                            handle_channel_bias(message, &mut main_bus.channels, *delay)
                         }
                         "channel/read" => {
                             handle_channel_property_read(message, &mut main_bus.channels)
@@ -406,7 +406,7 @@ fn handle_channel_property_write(
     }
 }
 
-/// Handle a request to tune the bias current of a channel.
+/// Handle a request to set the bias of a channel.
 ///
 /// # Args
 /// * `message` - The serialized message request.
@@ -415,18 +415,18 @@ fn handle_channel_property_write(
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_tune(
+fn handle_channel_bias(
     message: &[u8],
     channels: &mut BoosterChannels,
     delay: &mut impl DelayUs<u16>,
 ) -> String<consts::U256> {
-    let request = match serde_json_core::from_slice::<ChannelTuneRequest>(message) {
+    let request = match serde_json_core::from_slice::<ChannelBiasRequest>(message) {
         Ok(data) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
 
-    match channels.tune_channel(request.channel, request.current, delay) {
-        Ok((vgs, ids)) => ChannelTuneResponse::okay(vgs, ids),
+    match channels.set_bias(request.channel, request.voltage, delay) {
+        Ok((vgs, ids)) => ChannelBiasResponse::okay(vgs, ids),
         Err(error) => Response::error(error),
     }
 }

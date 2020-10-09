@@ -175,23 +175,15 @@ impl BoosterChannels {
     /// # Args
     /// * `channel` - The channel to set the bias voltage of.
     /// * `bias_voltage` - The desired bias voltage to apply to the RF amplification transistor.
-    pub fn set_bias(&mut self, channel: Channel, bias_voltage: f32) -> Result<(), Error> {
-        self.map_channel(channel, |ch, _| ch.set_bias(bias_voltage))
-    }
+    pub fn set_bias(&mut self, channel: Channel, bias_voltage: f32,
+        delay: &mut impl DelayUs<u16>) -> Result<(f32, f32), Error> {
+        self.map_channel(channel, |ch, _| {
+            ch.set_bias(bias_voltage)?;
 
-    /// Tune a channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to set the bias voltage of.
-    /// * `desired_current` - The desired RF amplifier drain current.
-    /// * `delay` - A means of delaying during tuning.
-    pub fn tune_channel(
-        &mut self,
-        channel: Channel,
-        desired_current: f32,
-        delay: &mut impl DelayUs<u16>,
-    ) -> Result<(f32, f32), Error> {
-        self.map_channel(channel, |ch, _| ch.tune_bias(desired_current, delay))
+            // Settle the bias current and wait for an up-to-date measurement.
+            delay.delay_us(11000);
+            Ok((ch.get_bias_voltage(), ch.get_p28v_current()))
+        })
     }
 
     /// Get the state of a channel.

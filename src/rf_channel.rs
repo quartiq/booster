@@ -877,8 +877,11 @@ impl RfChannel {
         }
     }
 
-    fn get_p28v_current(&mut self, delay: &mut impl DelayUs<u16>) -> f32 {
-        delay.delay_us(1000);
+    /// Get P28V rail current.
+    ///
+    /// # Returns
+    /// The most recent P28V rail current measurements of the channel.
+    pub fn get_p28v_current(&mut self) -> f32 {
         let p28v_rail_current_sense = self
             .i2c_devices
             .power_monitor
@@ -958,87 +961,6 @@ impl RfChannel {
     /// Get the current state of the channel.
     pub fn get_state(&self) -> ChannelState {
         self.state_machine.state()
-    }
-
-    /// Tune the RF amplifier bias current.
-    ///
-    /// # Args
-    /// * `desired_current` - The desired RF amplifier drain current.
-    /// * `delay` - A means of delaying during tuning.
-    ///
-    /// # Returns
-    /// A tuple of (Vgs, Ids) where Vgs is the bias voltage on the amplifier gate. Ids is the actual
-    /// drain current achieved.
-    pub fn tune_bias(
-        &mut self,
-        desired_current: f32,
-        delay: &mut impl DelayUs<u16>,
-    ) -> Result<(f32, f32), Error> {
-        // Verify that the channel is powered, but is not actively outputting for bias calibration.
-        match self.state_machine.state() {
-            ChannelState::Powered | ChannelState::Tripped(_) => {}
-            _ => return Err(Error::InvalidState),
-        }
-
-        // Booster schematic indicates the regulator is configured to supply up to 550mA. However,
-        // when the RF input is disabled, the bias current is significantly lower. For this reason,
-        // the upper bound is currently limited to 100mA, but may be adjusted in the future.
-        if desired_current < 0.010 || desired_current > 0.100 {
-            return Err(Error::Bounds);
-        }
-
-        // Disable the RF input during the test. Note: The state should ensure this is already the
-        // case, but it is done here redundantly as a safety precaution.
-        self.pins.signal_on.set_low().unwrap();
-
-        // Place the RF channel into pinch-off to start.
-        let mut bias_voltage = -3.2;
-        self.set_bias(bias_voltage).unwrap();
-        let mut last_current = self.get_p28v_current(delay);
-
-        // First, increase the bias voltage until we overshoot the desired set current by a small
-        // margin.
-        while last_current < desired_current {
-            // Slowly bring the bias voltage up in steps of 20mV until the desired drain current is
-            // achieved.
-            bias_voltage = bias_voltage + 0.020;
-            if bias_voltage >= 0.0 {
-                return Err(Error::Invalid);
-            }
-
-            self.set_bias(bias_voltage).unwrap();
-
-            // Re-measure the drain current.
-            let new_current = self.get_p28v_current(delay);
-
-            // Check that the LDO did not enter fold-back. When the LDO enters fold-back, the
-            // current should begin to drop dramatically. For now, a 20mA threshold is used to
-            // detect foldback.
-            if last_current - new_current > 0.020 {
-                return Err(Error::Foldback);
-            }
-            last_current = new_current;
-        }
-
-        // let high_voltage = bias_voltage;
-
-        // Next, decrease the bias voltage until we drop back below the desired set point.
-        while last_current > desired_current {
-            // Decrease the bias voltage in 1mV steps to decrease the drain current marginally.
-            bias_voltage = bias_voltage - 0.001;
-            if bias_voltage <= -3.2 { // || bias_voltage < high_voltage - 0.040 {
-                return Err(Error::Invalid);
-            }
-
-            // Set the new bias and re-measure the drain current.
-            self.set_bias(bias_voltage).unwrap();
-            last_current = self.get_p28v_current(delay);
-        }
-
-        // Note that we're returning the actual bias voltage as calculated by the DAC as opposed to
-        // the voltage we used in the algorithm because the voltage reported by the DAC is more
-        // accurate.
-        Ok((self.settings.data.bias_voltage, last_current))
     }
 
     /// Set a property for the channel.
