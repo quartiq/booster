@@ -39,7 +39,7 @@ pub struct ChannelStatus {
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
     channels: [Option<RfChannel>; 8],
-    adc: core::cell::RefCell<hal::adc::Adc<hal::stm32::ADC3>>,
+    adc: hal::adc::Adc<hal::stm32::ADC3>,
     mux: Tca9548<I2cProxy>,
 }
 
@@ -118,8 +118,21 @@ impl BoosterChannels {
         BoosterChannels {
             channels: rf_channels,
             mux: mux,
-            adc: core::cell::RefCell::new(adc),
+            adc: adc,
         }
+    }
+
+    fn map_channel<F, R>(&mut self, channel: Channel, f: F) -> Result<R, Error>
+    where
+        F: FnOnce(&mut RfChannel, &mut hal::adc::Adc<hal::stm32::ADC3>) -> Result<R, Error>,
+    {
+        let mux = &mut self.mux;
+        let adc = &mut self.adc;
+        let ch = &mut self.channels[channel as usize];
+        ch.as_mut().ok_or(Error::NotPresent).and_then(|ch| {
+            mux.select_bus(Some(channel.into())).unwrap();
+            f(ch, adc)
+        })
     }
 
     /// Enable an RF channel.
@@ -127,12 +140,7 @@ impl BoosterChannels {
     /// # Args
     /// * `channel` - The channel to enable.
     pub fn enable_channel(&mut self, channel: Channel) -> Result<(), Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.start_powerup(true),
-            None => Err(Error::NotPresent),
-        }
+        self.map_channel(channel, |ch, _| ch.start_powerup(true))
     }
 
     /// Power up an RF channel without enabling output.
@@ -140,12 +148,7 @@ impl BoosterChannels {
     /// # Args
     /// * `channel` - The channel to power-up.
     pub fn power_channel(&mut self, channel: Channel) -> Result<(), Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.start_powerup(false),
-            None => Err(Error::NotPresent),
-        }
+        self.map_channel(channel, |ch, _| ch.start_powerup(false))
     }
 
     /// Disable an RF channel.
@@ -153,12 +156,7 @@ impl BoosterChannels {
     /// # Args
     /// * `channel` - The channel to disable.
     pub fn disable_channel(&mut self, channel: Channel) -> Result<(), Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.start_disable()),
-            None => Err(Error::NotPresent),
-        }
+        self.map_channel(channel, |ch, _| Ok(ch.start_disable()))
     }
 
     /// Get the temperature of a channel.
@@ -169,12 +167,7 @@ impl BoosterChannels {
     /// # Returns
     /// The temperature of the channel in degrees celsius.
     pub fn get_temperature(&mut self, channel: Channel) -> Result<f32, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.get_temperature()),
-            None => Err(Error::NotPresent),
-        }
+        self.map_channel(channel, |ch, _| Ok(ch.get_temperature()))
     }
 
     /// Set the bias voltage of a channel.
@@ -183,15 +176,7 @@ impl BoosterChannels {
     /// * `channel` - The channel to set the bias voltage of.
     /// * `bias_voltage` - The desired bias voltage to apply to the RF amplification transistor.
     pub fn set_bias(&mut self, channel: Channel, bias_voltage: f32) -> Result<(), Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => {
-                rf_channel.set_bias(bias_voltage)?;
-                Ok(())
-            }
-            None => Err(Error::NotPresent),
-        }
+        self.map_channel(channel, |ch, _| ch.set_bias(bias_voltage))
     }
 
     /// Tune a channel.
@@ -206,12 +191,7 @@ impl BoosterChannels {
         desired_current: f32,
         delay: &mut impl DelayUs<u16>,
     ) -> Result<(f32, f32), Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.tune_bias(desired_current, delay),
-            None => Err(Error::NotPresent),
-        }
+        self.map_channel(channel, |ch, _| ch.tune_bias(desired_current, delay))
     }
 
     /// Get the state of a channel.
@@ -222,12 +202,7 @@ impl BoosterChannels {
     /// # Returns
     /// The channel state of the requested channel.
     pub fn get_channel_state(&mut self, channel: Channel) -> Result<ChannelState, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.get_state()),
-            None => Err(Error::NotPresent),
-        }
+        self.map_channel(channel, |ch, _| Ok(ch.get_state()))
     }
 
     /// Get the current status of the channel.
@@ -238,58 +213,40 @@ impl BoosterChannels {
     /// Returns
     /// A structure indicating all measurements on the channel.
     pub fn get_status(&mut self, channel: Channel) -> Result<ChannelStatus, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
+        self.map_channel(channel, |ch, adc| {
+            let power_measurements = ch.get_supply_measurements();
 
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => {
-                let power_measurements = rf_channel.get_supply_measurements();
+            let status = ChannelStatus {
+                reflected_overdrive: ch.pins.reflected_overdrive.is_high().unwrap(),
+                output_overdrive: ch.pins.output_overdrive.is_high().unwrap(),
+                alert: ch.pins.alert.is_low().unwrap(),
+                temperature: ch.get_temperature(),
+                p28v_current: power_measurements.i_p28v0ch,
+                p5v_current: power_measurements.i_p5v0ch,
+                p5v_voltage: power_measurements.v_p5v0mp,
+                input_power: ch.get_input_power(),
+                output_power: ch.get_output_power(adc),
+                reflected_power: ch.get_reflected_power(adc),
+                reflected_overdrive_threshold: ch.get_reflected_interlock_threshold(),
+                output_overdrive_threshold: ch.get_output_interlock_threshold(),
+                bias_voltage: ch.get_bias_voltage(),
+                state: ch.get_state(),
+            };
 
-                let mut adc = self.adc.borrow_mut();
-
-                let status = ChannelStatus {
-                    reflected_overdrive: rf_channel.pins.reflected_overdrive.is_high().unwrap(),
-                    output_overdrive: rf_channel.pins.output_overdrive.is_high().unwrap(),
-                    alert: rf_channel.pins.alert.is_low().unwrap(),
-                    temperature: rf_channel.get_temperature(),
-                    p28v_current: power_measurements.i_p28v0ch,
-                    p5v_current: power_measurements.i_p5v0ch,
-                    p5v_voltage: power_measurements.v_p5v0mp,
-                    input_power: rf_channel.get_input_power(),
-                    output_power: rf_channel.get_output_power(&mut adc),
-                    reflected_power: rf_channel.get_reflected_power(&mut adc),
-                    reflected_overdrive_threshold: rf_channel.get_reflected_interlock_threshold(),
-                    output_overdrive_threshold: rf_channel.get_output_interlock_threshold(),
-                    bias_voltage: rf_channel.get_bias_voltage(),
-                    state: rf_channel.get_state(),
-                };
-
-                Ok(status)
-            }
-            None => Err(Error::NotPresent),
-        }
+            Ok(status)
+        })
     }
 
     /// Save the current channel configuration in channel EEPROM.
     pub fn save_configuration(&mut self, channel: Channel) -> Result<(), Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => {
-                rf_channel.save_configuration();
-                Ok(())
-            }
-            None => Err(Error::NotPresent),
-        }
+        self.map_channel(channel, |ch, _| Ok(ch.save_configuration()))
     }
 
     /// Update the states of RF channels as necessary.
     pub fn update(&mut self) {
         for channel in Channel::into_enum_iter() {
-            self.mux.select_bus(Some(channel.into())).unwrap();
-
-            if let Some(rf_channel) = &mut self.channels[channel as usize] {
-                rf_channel.update().unwrap();
-            }
+            self.map_channel(channel, |ch, _| Ok(ch.update().unwrap()))
+                .ok();
         }
     }
 
@@ -306,12 +263,7 @@ impl BoosterChannels {
         channel: Channel,
         property: PropertyId,
     ) -> Result<RfChannelProperty, Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => Ok(rf_channel.get_property(property)),
-            None => Err(Error::NotPresent),
-        }
+        self.map_channel(channel, |ch, _| Ok(ch.get_property(property)))
     }
 
     /// Write a property into an RF channel.
@@ -324,11 +276,6 @@ impl BoosterChannels {
         channel: Channel,
         property: RfChannelProperty,
     ) -> Result<(), Error> {
-        self.mux.select_bus(Some(channel.into())).unwrap();
-
-        match &mut self.channels[channel as usize] {
-            Some(rf_channel) => rf_channel.set_property(property),
-            None => Err(Error::NotPresent),
-        }
+        self.map_channel(channel, |ch, _| ch.set_property(property))
     }
 }
