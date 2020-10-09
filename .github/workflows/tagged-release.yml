@@ -23,7 +23,8 @@ jobs:
       - name: Install Binutils
         uses: actions-rs/cargo@v1
         with:
-          command: install cargo-binutils
+          command: install
+          args: cargo-binutils
 
       - name: Build Debug
         uses: actions-rs/cargo@v1
