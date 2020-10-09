@@ -361,8 +361,10 @@ impl Devices {
             .expect("Power monitor did not respond");
 
         // Configure alarm thresholds for the P5V0_MP signal.
+        // Ensure that P5V0MP remains valid. Note that
+        // the 5V rail is divided by 2.5 before entering the ADC.
         ads7924
-            .set_thresholds(ads7924::Channel::Three, 0.0, 5.5 / 2.5)
+            .set_thresholds(ads7924::Channel::Three, 0.0, 6.5 / 2.5)
             .expect("Power monitor failed to set thresholds");
 
         // Verify that there is no active alarm condition.
@@ -499,13 +501,6 @@ impl RfChannel {
                     )
                     .unwrap();
 
-                // Place the bias DAC to drive the RF amplifier into pinch-off.
-                channel
-                    .i2c_devices
-                    .bias_dac
-                    .set_voltage(3.2)
-                    .expect("Failed to disable RF bias voltage");
-
                 // If the channel configuration specifies the channel as enabled, power up the
                 // channel now.
                 if channel.settings.data.enabled && platform::watchdog_detected() == false {
@@ -514,18 +509,6 @@ impl RfChannel {
                         .transition(ChannelState::WillPowerupEnable)
                         .unwrap();
                 }
-
-                // Configure alerts/alarms for the power monitor.
-
-                // Ensure that P5V0MP remains within +/- 500mV of the specified voltage. Note that
-                // the 5V rail is divided by 2.5 before entering the ADC.
-                channel
-                    .i2c_devices
-                    .power_monitor
-                    .set_thresholds(ads7924::Channel::Three, 0.0, 5.5 / 2.5)
-                    .unwrap();
-
-                channel.i2c_devices.power_monitor.clear_alarm().unwrap();
 
                 Some(channel)
             }

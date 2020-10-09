@@ -132,15 +132,6 @@ where
 
     fn set_mode(&mut self, mode: OperationMode, channel: Option<Channel>) -> Result<(), Error> {
         let mut mode_control: [u8; 1] = [0];
-        self.read(Register::ModeCntrl, &mut mode_control)?;
-
-        // The datasheet indicates that the device should always transition to active when switching
-        // operational modes to ensure internal logic is synchronized.
-        if mode != OperationMode::Active {
-            mode_control[0].set_bits(2..8, OperationMode::Active as u8);
-            self.write(Register::ModeCntrl, &mode_control)?;
-        }
-
         if let Some(channel) = channel {
             mode_control[0].set_bits(0..3, channel as u8);
         }
@@ -310,14 +301,15 @@ where
         // First, disable Autoscan mode.
         self.set_mode(OperationMode::Active, None)?;
 
-        for (voltage, reg) in voltages.iter_mut().zip(upper_data_registers.iter()) {
+        for (i, reg) in upper_data_registers.iter().enumerate() {
             let mut data = [0u8; 2];
             self.read(*reg, &mut data)?;
+
             // Convert the voltage register to an ADC code. The code is stored MSB-aligned, so we need
             // to shift it back into alignment.
             let code = u16::from_be_bytes(data) >> 4;
 
-            *voltage = code as f32 * self.volts_per_lsb;
+            voltages[i] = code as f32 * self.volts_per_lsb;
         }
 
         // Reenable Autoscan.
