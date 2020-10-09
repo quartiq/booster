@@ -19,7 +19,6 @@ jobs:
           toolchain: stable
           target: thumbv7em-none-eabihf
           override: true
-          components: cargo-binutils
 
       - name: Install Binutils
         uses: actions-rs/cargo@v1
