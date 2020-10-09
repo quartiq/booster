@@ -1,0 +1,70 @@
+[package]
+authors = ["Ryan Summers <ryan.summers@vertigo-designs.com>"]
+edition = "2018"
+readme = "README.md"
+name = "booster"
+version = "0.1.0"
+
+[dependencies]
+cortex-m = "0.6.3"
+cortex-m-rt = "0.6.10"
+cortex-m-rtic = "0.5.3"
+embedded-hal = "0.2.4"
+enum-iterator = "0.6.0"
+cortex-m-log = { version = "0.6.1", features = ["log-integration"] }
+log = "0.4.8"
+heapless = { version = "0.5.5", features = ["serde"] }
+bit_field = "0.10.0"
+debounced-pin = "0.3.0"
+serde = {version = "1.0", features = ["derive"], default-features = false }
+serde-json-core = "0.1"
+logos = { version = "0.11.4", default-features = false, features = ["export_derive"] }
+bbqueue = "0.4.10"
+usbd-serial = "0.1.0"
+shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
+usb-device = "0.2.6"
+postcard = "0.5.1"
+crc-any = { version = "2.3.5", default-features = false }
+
+[dependencies.minimq]
+git = "https://github.com/quartiq/minimq"
+
+[dependencies.stm32f4xx-hal]
+git = "https://github.com/quartiq/stm32f4xx-hal"
+features = ["stm32f407", "rt", "usb_fs"]
+
+[dependencies.w5500]
+git = "https://github.com/quartiq/w5500"
+branch = "feature/tcp-nal"
+
+[dependencies.ad5627]
+path = "ad5627"
+
+[dependencies.ads7924]
+path = "ads7924"
+
+[dependencies.dac7571]
+path = "dac7571"
+
+[dependencies.max6639]
+path = "max6639"
+
+[dependencies.max6642]
+path = "max6642"
+
+[dependencies.mcp3221]
+path = "mcp3221"
+
+[dependencies.microchip-24aa02e48]
+path = "microchip-24aa02e48"
+
+[dependencies.tca9548]
+path = "tca9548"
+
+[features]
+unstable = []
+
+[profile.release]
+codegen-units = 1 # better optimizations
+debug = true # symbols are nice and they don't increase the size on Flash
+lto = true # better optimizations
