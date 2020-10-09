@@ -40,12 +40,14 @@ jobs:
       - name: Dump Debug Binary
         uses: actions-rs/cargo@v1
         with:
-          command: objcopy -- -O binary booster-debug.bin
+          command: objcopy
+          args: -- -O binary booster-debug.bin
 
       - name: Dump Release Binary
         uses: actions-rs/cargo@v1
         with:
-          command: objcopy --release -- -O binary booster-release.bin
+          command: objcopy
+          args: --release -- -O binary booster-release.bin
 
       - uses: marvinpinto/action-automatic-releases@v1.1.0
         with:
