@@ -1,0 +1,58 @@
+name: tagged-release
+
+on:
+    push:
+        tags:
+          - "v*"
+
+jobs:
+  tagged-release:
+    name: "Tagged Release"
+    runs-on: "ubuntu-latest"
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust (Stable)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: thumbv7em-none-eabihf
+          override: true
+          components: cargo-binutils
+
+      - name: Install Binutils
+        uses: actions-rs/cargo@v1
+        with:
+          command: install cargo-binutils
+
+      - name: Build Debug
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: Build Release
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
+
+      - name: Dump Debug Binary
+        uses: actions-rs/cargo@v1
+        with:
+          command: objcopy -- -O binary booster-debug.bin
+
+      - name: Dump Release Binary
+        uses: actions-rs/cargo@v1
+        with:
+          command: objcopy --release -- -O binary booster-release.bin
+
+      - uses: marvinpinto/action-automatic-releases@v1.1.0
+        with:
+          prerelease: false
+          repo_token: '${{ secrets.ACCESS_TOKEN }}'
+          files: |
+            target/thumbv7em/debug/booster
+            target/thumbv7em/release/booster
+            booster-debug.bin
+            booster-release.bin
