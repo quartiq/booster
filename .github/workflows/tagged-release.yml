@@ -18,7 +18,6 @@ jobs:
         with:
           toolchain: stable
           target: thumbv7em-none-eabihf
-          override: true
           
       - uses: actions-rs/install@v0.1
         with:
