@@ -6,35 +6,16 @@
 //! Proprietary and confidential.
 
 use enum_iterator::IntoEnumIterator;
-use stm32f4xx_hal::{self as hal, prelude::*};
+use stm32f4xx_hal as hal;
 use tca9548::{self, Tca9548};
 
 use super::{I2cBusManager, I2cProxy};
 use crate::error::Error;
 use crate::rf_channel::{
     ChannelPins as RfChannelPins, ChannelState, Property as RfChannelProperty, PropertyId,
-    RfChannel,
+    RfChannel, ChannelStatus,
 };
 use embedded_hal::blocking::delay::DelayUs;
-
-/// Contains channel status information in SI base units.
-#[derive(Debug, serde::Serialize)]
-pub struct ChannelStatus {
-    pub reflected_overdrive: bool,
-    pub output_overdrive: bool,
-    pub alert: bool,
-    pub temperature: f32,
-    pub p28v_current: f32,
-    pub p5v_current: f32,
-    pub p5v_voltage: f32,
-    pub input_power: f32,
-    pub reflected_power: f32,
-    pub output_power: f32,
-    pub reflected_overdrive_threshold: f32,
-    pub output_overdrive_threshold: f32,
-    pub bias_voltage: f32,
-    pub state: ChannelState,
-}
 
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
@@ -122,7 +103,12 @@ impl BoosterChannels {
         }
     }
 
-    fn map_channel<F, R>(&mut self, channel: Channel, f: F) -> Result<R, Error>
+    /// Perform an action on a channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel to perform the action on.
+    /// * `func` - A function called with the channel selected and with the channel and the ADC3 peripheral passed as arguments.
+    pub fn map_channel<F, R>(&mut self, channel: Channel, f: F) -> Result<R, Error>
     where
         F: FnOnce(&mut RfChannel, &mut hal::adc::Adc<hal::stm32::ADC3>) -> Result<R, Error>,
     {
@@ -209,28 +195,7 @@ impl BoosterChannels {
     /// Returns
     /// A structure indicating all measurements on the channel.
     pub fn get_status(&mut self, channel: Channel) -> Result<ChannelStatus, Error> {
-        self.map_channel(channel, |ch, adc| {
-            let power_measurements = ch.get_supply_measurements();
-
-            let status = ChannelStatus {
-                reflected_overdrive: ch.pins.reflected_overdrive.is_high().unwrap(),
-                output_overdrive: ch.pins.output_overdrive.is_high().unwrap(),
-                alert: ch.pins.alert.is_low().unwrap(),
-                temperature: ch.get_temperature(),
-                p28v_current: power_measurements.i_p28v0ch,
-                p5v_current: power_measurements.i_p5v0ch,
-                p5v_voltage: power_measurements.v_p5v0mp,
-                input_power: ch.get_input_power(),
-                output_power: ch.get_output_power(adc),
-                reflected_power: ch.get_reflected_power(adc),
-                reflected_overdrive_threshold: ch.get_reflected_interlock_threshold(),
-                output_overdrive_threshold: ch.get_output_interlock_threshold(),
-                bias_voltage: ch.get_bias_voltage(),
-                state: ch.get_state(),
-            };
-
-            Ok(status)
-        })
+        self.map_channel(channel, |ch, adc| Ok(ch.get_status(adc)))
     }
 
     /// Save the current channel configuration in channel EEPROM.

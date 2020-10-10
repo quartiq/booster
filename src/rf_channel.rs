@@ -458,6 +458,25 @@ impl ChannelPins {
     }
 }
 
+/// Contains channel status information in SI base units.
+#[derive(Debug, serde::Serialize)]
+pub struct ChannelStatus {
+    pub reflected_overdrive: bool,
+    pub output_overdrive: bool,
+    pub alert: bool,
+    pub temperature: f32,
+    pub p28v_current: f32,
+    pub p5v_current: f32,
+    pub p5v_voltage: f32,
+    pub input_power: f32,
+    pub reflected_power: f32,
+    pub output_power: f32,
+    pub reflected_overdrive_threshold: f32,
+    pub output_overdrive_threshold: f32,
+    pub bias_voltage: f32,
+    pub state: ChannelState,
+}
+
 /// Represents a means of interacting with an RF output channel.
 pub struct RfChannel {
     pub i2c_devices: Devices,
@@ -939,6 +958,30 @@ impl RfChannel {
     /// Get the current bias voltage programmed to the RF amplification transistor.
     pub fn get_bias_voltage(&self) -> f32 {
         self.settings.data.bias_voltage
+    }
+
+    /// Get the channel status.
+    pub fn get_status(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> ChannelStatus {
+        let power_measurements = self.get_supply_measurements();
+
+        let status = ChannelStatus {
+            reflected_overdrive: self.pins.reflected_overdrive.is_high().unwrap(),
+            output_overdrive: self.pins.output_overdrive.is_high().unwrap(),
+            alert: self.pins.alert.is_low().unwrap(),
+            temperature: self.get_temperature(),
+            p28v_current: power_measurements.i_p28v0ch,
+            p5v_current: power_measurements.i_p5v0ch,
+            p5v_voltage: power_measurements.v_p5v0mp,
+            input_power: self.get_input_power(),
+            output_power: self.get_output_power(adc),
+            reflected_power: self.get_reflected_power(adc),
+            reflected_overdrive_threshold: self.get_reflected_interlock_threshold(),
+            output_overdrive_threshold: self.get_output_interlock_threshold(),
+            bias_voltage: self.get_bias_voltage(),
+            state: self.get_state(),
+        };
+
+        status
     }
 
     /// Get the current state of the channel.

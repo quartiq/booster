@@ -229,31 +229,35 @@ class BoosterApi:
             print(f'Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
             return vgs, ids
 
-        voltage = -3.2
+        # v_gsq from datasheet
+        voltage = -2.1
+        vgs_max = -0.3
+        ids_max = .2
+
+        # scan upwards in steps of 20 mV to just exceed the target
         last_ids = 0.
         while True:
-            if not voltage < 0:
+            if voltage > vgs_max:
                 raise ValueError(f'Voltage out of bounds')
             vgs, ids = await set(voltage)
-            if not 0 <= ids <= .1:
+            if ids > ids_max:
                 raise ValueError(f'Ids out of range')
-            if last_ids - ids > .02:
+            if ids < last_ids - .02:
                 raise ValueError(f'Foldback')
             last_ids = ids
             if ids > current:
                 break
             voltage += .02
+        vgs_max = voltage
 
+        # scan downwards in steps of 1 mV to just meed the target
         while True:
             voltage -= .001
-            if not voltage > -3.2:
+            if not vgs_max - .03 <= voltage <= vgs_max:
                 raise ValueError(f'Voltage out of bounds')
             vgs, ids = await set(voltage)
-            if not 0 <= ids <= .1:
+            if ids > ids_max:
                 raise ValueError(f'Ids out of range')
-            if last_ids - ids > .02:
-                raise ValueError(f'Foldback')
-            last_ids = ids
             if ids <= current:
                 break
 
