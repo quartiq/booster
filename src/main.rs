@@ -501,12 +501,12 @@ const APP: () = {
         // Check in with the watchdog.
         c.resources.watchdog.check_in(WatchdogClient::MonitorTask);
 
-        // Potentially update the state of any channels.
-        c.resources.main_bus.channels.update();
-
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
-            let state = match c.resources.main_bus.channels.get_channel_state(channel) {
+            let state = match c.resources.main_bus.channels.map(channel, |ch, _| {
+                ch.update()?;
+                Ok(ch.get_state())
+            }) {
                 Err(Error::NotPresent) => {
                     // Clear all LEDs for this channel.
                     c.resources.leds.set_led(Color::Red, channel, false);
@@ -569,11 +569,11 @@ const APP: () = {
         let mut temperatures: [f32; 8] = [0.0; 8];
 
         for channel in Channel::into_enum_iter() {
-            temperatures[channel as usize] = match c
-                .resources
-                .main_bus
-                .lock(|main_bus| main_bus.channels.get_temperature(channel))
-            {
+            temperatures[channel as usize] = match c.resources.main_bus.lock(|main_bus| {
+                main_bus
+                    .channels
+                    .map(channel, |ch, _| Ok(ch.get_temperature()))
+            }) {
                 Ok(temp) => temp,
                 Err(Error::NotPresent) => 0.0,
                 err => err.unwrap(),
@@ -603,10 +603,11 @@ const APP: () = {
 
         // Gather telemetry for all of the channels.
         for channel in Channel::into_enum_iter() {
-            let measurements = c
-                .resources
-                .main_bus
-                .lock(|main_bus| main_bus.channels.get_status(channel));
+            let measurements = c.resources.main_bus.lock(|main_bus| {
+                main_bus
+                    .channels
+                    .map(channel, |ch, adc| Ok(ch.get_status(adc)))
+            });
 
             if let Ok(measurements) = measurements {
                 // Broadcast the measured data over the telemetry interface.
@@ -647,7 +648,7 @@ const APP: () = {
                 ButtonEvent::InterlockReset => {
                     for chan in Channel::into_enum_iter() {
                         c.resources.main_bus.lock(|main_bus| {
-                            match main_bus.channels.enable_channel(chan) {
+                            match main_bus.channels.map(chan, |ch, _| ch.start_powerup(true)) {
                                 Ok(_) | Err(Error::NotPresent) => {}
 
                                 // It is possible to attempt to re-enable the channel before it was
@@ -664,7 +665,7 @@ const APP: () = {
                 ButtonEvent::Standby => {
                     for chan in Channel::into_enum_iter() {
                         c.resources.main_bus.lock(|main_bus| {
-                            match main_bus.channels.disable_channel(chan) {
+                            match main_bus.channels.map(chan, |ch, _| Ok(ch.start_disable())) {
                                 Ok(_) | Err(Error::NotPresent) => {}
                                 Err(e) => panic!("Standby failed on {:?}: {:?}", chan, e),
                             }

@@ -244,18 +244,18 @@ impl ControlState {
         if !self.subscribed {
             resources.mqtt_client.lock(|client| {
                 if client.is_connected().unwrap() {
-                    client
-                        .subscribe(&self.generate_topic_string("channel/state"), &[])
-                        .unwrap();
-                    client
-                        .subscribe(&self.generate_topic_string("channel/bias"), &[])
-                        .unwrap();
-                    client
-                        .subscribe(&self.generate_topic_string("channel/read"), &[])
-                        .unwrap();
-                    client
-                        .subscribe(&self.generate_topic_string("channel/write"), &[])
-                        .unwrap();
+                    for topic in [
+                        "channel/state",
+                        "channel/bias",
+                        "channel/read",
+                        "channel/write",
+                    ]
+                    .iter()
+                    {
+                        client
+                            .subscribe(&self.generate_topic_string(topic), &[])
+                            .unwrap();
+                    }
                     self.subscribed = true;
                 }
             });
@@ -334,25 +334,26 @@ fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> Stri
         Ok(data) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
-
-    match request.action {
-        ChannelAction::Enable => channels.enable_channel(request.channel).map_or_else(
-            |e| Response::error(e),
-            |_| Response::okay("Channel enabled"),
-        ),
-        ChannelAction::Disable => channels.disable_channel(request.channel).map_or_else(
-            |e| Response::error(e),
-            |_| Response::okay("Channel disabled"),
-        ),
-        ChannelAction::Powerup => channels.power_channel(request.channel).map_or_else(
-            |e| Response::error(e),
-            |_| Response::okay("Channel powered"),
-        ),
-        ChannelAction::Save => channels.save_configuration(request.channel).map_or_else(
-            |e| Response::error(e),
-            |_| Response::okay("Configuration saved"),
-        ),
-    }
+    channels
+        .map(request.channel, |ch, _| match request.action {
+            ChannelAction::Powerup => {
+                ch.start_powerup(false)?;
+                Ok("Channel powered")
+            }
+            ChannelAction::Enable => {
+                ch.start_powerup(true)?;
+                Ok("Channel enabled")
+            }
+            ChannelAction::Disable => {
+                ch.start_disable();
+                Ok("Channel disabled")
+            }
+            ChannelAction::Save => {
+                ch.save_configuration();
+                Ok("Channel saved")
+            }
+        })
+        .map_or_else(|e| Response::error(e), |m| Response::okay(m))
 }
 
 /// Handle a request to read a property of an RF channel.
@@ -372,7 +373,7 @@ fn handle_channel_property_read(
         Err(_) => return Response::error_msg("Failed to decode read request"),
     };
 
-    match channels.read_property(request.channel, request.prop) {
+    match channels.map(request.channel, |ch, _| Ok(ch.get_property(request.prop))) {
         Ok(prop) => PropertyReadResponse::okay(prop),
         Err(error) => Response::error(error),
     }
@@ -400,7 +401,7 @@ fn handle_channel_property_write(
         Err(_) => return Response::error_msg("Failed to decode property"),
     };
 
-    match channels.write_property(request.channel, property) {
+    match channels.map(request.channel, |ch, _| ch.set_property(property)) {
         Ok(_) => Response::okay("Property update successful"),
         Err(error) => Response::error(error),
     }
@@ -425,7 +426,13 @@ fn handle_channel_bias(
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
 
-    match channels.set_bias(request.channel, request.voltage, delay) {
+    match channels.map(request.channel, |ch, _| {
+        ch.set_bias(request.voltage)?;
+
+        // Settle the bias current and wait for an up-to-date measurement.
+        delay.delay_us(11000);
+        Ok((ch.get_bias_voltage(), ch.get_p28v_current()))
+    }) {
         Ok((vgs, ids)) => ChannelBiasResponse::okay(vgs, ids),
         Err(error) => Response::error(error),
     }

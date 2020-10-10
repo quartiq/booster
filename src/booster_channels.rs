@@ -11,10 +11,7 @@ use tca9548::{self, Tca9548};
 
 use super::{I2cBusManager, I2cProxy};
 use crate::error::Error;
-use crate::rf_channel::{
-    ChannelPins as RfChannelPins, ChannelState, Property as RfChannelProperty, PropertyId,
-    RfChannel, ChannelStatus,
-};
+use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 use embedded_hal::blocking::delay::DelayUs;
 
 /// Represents a control structure for interfacing to booster RF channels.
@@ -108,7 +105,7 @@ impl BoosterChannels {
     /// # Args
     /// * `channel` - The channel to perform the action on.
     /// * `func` - A function called with the channel selected and with the channel and the ADC3 peripheral passed as arguments.
-    pub fn map_channel<F, R>(&mut self, channel: Channel, f: F) -> Result<R, Error>
+    pub fn map<F, R>(&mut self, channel: Channel, func: F) -> Result<R, Error>
     where
         F: FnOnce(&mut RfChannel, &mut hal::adc::Adc<hal::stm32::ADC3>) -> Result<R, Error>,
     {
@@ -117,126 +114,7 @@ impl BoosterChannels {
         let ch = &mut self.channels[channel as usize];
         ch.as_mut().ok_or(Error::NotPresent).and_then(|ch| {
             mux.select_bus(Some(channel.into())).unwrap();
-            f(ch, adc)
+            func(ch, adc)
         })
-    }
-
-    /// Enable an RF channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to enable.
-    pub fn enable_channel(&mut self, channel: Channel) -> Result<(), Error> {
-        self.map_channel(channel, |ch, _| ch.start_powerup(true))
-    }
-
-    /// Power up an RF channel without enabling output.
-    ///
-    /// # Args
-    /// * `channel` - The channel to power-up.
-    pub fn power_channel(&mut self, channel: Channel) -> Result<(), Error> {
-        self.map_channel(channel, |ch, _| ch.start_powerup(false))
-    }
-
-    /// Disable an RF channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to disable.
-    pub fn disable_channel(&mut self, channel: Channel) -> Result<(), Error> {
-        self.map_channel(channel, |ch, _| Ok(ch.start_disable()))
-    }
-
-    /// Get the temperature of a channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to get the temperature of.
-    ///
-    /// # Returns
-    /// The temperature of the channel in degrees celsius.
-    pub fn get_temperature(&mut self, channel: Channel) -> Result<f32, Error> {
-        self.map_channel(channel, |ch, _| Ok(ch.get_temperature()))
-    }
-
-    /// Set the bias voltage of a channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to set the bias voltage of.
-    /// * `bias_voltage` - The desired bias voltage to apply to the RF amplification transistor.
-    pub fn set_bias(
-        &mut self,
-        channel: Channel,
-        bias_voltage: f32,
-        delay: &mut impl DelayUs<u16>,
-    ) -> Result<(f32, f32), Error> {
-        self.map_channel(channel, |ch, _| {
-            ch.set_bias(bias_voltage)?;
-
-            // Settle the bias current and wait for an up-to-date measurement.
-            delay.delay_us(11000);
-            Ok((ch.get_bias_voltage(), ch.get_p28v_current()))
-        })
-    }
-
-    /// Get the state of a channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to get the state of.
-    ///
-    /// # Returns
-    /// The channel state of the requested channel.
-    pub fn get_channel_state(&mut self, channel: Channel) -> Result<ChannelState, Error> {
-        self.map_channel(channel, |ch, _| Ok(ch.get_state()))
-    }
-
-    /// Get the current status of the channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to get the status of.
-    ///
-    /// Returns
-    /// A structure indicating all measurements on the channel.
-    pub fn get_status(&mut self, channel: Channel) -> Result<ChannelStatus, Error> {
-        self.map_channel(channel, |ch, adc| Ok(ch.get_status(adc)))
-    }
-
-    /// Save the current channel configuration in channel EEPROM.
-    pub fn save_configuration(&mut self, channel: Channel) -> Result<(), Error> {
-        self.map_channel(channel, |ch, _| Ok(ch.save_configuration()))
-    }
-
-    /// Update the states of RF channels as necessary.
-    pub fn update(&mut self) {
-        for channel in Channel::into_enum_iter() {
-            self.map_channel(channel, |ch, _| Ok(ch.update().unwrap()))
-                .ok();
-        }
-    }
-
-    /// Read a property from an RF channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to read the property of.
-    /// * `property` - The identifier of the property to read.
-    ///
-    /// # Returns
-    /// The requested property of the desired channel.
-    pub fn read_property(
-        &mut self,
-        channel: Channel,
-        property: PropertyId,
-    ) -> Result<RfChannelProperty, Error> {
-        self.map_channel(channel, |ch, _| Ok(ch.get_property(property)))
-    }
-
-    /// Write a property into an RF channel.
-    ///
-    /// # Args
-    /// * `channel` - The channel to update the property of.
-    /// * `property` - The property to set.
-    pub fn write_property(
-        &mut self,
-        channel: Channel,
-        property: RfChannelProperty,
-    ) -> Result<(), Error> {
-        self.map_channel(channel, |ch, _| ch.set_property(property))
     }
 }
