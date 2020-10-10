@@ -8,7 +8,6 @@ import argparse
 import asyncio
 import enum
 import json
-import time
 
 from gmqtt  import Client as MqttClient
 
@@ -198,7 +197,7 @@ class BoosterApi:
 
         # Power up the channel. Wait 200ms for the channel to fully power-up before continuing.
         await self._update_channel_state(channel, Action.Powerup)
-        time.sleep(0.4)
+        await asyncio.sleep(0.4)
 
         request = generate_request(channel=CHANNEL[channel],
                                    voltage=voltage)
@@ -219,7 +218,7 @@ class BoosterApi:
         """
         # Power up the channel. Wait for the channel to fully power-up before continuing.
         await self._update_channel_state(channel, Action.Powerup)
-        time.sleep(0.4)
+        await asyncio.sleep(0.4)
 
         async def set(voltage):
             request = generate_request(channel=CHANNEL[channel],
@@ -234,7 +233,7 @@ class BoosterApi:
         vgs_max = -0.3
         ids_max = .2
 
-        # scan upwards in steps of 20 mV to just exceed the target
+        # scan upwards in steps of 20 mV to just above target
         last_ids = 0.
         while True:
             if voltage > vgs_max:
@@ -250,7 +249,7 @@ class BoosterApi:
             voltage += .02
         vgs_max = voltage
 
-        # scan downwards in steps of 1 mV to just meed the target
+        # scan downwards in steps of 1 mV to just below target
         while True:
             voltage -= .001
             if not vgs_max - .03 <= voltage <= vgs_max:
