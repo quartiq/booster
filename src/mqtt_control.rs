@@ -353,7 +353,7 @@ fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> Stri
                 Ok("Channel saved")
             }
         })
-        .map_or_else(|e| Response::error(e), |m| Response::okay(m))
+        .map_or_else(Response::error, Response::okay)
 }
 
 /// Handle a request to read a property of an RF channel.

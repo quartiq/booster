@@ -104,17 +104,20 @@ impl BoosterChannels {
     ///
     /// # Args
     /// * `channel` - The channel to perform the action on.
-    /// * `func` - A function called with the channel selected and with the channel and the ADC3 peripheral passed as arguments.
+    /// * `func` - A function called with the channel selected and
+    ///     with the channel and the ADC3 peripheral passed as arguments.
     pub fn map<F, R>(&mut self, channel: Channel, func: F) -> Result<R, Error>
     where
         F: FnOnce(&mut RfChannel, &mut hal::adc::Adc<hal::stm32::ADC3>) -> Result<R, Error>,
     {
         let mux = &mut self.mux;
         let adc = &mut self.adc;
-        let ch = &mut self.channels[channel as usize];
-        ch.as_mut().ok_or(Error::NotPresent).and_then(|ch| {
-            mux.select_bus(Some(channel.into())).unwrap();
-            func(ch, adc)
-        })
+        self.channels[channel as usize]
+            .as_mut()
+            .ok_or(Error::NotPresent)
+            .and_then(|ch| {
+                mux.select_bus(Some(channel.into())).unwrap();
+                func(ch, adc)
+            })
     }
 }
