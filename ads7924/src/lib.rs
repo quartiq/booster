@@ -7,6 +7,8 @@
 #![no_std]
 #![deny(warnings)]
 
+use core::convert::TryInto;
+
 use bit_field::BitField;
 
 use embedded_hal::blocking::{
@@ -290,31 +292,21 @@ where
     /// # Returns
     /// The analog measurements of all channel in volts.
     pub fn get_voltages(&mut self) -> Result<[f32; 4], Error> {
-        let mut voltages = [0f32; 4];
-
-        let upper_data_registers = [
-            Register::Data0Upper,
-            Register::Data1Upper,
-            Register::Data2Upper,
-            Register::Data3Upper,
-        ];
-
         // First, disable Autoscan mode.
         self.set_mode(OperationMode::Active, None)?;
-
-        for (i, reg) in upper_data_registers.iter().enumerate() {
-            let mut data = [0u8; 2];
-            self.read(*reg, &mut data)?;
-
-            // Convert the voltage register to an ADC code. The code is stored MSB-aligned, so we need
-            // to shift it back into alignment.
-            let code = u16::from_be_bytes(data) >> 4;
-
-            voltages[i] = code as f32 * self.volts_per_lsb;
-        }
-
+        let mut data = [0u8; 4 * 2];
+        // Read all ADC data registers
+        self.read(Register::Data0Upper, &mut data)?;
         // Reenable Autoscan.
         self.set_mode(OperationMode::AutoscanWithSleep, None)?;
+
+        let mut voltages = [0f32; 4];
+        // Convert the voltage registers to an ADC code. The code is stored MSB-aligned,
+        // so we need to shift it back into alignment.
+        for i in 0..4 {
+            let code = u16::from_be_bytes(data[2 * i..2 * i + 1].try_into().unwrap());
+            voltages[i] = (code >> 4) as f32 * self.volts_per_lsb;
+        }
 
         Ok(voltages)
     }
