@@ -304,7 +304,7 @@ where
         // Convert the voltage registers to an ADC code. The code is stored MSB-aligned,
         // so we need to shift it back into alignment.
         for i in 0..4 {
-            let code = u16::from_be_bytes(data[2 * i..2 * i + 1].try_into().unwrap());
+            let code = u16::from_be_bytes(data[2 * i..2 * (i + 1)].try_into().unwrap());
             voltages[i] = (code >> 4) as f32 * self.volts_per_lsb;
         }
 
