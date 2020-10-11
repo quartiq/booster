@@ -104,7 +104,7 @@ where
 
         ads7924.reset(delay)?;
 
-         // Bring the ADC from idle to awake mode unconditionally.
+        // Bring the ADC from idle to awake mode unconditionally.
         let mode_control = *0u8.set_bits(2..8, OperationMode::Active as u8);
         ads7924.write(Register::ModeCntrl, &[mode_control])?;
 
@@ -296,7 +296,8 @@ where
             Register::Data0Upper,
             Register::Data1Upper,
             Register::Data2Upper,
-            Register::Data3Upper];
+            Register::Data3Upper,
+        ];
 
         // First, disable Autoscan mode.
         self.set_mode(OperationMode::Active, None)?;
@@ -317,5 +318,4 @@ where
 
         Ok(voltages)
     }
-
 }
