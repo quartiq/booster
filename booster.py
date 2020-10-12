@@ -195,7 +195,7 @@ class BoosterApi:
             current.
         """
 
-        # Power up the channel. Wait 200ms for the channel to fully power-up before continuing.
+        # Power up the channel. Wait for the channel to fully power-up before continuing.
         await self._update_channel_state(channel, Action.Powerup)
         await asyncio.sleep(0.4)
 

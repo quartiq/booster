@@ -429,7 +429,8 @@ fn handle_channel_bias(
     match channels.map(request.channel, |ch, _| {
         ch.set_bias(request.voltage)?;
 
-        // Settle the bias current and wait for an up-to-date measurement.
+        // Wait for 11 ms > 10.04 ms total cycle time to ensure an up-to-date
+        // current measurement.
         delay.delay_us(11000);
         Ok((ch.get_bias_voltage(), ch.get_p28v_current()))
     }) {

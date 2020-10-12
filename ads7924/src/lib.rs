@@ -30,7 +30,8 @@ where
 #[doc(hidden)]
 #[allow(dead_code)]
 enum OperationMode {
-    Active = 0b100000,
+    Idle = 0b000000,
+    Awake = 0b100000,
     ManualSingle = 0b110000,
     AutoscanWithSleep = 0b111011,
 }
@@ -107,8 +108,7 @@ where
         ads7924.reset(delay)?;
 
         // Bring the ADC from idle to awake mode unconditionally.
-        let mode_control = *0u8.set_bits(2..8, OperationMode::Active as u8);
-        ads7924.write(Register::ModeCntrl, &[mode_control])?;
+        ads7924.set_mode(OperationMode::Awake, None)?;
 
         // Configure the interrupt pin to operate in alarm mode when thresholds are exceeded once.
         let interrupt_config = *0u8.set_bits(5..8, 0b1);
@@ -272,12 +272,13 @@ where
             Channel::Three => Register::Data3Upper,
         };
         // First, disable Autoscan mode.
-        self.set_mode(OperationMode::Active, None)?;
+        self.set_mode(OperationMode::Idle, None)?;
 
         let mut voltage_register: [u8; 2] = [0; 2];
         self.read(upper_data_register, &mut voltage_register)?;
 
         // Reenable Autoscan.
+        self.set_mode(OperationMode::Awake, None)?;
         self.set_mode(OperationMode::AutoscanWithSleep, None)?;
 
         // Convert the voltage register to an ADC code. The code is stored MSB-aligned, so we need
@@ -293,11 +294,14 @@ where
     /// The analog measurements of all channel in volts.
     pub fn get_voltages(&mut self) -> Result<[f32; 4], Error> {
         // First, disable Autoscan mode.
-        self.set_mode(OperationMode::Active, None)?;
-        let mut data = [0u8; 4 * 2];
+        self.set_mode(OperationMode::Idle, None)?;
+
         // Read all ADC data registers
+        let mut data = [0u8; 4 * 2];
         self.read(Register::Data0Upper, &mut data)?;
+
         // Reenable Autoscan.
+        self.set_mode(OperationMode::Awake, None)?;
         self.set_mode(OperationMode::AutoscanWithSleep, None)?;
 
         let mut voltages = [0f32; 4];
