@@ -22,6 +22,13 @@ Proprietary and confidential.
 You may purchase a [license](LICENSE) to use this software from
 [QUARTIQ](mailto:sales@quartiq.com).
 
+# Hardware
+
+Booster is an 8 channel RF power amplifier in the Sinara open hardware ecosystem.
+The open hardware designs and hardware discussions are located at
+https://github.com/sinara-hw/Booster/wiki.
+The hardware is available from Creotech, QUARTIQ, Technosyste, and M-Labs.
+
 # Getting Started
 
 This section is intended to acquaint the user with the Booster NGFW application.
