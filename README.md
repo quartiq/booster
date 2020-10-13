@@ -113,8 +113,7 @@ transmitted in human-readable JSON format for logging purposes.
 
 Booster also supports a control interface over MQTT using the following topics:
 * `<ID>/channel/state` - Used to configure the power state of an RF channel
-* `<ID>/channel/tune` - Used to tune the drain current of an RF channel
-* `<ID>/channel/bias` - Used to set the gate bias of an RF channel
+* `<ID>/channel/bias` - Used to set the gate bias voltage of an RF channel
 * `<ID>/channel/read` - Used to read Booster properties, such as the interlock thresholds or the
   power transforms
 * `<ID>/channel/write` - Used to write Booster properties, such as the interlock thresholds or the
