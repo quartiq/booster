@@ -8,7 +8,6 @@ import argparse
 import asyncio
 import enum
 import json
-import time
 
 from gmqtt  import Client as MqttClient
 
@@ -184,27 +183,84 @@ class BoosterApi:
         await self.command("channel/write", request)
 
 
-    async def tune_bias(self, channel, desired_current):
-        """ Tune a booster RF bias current.
+    async def set_bias(self, channel, voltage):
+        """ Set a booster RF bias voltage.
 
         Args:
             channel: The channel index to configure.
-            desired_current: The desired booster output current.
+            voltage: The bias voltage.
 
         Returns:
-            (Vgs, Ids) where Vgs is the tuned bias voltage and Ids is the RF amplifier drain
+            (Vgs, Ids) where Vgs is the bias voltage and Ids is the RF amplifier drain
             current.
         """
 
-        # Power up the channel. Wait 200ms for the channel to fully power-up before continuing.
+        # Power up the channel. Wait for the channel to fully power-up before continuing.
         await self._update_channel_state(channel, Action.Powerup)
-        time.sleep(0.200)
+        await asyncio.sleep(0.4)
 
         request = generate_request(channel=CHANNEL[channel],
-                                   current=float(desired_current))
-        response = await self.command("channel/tune", request)
+                                   voltage=voltage)
+        response = await self.command("channel/bias", request)
 
         return (response['vgs'], response['ids'])
+
+    async def tune_bias(self, channel, current):
+        """ Set a booster RF bias current.
+
+        Args:
+            channel: The channel index to configure.
+            current: The bias current.
+
+        Returns:
+            (Vgs, Ids) where Vgs is the actual bias voltage and Ids is
+            the measured RF amplifier drain current.
+        """
+        # Power up the channel. Wait for the channel to fully power-up before continuing.
+        await self._update_channel_state(channel, Action.Powerup)
+        await asyncio.sleep(0.4)
+
+        async def set(voltage):
+            request = generate_request(channel=CHANNEL[channel],
+                                       voltage=voltage)
+            response = await self.command("channel/bias", request)
+            vgs, ids = response['vgs'], response['ids']
+            print(f'Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
+            return vgs, ids
+
+        # v_gsq from datasheet
+        voltage = -2.1
+        vgs_max = -0.3
+        ids_max = .2
+
+        # scan upwards in steps of 20 mV to just above target
+        last_ids = 0.
+        while True:
+            if voltage > vgs_max:
+                raise ValueError(f'Voltage out of bounds')
+            vgs, ids = await set(voltage)
+            if ids > ids_max:
+                raise ValueError(f'Ids out of range')
+            if ids < last_ids - .02:
+                raise ValueError(f'Foldback')
+            last_ids = ids
+            if ids > current:
+                break
+            voltage += .02
+        vgs_max = voltage
+
+        # scan downwards in steps of 1 mV to just below target
+        while True:
+            voltage -= .001
+            if not vgs_max - .03 <= voltage <= vgs_max:
+                raise ValueError(f'Voltage out of bounds')
+            vgs, ids = await set(voltage)
+            if ids > ids_max:
+                raise ValueError(f'Ids out of range')
+            if ids <= current:
+                break
+
+        return vgs, ids
 
 
 async def channel_configuration(args):
@@ -227,7 +283,11 @@ async def channel_configuration(args):
               f'Reflected power interlock threshold = {args.thresholds[1]} dBm')
 
     if args.bias:
-        vgs, ids = await interface.tune_bias(args.channel, args.bias)
+        vgs, ids = await interface.set_bias(args.channel, args.bias)
+        print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
+
+    if args.tune:
+        vgs, ids = await interface.tune_bias(args.channel, args.tune)
         print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
 
     if args.disable:
@@ -252,6 +312,8 @@ def main():
     parser.add_argument('channel', type=int, choices=list(range(8)))
     parser.add_argument('--broker', default='10.0.0.2', type=str, help='The MQTT broker address')
     parser.add_argument('--bias', type=float,
+                        help='Set the RF channel bias voltage to the provided value')
+    parser.add_argument('--tune', type=float,
                         help='Tune the RF channel bias current to the provided value')
     parser.add_argument('--enable', action='store_true', help='Enable the RF channel')
     parser.add_argument('--disable', action='store_true', help='Disable the RF channel')

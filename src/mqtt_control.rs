@@ -133,23 +133,23 @@ struct ChannelRequest {
     pub action: ChannelAction,
 }
 
-/// Specifies the desired channel RF bias current.
+/// Specifies the desired channel RF bias voltage.
 #[derive(serde::Deserialize)]
-struct ChannelTuneRequest {
+struct ChannelBiasRequest {
     pub channel: Channel,
-    pub current: f32,
+    pub voltage: f32,
 }
 
-/// Indicates the result of a channel tuning request.
+/// Indicates the result of a channel bias setting request.
 #[derive(serde::Serialize)]
-struct ChannelTuneResponse {
+struct ChannelBiasResponse {
     code: u32,
     pub vgs: f32,
     pub ids: f32,
 }
 
-impl ChannelTuneResponse {
-    /// Indicate that a channel bias tuning command was successfully processed.
+impl ChannelBiasResponse {
+    /// Indicate that a channel bias setting command was successfully processed.
     ///
     /// # Args
     /// * `vgs` - The resulting gate voltage of the RF amplifier.
@@ -244,18 +244,18 @@ impl ControlState {
         if !self.subscribed {
             resources.mqtt_client.lock(|client| {
                 if client.is_connected().unwrap() {
-                    client
-                        .subscribe(&self.generate_topic_string("channel/state"), &[])
-                        .unwrap();
-                    client
-                        .subscribe(&self.generate_topic_string("channel/tune"), &[])
-                        .unwrap();
-                    client
-                        .subscribe(&self.generate_topic_string("channel/read"), &[])
-                        .unwrap();
-                    client
-                        .subscribe(&self.generate_topic_string("channel/write"), &[])
-                        .unwrap();
+                    for topic in [
+                        "channel/state",
+                        "channel/bias",
+                        "channel/read",
+                        "channel/write",
+                    ]
+                    .iter()
+                    {
+                        client
+                            .subscribe(&self.generate_topic_string(topic), &[])
+                            .unwrap();
+                    }
                     self.subscribed = true;
                 }
             });
@@ -277,8 +277,8 @@ impl ControlState {
 
                     let response = match route {
                         "channel/state" => handle_channel_update(message, &mut main_bus.channels),
-                        "channel/tune" => {
-                            handle_channel_tune(message, &mut main_bus.channels, *delay)
+                        "channel/bias" => {
+                            handle_channel_bias(message, &mut main_bus.channels, *delay)
                         }
                         "channel/read" => {
                             handle_channel_property_read(message, &mut main_bus.channels)
@@ -334,25 +334,26 @@ fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> Stri
         Ok(data) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
-
-    match request.action {
-        ChannelAction::Enable => channels.enable_channel(request.channel).map_or_else(
-            |e| Response::error(e),
-            |_| Response::okay("Channel enabled"),
-        ),
-        ChannelAction::Disable => channels.disable_channel(request.channel).map_or_else(
-            |e| Response::error(e),
-            |_| Response::okay("Channel disabled"),
-        ),
-        ChannelAction::Powerup => channels.power_channel(request.channel).map_or_else(
-            |e| Response::error(e),
-            |_| Response::okay("Channel powered"),
-        ),
-        ChannelAction::Save => channels.save_configuration(request.channel).map_or_else(
-            |e| Response::error(e),
-            |_| Response::okay("Configuration saved"),
-        ),
-    }
+    channels
+        .map(request.channel, |ch, _| match request.action {
+            ChannelAction::Powerup => {
+                ch.start_powerup(false)?;
+                Ok("Channel powered")
+            }
+            ChannelAction::Enable => {
+                ch.start_powerup(true)?;
+                Ok("Channel enabled")
+            }
+            ChannelAction::Disable => {
+                ch.start_disable();
+                Ok("Channel disabled")
+            }
+            ChannelAction::Save => {
+                ch.save_configuration();
+                Ok("Channel saved")
+            }
+        })
+        .map_or_else(Response::error, Response::okay)
 }
 
 /// Handle a request to read a property of an RF channel.
@@ -372,7 +373,7 @@ fn handle_channel_property_read(
         Err(_) => return Response::error_msg("Failed to decode read request"),
     };
 
-    match channels.read_property(request.channel, request.prop) {
+    match channels.map(request.channel, |ch, _| Ok(ch.get_property(request.prop))) {
         Ok(prop) => PropertyReadResponse::okay(prop),
         Err(error) => Response::error(error),
     }
@@ -400,13 +401,13 @@ fn handle_channel_property_write(
         Err(_) => return Response::error_msg("Failed to decode property"),
     };
 
-    match channels.write_property(request.channel, property) {
+    match channels.map(request.channel, |ch, _| ch.set_property(property)) {
         Ok(_) => Response::okay("Property update successful"),
         Err(error) => Response::error(error),
     }
 }
 
-/// Handle a request to tune the bias current of a channel.
+/// Handle a request to set the bias of a channel.
 ///
 /// # Args
 /// * `message` - The serialized message request.
@@ -415,18 +416,25 @@ fn handle_channel_property_write(
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_tune(
+fn handle_channel_bias(
     message: &[u8],
     channels: &mut BoosterChannels,
     delay: &mut impl DelayUs<u16>,
 ) -> String<consts::U256> {
-    let request = match serde_json_core::from_slice::<ChannelTuneRequest>(message) {
+    let request = match serde_json_core::from_slice::<ChannelBiasRequest>(message) {
         Ok(data) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
 
-    match channels.tune_channel(request.channel, request.current, delay) {
-        Ok((vgs, ids)) => ChannelTuneResponse::okay(vgs, ids),
+    match channels.map(request.channel, |ch, _| {
+        ch.set_bias(request.voltage)?;
+
+        // Wait for 11 ms > 10.04 ms total cycle time to ensure an up-to-date
+        // current measurement.
+        delay.delay_us(11000);
+        Ok((ch.get_bias_voltage(), ch.get_p28v_current()))
+    }) {
+        Ok((vgs, ids)) => ChannelBiasResponse::okay(vgs, ids),
         Err(error) => Response::error(error),
     }
 }

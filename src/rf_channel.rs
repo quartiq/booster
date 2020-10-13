@@ -361,8 +361,10 @@ impl Devices {
             .expect("Power monitor did not respond");
 
         // Configure alarm thresholds for the P5V0_MP signal.
+        // Ensure that P5V0MP remains valid. Note that
+        // the 5V rail is divided by 2.5 before entering the ADC.
         ads7924
-            .set_thresholds(ads7924::Channel::Three, 0.0, 5.5 / 2.5)
+            .set_thresholds(ads7924::Channel::Three, 0.0, 6.5 / 2.5)
             .expect("Power monitor failed to set thresholds");
 
         // Verify that there is no active alarm condition.
@@ -456,6 +458,25 @@ impl ChannelPins {
     }
 }
 
+/// Contains channel status information in SI base units.
+#[derive(Debug, serde::Serialize)]
+pub struct ChannelStatus {
+    pub reflected_overdrive: bool,
+    pub output_overdrive: bool,
+    pub alert: bool,
+    pub temperature: f32,
+    pub p28v_current: f32,
+    pub p5v_current: f32,
+    pub p5v_voltage: f32,
+    pub input_power: f32,
+    pub reflected_power: f32,
+    pub output_power: f32,
+    pub reflected_overdrive_threshold: f32,
+    pub output_overdrive_threshold: f32,
+    pub bias_voltage: f32,
+    pub state: ChannelState,
+}
+
 /// Represents a means of interacting with an RF output channel.
 pub struct RfChannel {
     pub i2c_devices: Devices,
@@ -499,13 +520,6 @@ impl RfChannel {
                     )
                     .unwrap();
 
-                // Place the bias DAC to drive the RF amplifier into pinch-off.
-                channel
-                    .i2c_devices
-                    .bias_dac
-                    .set_voltage(3.2)
-                    .expect("Failed to disable RF bias voltage");
-
                 // If the channel configuration specifies the channel as enabled, power up the
                 // channel now.
                 if channel.settings.data.enabled && platform::watchdog_detected() == false {
@@ -514,18 +528,6 @@ impl RfChannel {
                         .transition(ChannelState::WillPowerupEnable)
                         .unwrap();
                 }
-
-                // Configure alerts/alarms for the power monitor.
-
-                // Ensure that P5V0MP remains within +/- 500mV of the specified voltage. Note that
-                // the 5V rail is divided by 2.5 before entering the ADC.
-                channel
-                    .i2c_devices
-                    .power_monitor
-                    .set_thresholds(ads7924::Channel::Three, 0.0, 5.5 / 2.5)
-                    .unwrap();
-
-                channel.i2c_devices.power_monitor.clear_alarm().unwrap();
 
                 Some(channel)
             }
@@ -831,16 +833,28 @@ impl RfChannel {
     /// # Returns
     /// The most recent power supply measurements of the channel.
     pub fn get_supply_measurements(&mut self) -> SupplyMeasurements {
+        // Read the cached (scanned) ADC measurements from the monitor.
+        let voltages = self.i2c_devices.power_monitor.get_voltages().unwrap();
+
         // The P5V0 rail goes through a resistor divider of 15K -> 10K. This corresponds with a 2.5x
         // reduction in measured voltage.
-        let p5v_voltage = self
-            .i2c_devices
-            .power_monitor
-            .get_voltage(ads7924::Channel::Three)
-            .unwrap();
-        let v_p5v0mp = p5v_voltage * 2.5;
+        let v_p5v0mp = voltages[3] * 2.5;
 
-        let i_p28v0ch = self.measure_p28v_current(false);
+        // The 28V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
+        // output resistance on the current sensor is 4.3K Ohm.
+        //
+        // From the LT6106 (current monitor) datasheet:
+        // Vout = Vsns * Rout / Rin
+        //
+        // Given:
+        // Vsns = Isns * Rsns
+        // Rsns = 100m Ohm
+        // Rin = 100 Ohm
+        // Rout = 4.3K Ohm
+        //
+        // Vout = Isns * Rsns * Rout / Rin
+        // Isns = (Vout * Rin) / Rsns / Rout
+        let i_p28v0ch = voltages[0] * (100.0 / 0.100 / 4300.0);
 
         // The P5V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
         // output resistance on the current sensor is 6.2K Ohm.
@@ -856,12 +870,7 @@ impl RfChannel {
         //
         // Vout = Isns * Rsns * Rout / Rin
         // Isns = (Vout * Rin) / Rsns / Rout
-        let p5v_rail_current_sense = self
-            .i2c_devices
-            .power_monitor
-            .get_voltage(ads7924::Channel::One)
-            .unwrap();
-        let i_p5v0ch = p5v_rail_current_sense * (100.0 / 0.100 / 6200.0);
+        let i_p5v0ch = voltages[1] * (100.0 / 0.100 / 6200.0);
 
         SupplyMeasurements {
             v_p5v0mp,
@@ -870,35 +879,16 @@ impl RfChannel {
         }
     }
 
-    fn measure_p28v_current(&mut self, force_update: bool) -> f32 {
-        // The 28V current is sensed across a 100mOhm resistor with 100 Ohm input resistance. The
-        // output resistance on the current sensor is 4.3K Ohm.
-        //
-        // From the LT6106 (current monitor) datasheet:
-        // Vout = Vsns * Rout / Rin
-        //
-        // Given:
-        // Vsns = Isns * Rsns
-        // Rsns = 100m Ohm
-        // Rin = 100 Ohm
-        // Rout = 4.3K Ohm
-        //
-        // Vout = Isns * Rsns * Rout / Rin
-        // Isns = (Vout * Rin) / Rsns / Rout
-
-        let p28v_rail_current_sense = if force_update {
-            // Force the power monitor to make a new reading.
-            self.i2c_devices
-                .power_monitor
-                .measure_voltage(ads7924::Channel::Zero)
-                .unwrap()
-        } else {
-            // Read the cached (scanned) ADC measurement from the monitor.
-            self.i2c_devices
-                .power_monitor
-                .get_voltage(ads7924::Channel::Zero)
-                .unwrap()
-        };
+    /// Get P28V rail current.
+    ///
+    /// # Returns
+    /// The most recent P28V rail current measurements of the channel.
+    pub fn get_p28v_current(&mut self) -> f32 {
+        let p28v_rail_current_sense = self
+            .i2c_devices
+            .power_monitor
+            .get_voltage(ads7924::Channel::Zero)
+            .unwrap();
 
         p28v_rail_current_sense * (100.0 / 0.100 / 4300.0)
     }
@@ -920,12 +910,12 @@ impl RfChannel {
     ///
     /// # Returns
     /// The reflected power in dBm.
-    pub fn get_reflected_power(&mut self, mut adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
+    pub fn get_reflected_power(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
         let sample = self
             .pins
             .adc_pins
             .reflected_power
-            .convert(&mut adc, SampleTime::Cycles_480);
+            .convert(adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
         self.settings.data.reflected_power_transform.map(voltage)
@@ -938,12 +928,12 @@ impl RfChannel {
     ///
     /// # Returns
     /// The output power in dBm.
-    pub fn get_output_power(&mut self, mut adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
+    pub fn get_output_power(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
         let sample = self
             .pins
             .adc_pins
             .tx_power
-            .convert(&mut adc, SampleTime::Cycles_480);
+            .convert(adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
         self.settings.data.output_power_transform.map(voltage)
@@ -970,92 +960,33 @@ impl RfChannel {
         self.settings.data.bias_voltage
     }
 
+    /// Get the channel status.
+    pub fn get_status(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> ChannelStatus {
+        let power_measurements = self.get_supply_measurements();
+
+        let status = ChannelStatus {
+            reflected_overdrive: self.pins.reflected_overdrive.is_high().unwrap(),
+            output_overdrive: self.pins.output_overdrive.is_high().unwrap(),
+            alert: self.pins.alert.is_low().unwrap(),
+            temperature: self.get_temperature(),
+            p28v_current: power_measurements.i_p28v0ch,
+            p5v_current: power_measurements.i_p5v0ch,
+            p5v_voltage: power_measurements.v_p5v0mp,
+            input_power: self.get_input_power(),
+            output_power: self.get_output_power(adc),
+            reflected_power: self.get_reflected_power(adc),
+            reflected_overdrive_threshold: self.get_reflected_interlock_threshold(),
+            output_overdrive_threshold: self.get_output_interlock_threshold(),
+            bias_voltage: self.get_bias_voltage(),
+            state: self.get_state(),
+        };
+
+        status
+    }
+
     /// Get the current state of the channel.
     pub fn get_state(&self) -> ChannelState {
         self.state_machine.state()
-    }
-
-    /// Tune the RF amplifier bias current.
-    ///
-    /// # Args
-    /// * `desired_current` - The desired RF amplifier drain current.
-    /// * `delay` - A means of delaying during tuning.
-    ///
-    /// # Returns
-    /// A tuple of (Vgs, Ids) where Vgs is the bias voltage on the amplifier gate. Ids is the actual
-    /// drain current achieved.
-    pub fn tune_bias(
-        &mut self,
-        desired_current: f32,
-        delay: &mut impl DelayUs<u16>,
-    ) -> Result<(f32, f32), Error> {
-        // Verify that the channel is powered, but is not actively outputting for bias calibration.
-        match self.state_machine.state() {
-            ChannelState::Powered | ChannelState::Tripped(_) => {}
-            _ => return Err(Error::InvalidState),
-        }
-
-        // Booster schematic indicates the regulator is configured to supply up to 550mA. However,
-        // when the RF input is disabled, the bias current is significantly lower. For this reason,
-        // the upper bound is currently limited to 100mA, but may be adjusted in the future.
-        if desired_current < 0.010 || desired_current > 0.100 {
-            return Err(Error::Bounds);
-        }
-
-        // Disable the RF input during the test. Note: The state should ensure this is already the
-        // case, but it is done here redundantly as a safety precaution.
-        self.pins.signal_on.set_low().unwrap();
-
-        // Place the RF channel into pinch-off to start.
-        let mut bias_voltage = -3.2;
-        self.set_bias(bias_voltage).unwrap();
-        // Settle the bias
-        delay.delay_us(1000_u16);
-        let mut last_current = self.measure_p28v_current(true);
-
-        // First, increase the bias voltage until we overshoot the desired set current by a small
-        // margin.
-        while last_current < desired_current {
-            // Slowly bring the bias voltage up in steps of 20mV until the desired drain current is
-            // achieved.
-            bias_voltage = bias_voltage + 0.020;
-            if bias_voltage >= 0.0 {
-                return Err(Error::Invalid);
-            }
-
-            self.set_bias(bias_voltage).unwrap();
-            delay.delay_us(1000_u16);
-
-            // Re-measure the drain current.
-            let new_current = self.measure_p28v_current(true);
-
-            // Check that the LDO did not enter fold-back. When the LDO enters fold-back, the
-            // current should begin to drop dramatically. For now, a 20mA threshold is used to
-            // detect foldback.
-            if last_current - new_current > 0.020 {
-                return Err(Error::Foldback);
-            }
-            last_current = new_current;
-        }
-
-        // Next, decrease the bias voltage until we drop back below the desired set point.
-        while last_current > desired_current {
-            // Decrease the bias voltage in 1mV steps to decrease the drain current marginally.
-            bias_voltage = bias_voltage - 0.001;
-            if bias_voltage <= -3.2 {
-                return Err(Error::Invalid);
-            }
-
-            // Set the new bias and re-measure the drain current.
-            self.set_bias(bias_voltage).unwrap();
-            delay.delay_us(1000_u16);
-            last_current = self.measure_p28v_current(true);
-        }
-
-        // Note that we're returning the actual bias voltage as calculated by the DAC as opposed to
-        // the voltage we used in the algorithm because the voltage reported by the DAC is more
-        // accurate.
-        Ok((self.settings.data.bias_voltage, last_current))
     }
 
     /// Set a property for the channel.

@@ -7,6 +7,8 @@
 #![no_std]
 #![deny(warnings)]
 
+use core::convert::TryInto;
+
 use bit_field::BitField;
 
 use embedded_hal::blocking::{
@@ -26,12 +28,15 @@ where
 
 #[derive(Copy, Clone, PartialEq)]
 #[doc(hidden)]
+#[allow(dead_code)]
 enum OperationMode {
-    Active = 0b100000,
+    Idle = 0b000000,
+    Awake = 0b100000,
     ManualSingle = 0b110000,
     AutoscanWithSleep = 0b111011,
 }
 
+#[derive(Copy, Clone)]
 #[doc(hidden)]
 #[allow(dead_code)]
 enum Register {
@@ -102,6 +107,9 @@ where
 
         ads7924.reset(delay)?;
 
+        // Bring the ADC from idle to awake mode unconditionally.
+        ads7924.set_mode(OperationMode::Awake, None)?;
+
         // Configure the interrupt pin to operate in alarm mode when thresholds are exceeded once.
         let interrupt_config = *0u8.set_bits(5..8, 0b1);
         ads7924.write(Register::IntConfig, &[interrupt_config])?;
@@ -126,15 +134,6 @@ where
 
     fn set_mode(&mut self, mode: OperationMode, channel: Option<Channel>) -> Result<(), Error> {
         let mut mode_control: [u8; 1] = [0];
-        self.read(Register::ModeCntrl, &mut mode_control)?;
-
-        // The datasheet indicates that the device should always transition to active when switching
-        // operational modes to ensure internal logic is synchronized.
-        if mode != OperationMode::Active {
-            mode_control[0].set_bits(2..8, OperationMode::Active as u8);
-            self.write(Register::ModeCntrl, &mode_control)?;
-        }
-
         if let Some(channel) = channel {
             mode_control[0].set_bits(0..3, channel as u8);
         }
@@ -272,9 +271,15 @@ where
             Channel::Two => Register::Data2Upper,
             Channel::Three => Register::Data3Upper,
         };
+        // First, disable Autoscan mode.
+        self.set_mode(OperationMode::Idle, None)?;
 
         let mut voltage_register: [u8; 2] = [0; 2];
         self.read(upper_data_register, &mut voltage_register)?;
+
+        // Reenable Autoscan.
+        self.set_mode(OperationMode::Awake, None)?;
+        self.set_mode(OperationMode::AutoscanWithSleep, None)?;
 
         // Convert the voltage register to an ADC code. The code is stored MSB-aligned, so we need
         // to shift it back into alignment.
@@ -283,25 +288,30 @@ where
         Ok(code as f32 * self.volts_per_lsb)
     }
 
-    /// Get an up-to-date analog voltage of a channel.
-    ///
-    /// # Note
-    /// This function will force the ADC to perform a new analog conversion, so results will be as
-    /// up-to-date as possible.
-    ///
-    /// # Args
-    /// * `channel` - The channel to get the voltage of.
+    /// Get the analog voltages of all channels.
     ///
     /// # Returns
-    /// The analog measurement of the specified channel in volts.
-    pub fn measure_voltage(&mut self, channel: Channel) -> Result<f32, Error> {
-        // First, update the mode to be manual-single.
-        self.set_mode(OperationMode::ManualSingle, Some(channel))?;
+    /// The analog measurements of all channel in volts.
+    pub fn get_voltages(&mut self) -> Result<[f32; 4], Error> {
+        // First, disable Autoscan mode.
+        self.set_mode(OperationMode::Idle, None)?;
 
-        let voltage = self.get_voltage(channel)?;
+        // Read all ADC data registers
+        let mut data = [0u8; 4 * 2];
+        self.read(Register::Data0Upper, &mut data)?;
 
+        // Reenable Autoscan.
+        self.set_mode(OperationMode::Awake, None)?;
         self.set_mode(OperationMode::AutoscanWithSleep, None)?;
 
-        Ok(voltage)
+        let mut voltages = [0f32; 4];
+        // Convert the voltage registers to an ADC code. The code is stored MSB-aligned,
+        // so we need to shift it back into alignment.
+        for i in 0..4 {
+            let code = u16::from_be_bytes(data[2 * i..2 * (i + 1)].try_into().unwrap());
+            voltages[i] = (code >> 4) as f32 * self.volts_per_lsb;
+        }
+
+        Ok(voltages)
     }
 }
