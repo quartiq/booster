@@ -113,7 +113,7 @@ transmitted in human-readable JSON format for logging purposes.
 
 Booster also supports a control interface over MQTT using the following topics:
 * `<ID>/channel/state` - Used to configure the power state of an RF channel
-* `<ID>/channel/tune` - Used to tune the drain current of an RF channel to tune the amplification
+* `<ID>/channel/bias` - Used to set the gate bias voltage of an RF channel
 * `<ID>/channel/read` - Used to read Booster properties, such as the interlock thresholds or the
   power transforms
 * `<ID>/channel/write` - Used to write Booster properties, such as the interlock thresholds or the
@@ -187,9 +187,14 @@ To configure interlock thresholds for a channel:
 python booster.py --booster-id <ID> <CHANNEL> --thresholds <OUTPUT_DBM> <REFLECTED_DBM>
 ```
 
+To set the gate bias voltage of an RF channel:
+```
+python booster.py --booster-id <ID> <CHANNEL> --bias <GATE_BIAS_VOLTAGE>
+```
+
 To tune the bias current of an RF channel to a desired drain current:
 ```
-python booster.py --booster-id <ID> <CHANNEL> --bias <DRAIN_CURRENT>
+python booster.py --booster-id <ID> <CHANNEL> --tune <DRAIN_CURRENT>
 ```
 
 Once a channel is configured as desired, the configuration can be stored permanently in Booster
