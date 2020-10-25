@@ -293,8 +293,7 @@ const APP: () = {
             // Test scanning and reading back MUX channels.
             assert!(mux.self_test().unwrap() == true);
 
-            let config = hal::adc::config::AdcConfig::default()
-                .reference_voltage(2500);
+            let config = hal::adc::config::AdcConfig::default().reference_voltage(2500);
 
             let adc = hal::adc::Adc::adc3(c.device.ADC3, true, config);
 
