@@ -1,3 +1,5 @@
+[![QUARTIQ Matrix Chat](https://img.shields.io/matrix/quartiq:matrix.org)](https://matrix.to/#/#quartiq:matrix.org)
+
 # Booster NGFW (Next-Generation Firmware)
 
 Updated firmware for the Sinara Booster hardware
