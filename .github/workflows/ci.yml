@@ -91,6 +91,7 @@ jobs:
           args: --release --verbose -- -O binary booster-release.bin
 
       - name: Upload Release
+        uses: actions/upload-artifact@v2
         if: ${{ matrix.toolchain == 'stable' }} &&
             (${{ github.ref == 'refs/heads/master' }} ||
              ${{ github.ref == 'refs/heads/develop' }})
