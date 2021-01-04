@@ -10,9 +10,7 @@ use embedded_hal::blocking::delay::DelayUs;
 use heapless::{consts, String};
 use minimq::{Property, QoS};
 
-use crate::rf_channel::{
-    InterlockThresholds, Property as ChannelProperty, PropertyId as ChannelPropertyId,
-};
+use crate::rf_channel::{Property as ChannelProperty, PropertyId as ChannelPropertyId};
 
 use crate::linear_transformation::LinearTransformation;
 
@@ -37,8 +35,8 @@ impl PropertyReadResponse {
     pub fn okay(prop: ChannelProperty) -> String<consts::U256> {
         // Serialize the property.
         let data: String<consts::U64> = match prop {
-            ChannelProperty::InterlockThresholds(thresholds) => {
-                serde_json_core::to_string(&thresholds).unwrap()
+            ChannelProperty::OutputInterlockThreshold(threshold) => {
+                serde_json_core::to_string(&threshold).unwrap()
             }
             ChannelProperty::InputPowerTransform(transform) => {
                 serde_json_core::to_string(&transform).unwrap()
@@ -95,10 +93,11 @@ impl PropertyWriteRequest {
 
         // Convert the property
         let prop = match self.prop {
-            ChannelPropertyId::InterlockThresholds => ChannelProperty::InterlockThresholds(
-                serde_json_core::from_str::<InterlockThresholds>(&data)
-                    .map_err(|_| Error::Invalid)?,
-            ),
+            ChannelPropertyId::OutputInterlockThreshold => {
+                ChannelProperty::OutputInterlockThreshold(
+                    serde_json_core::from_str::<f32>(&data).map_err(|_| Error::Invalid)?,
+                )
+            }
             ChannelPropertyId::OutputPowerTransform => ChannelProperty::OutputPowerTransform(
                 serde_json_core::from_str::<LinearTransformation>(&data)
                     .map_err(|_| Error::Invalid)?,

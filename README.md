@@ -105,7 +105,12 @@ Additionally, the USB port allows the user to:
 * Reset booster
 * Enter DFU mode for upgrading firmware
 
-## Ethernet
+## Booster Units
+
+Booster uses SI units for all telemetry messages and properties, with the exception of power
+measurements. All power measurements are instead specified in dBm.
+
+## Ethernet Telemetry and Control
 
 Booster uses MQTT for telemetry and control of RF channels. All booster MQTT topics are prefixed
 with the booster ID, which defaults to a combination of `booster` and the MAC address of the device.
@@ -126,6 +131,18 @@ respond to the `ResponseTopic` property provided with the MQTT message. If no `R
 property is provided, Booster will respond by default to `<ID>/log`.
 
 For a reference implementation of the API to control booster over MQTT, refer to `booster.py`
+
+**Note**: When using mosquitto, the channel telemetry can be read using:
+```
+mosquitto_sub -h mqtt -t '<ID>/ch<N>'
+```
+Note in the above that <N> is an integer between 0 and 7 (inclusive). <ID> is as specified above.
+
+### Booster Properties
+
+Throughout the code, any reference to a "Property" refers to a value that is configurable by the
+user. Telemetry outputs, such as temperature or power measurements, are not considered to be
+properties of Booster.
 
 ### Special Note on Booster properties
 
@@ -214,7 +231,11 @@ the channel when Booster boots. Note that saving channel settings overwrites any
 **Prerequisites**
 * Ensure `dfu-util` is installed. On Ubuntu, install it from `apt` using `sudo apt-get install
 dfu-util`
-* If building your own firmware, install `cargo-binutils`: `cargo install cargo-binutils`
+* If building your own firmware, [`cargo-binutils`](https://github.com/rust-embedded/cargo-binutils#installation)) must be installed:
+```
+cargo install cargo-binutils
+rustup component add llvm-tools-preview
+```
 
 The following instructions describe the process of uploading a new firmware image over the DFU
 Bootloader USB interface.
@@ -224,7 +245,7 @@ Bootloader USB interface.
     - Note: You may also use the latest [pre-built](https://github.com/quartiq/booster/releases) assets instead of building firmware.
 
 1. Generate the binary file for your firmware build: `cargo objcopy -- -O binary booster.bin`
-    - Note: If you built with `--release`, replace `debug` with `release` in the above command.
+    - Note: If you built with `--release`, use the commmand: `cargo objcopy --release -- -O binary booster.bin`
 
 1. Reset Booster into DFU mode:
     - Insert a pin into the DFU Bootloader hole to press the DFU button

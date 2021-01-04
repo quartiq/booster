@@ -26,16 +26,9 @@ use stm32f4xx_hal::{
 use rtic::cyccnt::{Duration, Instant};
 
 #[derive(serde::Deserialize, serde::Serialize)]
-/// Represents the interlock threshold levels.
-pub struct InterlockThresholds {
-    pub output: f32,
-    pub reflected: f32,
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
 /// Used to identify a specific channel property.
 pub enum PropertyId {
-    InterlockThresholds,
+    OutputInterlockThreshold,
     OutputPowerTransform,
     InputPowerTransform,
     ReflectedPowerTransform,
@@ -43,7 +36,7 @@ pub enum PropertyId {
 
 /// Represents an operation property of an RF channel.
 pub enum Property {
-    InterlockThresholds(InterlockThresholds),
+    OutputInterlockThreshold(f32),
     OutputPowerTransform(LinearTransformation),
     InputPowerTransform(LinearTransformation),
     ReflectedPowerTransform(LinearTransformation),
@@ -514,10 +507,15 @@ impl RfChannel {
                 };
 
                 channel
-                    .set_interlock_thresholds(
+                    .set_output_interlock_threshold(
                         channel.settings.data.output_interlock_threshold,
-                        channel.settings.data.reflected_interlock_threshold,
                     )
+                    .unwrap();
+
+                // The reflected power interlock threshold is always configured to 30 dBm (1W
+                // reflected power) to protect Booster hardware.
+                channel
+                    .set_reflected_interlock_threshold(platform::MAXIMUM_REFLECTED_POWER_DBM)
                     .unwrap();
 
                 // If the channel configuration specifies the channel as enabled, power up the
@@ -543,44 +541,35 @@ impl RfChannel {
     /// Set the interlock thresholds for the channel.
     ///
     /// # Args
-    /// * `output_power` - The dBm interlock threshold to configure for the output power.
-    /// * `reflected_power` - The dBm interlock threshold to configure for reflected power.
-    pub fn set_interlock_thresholds(
-        &mut self,
-        output_power: f32,
-        reflected_power: f32,
-    ) -> Result<(), Error> {
+    /// * `power` - The dBm interlock threshold to configure for reflected power.
+    fn set_reflected_interlock_threshold(&mut self, power: f32) -> Result<(), Error> {
         match self.i2c_devices.interlock_thresholds_dac.set_voltage(
-            self.settings
-                .data
-                .reflected_power_transform
-                .invert(reflected_power),
+            self.settings.data.reflected_power_transform.invert(power),
             ad5627::Dac::A,
         ) {
-            Err(ad5627::Error::Range) => return Err(Error::Bounds),
-            Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
-            Ok(voltage) => {
-                self.settings.data.reflected_interlock_threshold =
-                    self.settings.data.reflected_power_transform.map(voltage);
-            }
+            Err(ad5627::Error::Range) => Err(Error::Bounds),
+            Err(ad5627::Error::I2c(_)) => Err(Error::Interface),
+            Ok(_) => Ok(()),
         }
+    }
 
+    /// Set the output interlock threshold for the channel.
+    ///
+    /// # Args
+    /// * `power` - The dBm interlock threshold to configure for the output power.
+    pub fn set_output_interlock_threshold(&mut self, power: f32) -> Result<(), Error> {
         match self.i2c_devices.interlock_thresholds_dac.set_voltage(
-            self.settings
-                .data
-                .output_power_transform
-                .invert(output_power),
+            self.settings.data.output_power_transform.invert(power),
             ad5627::Dac::B,
         ) {
-            Err(ad5627::Error::Range) => return Err(Error::Bounds),
-            Err(ad5627::Error::I2c(_)) => return Err(Error::Interface),
+            Err(ad5627::Error::Range) => Err(Error::Bounds),
+            Err(ad5627::Error::I2c(_)) => Err(Error::Interface),
             Ok(voltage) => {
                 self.settings.data.output_interlock_threshold =
                     self.settings.data.output_power_transform.map(voltage);
+                Ok(())
             }
         }
-
-        Ok(())
     }
 
     fn check_faults(&mut self) -> Option<ChannelFault> {
@@ -745,10 +734,8 @@ impl RfChannel {
         // As a workaround, we need to ensure that the interlock level is above the output power
         // detector level. When RF is disabled, the power detectors output a near-zero value, so
         // 100mV should be a sufficient level.
-        if (self.settings.data.reflected_interlock_threshold
-            < self.settings.data.reflected_power_transform.map(0.100))
-            || (self.settings.data.output_interlock_threshold
-                < self.settings.data.output_power_transform.map(0.100))
+        if self.settings.data.output_interlock_threshold
+            < self.settings.data.output_power_transform.map(0.100)
         {
             self.start_disable();
             return Err(Error::Invalid);
@@ -947,14 +934,6 @@ impl RfChannel {
         self.settings.data.output_interlock_threshold
     }
 
-    /// Get the current reflected power interlock threshold.
-    ///
-    /// # Returns
-    /// The current reflected interlock threshold in dBm.
-    pub fn get_reflected_interlock_threshold(&self) -> f32 {
-        self.settings.data.reflected_interlock_threshold
-    }
-
     /// Get the current bias voltage programmed to the RF amplification transistor.
     pub fn get_bias_voltage(&self) -> f32 {
         self.settings.data.bias_voltage
@@ -975,7 +954,7 @@ impl RfChannel {
             input_power: self.get_input_power(),
             output_power: self.get_output_power(adc),
             reflected_power: self.get_reflected_power(adc),
-            reflected_overdrive_threshold: self.get_reflected_interlock_threshold(),
+            reflected_overdrive_threshold: platform::MAXIMUM_REFLECTED_POWER_DBM,
             output_overdrive_threshold: self.get_output_interlock_threshold(),
             bias_voltage: self.get_bias_voltage(),
             state: self.get_state(),
@@ -995,8 +974,8 @@ impl RfChannel {
     /// * `property` - The property to configure on the channel.
     pub fn set_property(&mut self, property: Property) -> Result<(), Error> {
         match property {
-            Property::InterlockThresholds(InterlockThresholds { output, reflected }) => {
-                self.set_interlock_thresholds(output, reflected)?;
+            Property::OutputInterlockThreshold(output) => {
+                self.set_output_interlock_threshold(output)?;
             }
             Property::OutputPowerTransform(transform) => {
                 self.settings.data.output_power_transform = transform;
@@ -1021,10 +1000,9 @@ impl RfChannel {
     /// The current channel property.
     pub fn get_property(&self, property: PropertyId) -> Property {
         match property {
-            PropertyId::InterlockThresholds => Property::InterlockThresholds(InterlockThresholds {
-                output: self.settings.data.output_interlock_threshold,
-                reflected: self.settings.data.reflected_interlock_threshold,
-            }),
+            PropertyId::OutputInterlockThreshold => {
+                Property::OutputInterlockThreshold(self.settings.data.output_interlock_threshold)
+            }
             PropertyId::OutputPowerTransform => {
                 Property::OutputPowerTransform(self.settings.data.output_power_transform.clone())
             }

@@ -12,7 +12,6 @@ use microchip_24aa02e48::Microchip24AA02E48;
 /// Represents booster channel-specific configuration values.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct BoosterChannelData {
-    pub reflected_interlock_threshold: f32,
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,
     pub enabled: bool,
@@ -25,7 +24,6 @@ impl BoosterChannelData {
     /// Generate default booster channel data.
     pub fn default() -> Self {
         Self {
-            reflected_interlock_threshold: 0.0,
             output_interlock_threshold: 0.0,
             bias_voltage: -3.2,
             enabled: false,
