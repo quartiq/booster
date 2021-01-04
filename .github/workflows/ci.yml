@@ -91,7 +91,9 @@ jobs:
           args: --release --verbose -- -O binary booster-release.bin
 
       - name: Upload Release
-        if: ${{ matrix.toolchain == 'stable' }}
+        if: ${{ matrix.toolchain == 'stable' }} &&
+            (${{ github.ref == 'refs/heads/master' }} ||
+             ${{ github.ref == 'refs/heads/develop' }})
         with:
           name: Firmware Images
           path: |
