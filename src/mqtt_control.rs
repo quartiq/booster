@@ -266,48 +266,42 @@ impl ControlState {
 
         resources.mqtt_client.lock(|client| {
             match client.poll(|client, topic, message, properties| {
-                main_bus.lock(|main_bus| {
-                    let (id, route) = topic.split_at(topic.find('/').unwrap());
-                    let route = &route[1..];
+                let (id, route) = topic.split_at(topic.find('/').unwrap());
+                let route = &route[1..];
 
-                    if id != self.id {
-                        warn!("Ignoring topic for identifier: {}", id);
-                        return;
+                if id != self.id {
+                    warn!("Ignoring topic for identifier: {}", id);
+                    return;
+                }
+
+                let response = main_bus.lock(|main_bus| match route {
+                    "channel/state" => handle_channel_update(message, &mut main_bus.channels),
+                    "channel/bias" => handle_channel_bias(message, &mut main_bus.channels, *delay),
+                    "channel/read" => handle_channel_property_read(message, &mut main_bus.channels),
+                    "channel/write" => {
+                        handle_channel_property_write(message, &mut main_bus.channels)
                     }
-
-                    let response = match route {
-                        "channel/state" => handle_channel_update(message, &mut main_bus.channels),
-                        "channel/bias" => {
-                            handle_channel_bias(message, &mut main_bus.channels, *delay)
-                        }
-                        "channel/read" => {
-                            handle_channel_property_read(message, &mut main_bus.channels)
-                        }
-                        "channel/write" => {
-                            handle_channel_property_write(message, &mut main_bus.channels)
-                        }
-                        _ => Response::error_msg("Unexpected topic"),
-                    };
-
-                    if let Property::ResponseTopic(topic) = properties
-                        .iter()
-                        .find(|&prop| {
-                            if let Property::ResponseTopic(_) = *prop {
-                                true
-                            } else {
-                                false
-                            }
-                        })
-                        .or(Some(&Property::ResponseTopic(
-                            &self.generate_topic_string("log"),
-                        )))
-                        .unwrap()
-                    {
-                        client
-                            .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
-                            .unwrap();
-                    }
+                    _ => Response::error_msg("Unexpected topic"),
                 });
+
+                if let Property::ResponseTopic(topic) = properties
+                    .iter()
+                    .find(|&prop| {
+                        if let Property::ResponseTopic(_) = *prop {
+                            true
+                        } else {
+                            false
+                        }
+                    })
+                    .or(Some(&Property::ResponseTopic(
+                        &self.generate_topic_string("log"),
+                    )))
+                    .unwrap()
+                {
+                    client
+                        .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
+                        .unwrap();
+                }
             }) {
                 Ok(_) => {}
 
