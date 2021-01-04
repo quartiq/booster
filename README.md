@@ -107,8 +107,7 @@ Additionally, the USB port allows the user to:
 
 ## Booster Units
 
-Booster uses SI units for all telemetry messages and properties, with the exception of power
-measurements. All power measurements are instead specified in dBm.
+Booster uses SI units (Volt, Ampere, Celsius) for telemetry messages and properties. Power measurements are specified in dBm.
 
 ## Ethernet Telemetry and Control
 
@@ -134,7 +133,7 @@ For a reference implementation of the API to control booster over MQTT, refer to
 
 **Note**: When using mosquitto, the channel telemetry can be read using:
 ```
-mosquitto_sub -h mqtt -t '<ID>/ch<N>'
+mosquitto_sub -h mqtt -v -t <ID>/ch<N>
 ```
 Note in the above that <N> is an integer between 0 and 7 (inclusive). <ID> is as specified above.
 
