@@ -166,7 +166,7 @@ class BoosterApi:
         request = generate_request(prop=prop.value, channel=CHANNEL[channel])
 
         response = await self.command("channel/read", request)
-        return json.loads(response['data'].replace("'", '"'))
+        return json.loads(response['data'])
 
 
     async def write_property(self, channel, prop_id, value):
@@ -178,7 +178,7 @@ class BoosterApi:
             value: The value to write to the property.
         """
         request = generate_request(prop=prop_id.value, channel=CHANNEL[channel],
-                                   data=json.dumps(value).replace('"', "'"))
+                                   data=json.dumps(value))
 
         await self.command("channel/write", request)
 
@@ -273,17 +273,17 @@ async def channel_configuration(args):
         await interface.enable_channel(args.channel)
         print(f'Channel {args.channel} enabled')
 
-    if args.threshold:
+    if args.threshold is not None:
         await interface.write_property(args.channel,
                                        PropertyId.OutputInterlockThreshold,
                                        args.threshold)
         print(f'Channel {args.channel}: Output power threshold = {args.threshold} dBm')
 
-    if args.bias:
+    if args.bias is not None:
         vgs, ids = await interface.set_bias(args.channel, args.bias)
         print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
 
-    if args.tune:
+    if args.tune is not None:
         vgs, ids = await interface.tune_bias(args.channel, args.tune)
         print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
 

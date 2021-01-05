@@ -56,7 +56,7 @@ impl BoosterChannelData {
     /// # Returns
     /// The configuration if deserialization was successful. Otherwise, returns an error.
     pub fn deserialize(data: &[u8; 64]) -> Result<Self, Error> {
-        let config: BoosterChannelData = postcard::from_bytes(data).unwrap();
+        let config: BoosterChannelData = postcard::from_bytes(data).or(Err(Error::Invalid))?;
 
         // Validate configuration parameters.
         if config.bias_voltage < -3.3 || config.bias_voltage > 0.0 {
