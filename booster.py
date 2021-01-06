@@ -25,7 +25,7 @@ CHANNEL = [
 
 class PropertyId(enum.Enum):
     """ Represents a property ID for Booster RF channels. """
-    InterlockThresholds = 'InterlockThresholds'
+    OutputInterlockThreshold = 'OutputInterlockThreshold'
     OutputPowerTransform = 'OutputPowerTransform'
     InputPowerTransform = 'InputPowerTransform'
     ReflectedPowerTransform = 'ReflectedPowerTransform'
@@ -166,7 +166,7 @@ class BoosterApi:
         request = generate_request(prop=prop.value, channel=CHANNEL[channel])
 
         response = await self.command("channel/read", request)
-        return json.loads(response['data'].replace("'", '"'))
+        return json.loads(response['data'])
 
 
     async def write_property(self, channel, prop_id, value):
@@ -178,7 +178,7 @@ class BoosterApi:
             value: The value to write to the property.
         """
         request = generate_request(prop=prop_id.value, channel=CHANNEL[channel],
-                                   data=json.dumps(value).replace('"', "'"))
+                                   data=json.dumps(value))
 
         await self.command("channel/write", request)
 
@@ -273,20 +273,17 @@ async def channel_configuration(args):
         await interface.enable_channel(args.channel)
         print(f'Channel {args.channel} enabled')
 
-    if args.thresholds:
-        thresholds = {
-            'output': args.thresholds[0],
-            'reflected': args.thresholds[1],
-        }
-        await interface.write_property(args.channel, PropertyId.InterlockThresholds, thresholds)
-        print(f'Channel {args.channel}: Output power threshold = {args.thresholds[0]} dBm, '
-              f'Reflected power interlock threshold = {args.thresholds[1]} dBm')
+    if args.threshold is not None:
+        await interface.write_property(args.channel,
+                                       PropertyId.OutputInterlockThreshold,
+                                       args.threshold)
+        print(f'Channel {args.channel}: Output power threshold = {args.threshold} dBm')
 
-    if args.bias:
+    if args.bias is not None:
         vgs, ids = await interface.set_bias(args.channel, args.bias)
         print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
 
-    if args.tune:
+    if args.tune is not None:
         vgs, ids = await interface.tune_bias(args.channel, args.tune)
         print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
 
@@ -317,9 +314,7 @@ def main():
                         help='Tune the RF channel bias current to the provided value')
     parser.add_argument('--enable', action='store_true', help='Enable the RF channel')
     parser.add_argument('--disable', action='store_true', help='Disable the RF channel')
-    parser.add_argument('--thresholds', type=float, nargs=2,
-                        help='The interlock thresholds in the following order: '
-                             '<output> <reflected>')
+    parser.add_argument('--threshold', type=float, help='The output interlock threshold')
     parser.add_argument('--save', action='store_true', help='Save the RF channel configuration')
 
     loop = asyncio.get_event_loop()

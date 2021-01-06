@@ -8,6 +8,10 @@ use super::hal;
 
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
+// Booster hardware channels are capable of withstanding up to 1W of reflected RF power. This
+// corresponds with a value of 30 dBm.
+pub const MAXIMUM_REFLECTED_POWER_DBM: f32 = 30.0;
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     cortex_m::interrupt::disable();
