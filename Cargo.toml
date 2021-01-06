@@ -17,7 +17,7 @@ heapless = { version = "0.5.5", features = ["serde"] }
 bit_field = "0.10.0"
 debounced-pin = "0.3.0"
 serde = {version = "1.0", features = ["derive"], default-features = false }
-serde-json-core = "0.1"
+serde-json-core = "0.2"
 logos = { version = "0.11.4", default-features = false, features = ["export_derive"] }
 bbqueue = "0.4.10"
 usbd-serial = "0.1.0"

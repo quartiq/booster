@@ -10,9 +10,7 @@ use embedded_hal::blocking::delay::DelayUs;
 use heapless::{consts, String};
 use minimq::{Property, QoS};
 
-use crate::rf_channel::{
-    InterlockThresholds, Property as ChannelProperty, PropertyId as ChannelPropertyId,
-};
+use crate::rf_channel::{Property as ChannelProperty, PropertyId as ChannelPropertyId};
 
 use crate::linear_transformation::LinearTransformation;
 
@@ -37,8 +35,8 @@ impl PropertyReadResponse {
     pub fn okay(prop: ChannelProperty) -> String<consts::U256> {
         // Serialize the property.
         let data: String<consts::U64> = match prop {
-            ChannelProperty::InterlockThresholds(thresholds) => {
-                serde_json_core::to_string(&thresholds).unwrap()
+            ChannelProperty::OutputInterlockThreshold(threshold) => {
+                serde_json_core::to_string(&threshold).unwrap()
             }
             ChannelProperty::InputPowerTransform(transform) => {
                 serde_json_core::to_string(&transform).unwrap()
@@ -51,20 +49,10 @@ impl PropertyReadResponse {
             }
         };
 
-        let mut response = Self {
+        let response = Self {
             code: 200,
-            data: String::new(),
+            data: String::from(data.as_str()),
         };
-
-        // Convert double quotes to single in the encoded property. This gets around string escape
-        // sequences.
-        for byte in data.as_str().chars() {
-            if byte == '"' {
-                response.data.push('\'').unwrap();
-            } else {
-                response.data.push(byte).unwrap();
-            }
-        }
 
         serde_json_core::to_string(&response).unwrap()
     }
@@ -83,33 +71,34 @@ impl PropertyWriteRequest {
     /// # Returns
     /// The property if it could be deserialized. Otherwise, an error is returned.
     pub fn property(&self) -> Result<ChannelProperty, Error> {
-        // Convert single quotes to double in the property data.
-        let mut data: String<consts::U64> = String::new();
-        for byte in self.data.as_str().chars() {
-            if byte == '\'' {
-                data.push('"').unwrap();
-            } else {
-                data.push(byte).unwrap();
-            }
-        }
-
         // Convert the property
         let prop = match self.prop {
-            ChannelPropertyId::InterlockThresholds => ChannelProperty::InterlockThresholds(
-                serde_json_core::from_str::<InterlockThresholds>(&data)
-                    .map_err(|_| Error::Invalid)?,
-            ),
+            ChannelPropertyId::OutputInterlockThreshold => {
+                // Due to a bug in serde-json-core, trailing data must be present for a float to be
+                // properly parsed. For more information, refer to:
+                // https://github.com/rust-embedded-community/serde-json-core/issues/47
+                let mut data: String<consts::U65> = String::from(self.data.as_str());
+                data.push(' ').unwrap();
+                ChannelProperty::OutputInterlockThreshold(
+                    serde_json_core::from_str::<f32>(&data)
+                        .map_err(|_| Error::Invalid)?
+                        .0,
+                )
+            }
             ChannelPropertyId::OutputPowerTransform => ChannelProperty::OutputPowerTransform(
-                serde_json_core::from_str::<LinearTransformation>(&data)
-                    .map_err(|_| Error::Invalid)?,
+                serde_json_core::from_str::<LinearTransformation>(&self.data)
+                    .map_err(|_| Error::Invalid)?
+                    .0,
             ),
             ChannelPropertyId::InputPowerTransform => ChannelProperty::InputPowerTransform(
-                serde_json_core::from_str::<LinearTransformation>(&data)
-                    .map_err(|_| Error::Invalid)?,
+                serde_json_core::from_str::<LinearTransformation>(&self.data)
+                    .map_err(|_| Error::Invalid)?
+                    .0,
             ),
             ChannelPropertyId::ReflectedPowerTransform => ChannelProperty::ReflectedPowerTransform(
-                serde_json_core::from_str::<LinearTransformation>(&data)
-                    .map_err(|_| Error::Invalid)?,
+                serde_json_core::from_str::<LinearTransformation>(&self.data)
+                    .map_err(|_| Error::Invalid)?
+                    .0,
             ),
         };
 
@@ -331,7 +320,7 @@ impl ControlState {
 /// A String response indicating the result of the request.
 fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
-        Ok(data) => data,
+        Ok((data, _)) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
     channels
@@ -369,7 +358,7 @@ fn handle_channel_property_read(
     channels: &mut BoosterChannels,
 ) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<PropertyReadRequest>(message) {
-        Ok(data) => data,
+        Ok((data, _)) => data,
         Err(_) => return Response::error_msg("Failed to decode read request"),
     };
 
@@ -392,8 +381,8 @@ fn handle_channel_property_write(
     channels: &mut BoosterChannels,
 ) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<PropertyWriteRequest>(message) {
-        Ok(data) => data,
-        Err(_) => return Response::error_msg("Failed to decode read request"),
+        Ok((data, _)) => data,
+        Err(_) => return Response::error_msg("Failed to decode write request"),
     };
 
     let property = match request.property() {
@@ -422,7 +411,7 @@ fn handle_channel_bias(
     delay: &mut impl DelayUs<u16>,
 ) -> String<consts::U256> {
     let request = match serde_json_core::from_slice::<ChannelBiasRequest>(message) {
-        Ok(data) => data,
+        Ok((data, _)) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
 
