@@ -80,7 +80,8 @@ impl BoosterMainBoardData {
     pub fn deserialize(data: &[u8; 64]) -> Result<Self, Error> {
         let config: BoosterMainBoardData = postcard::from_bytes(data).unwrap();
 
-        if config.version != EXPECTED_VERSION {
+        // Validate the version of the settings.
+        if !EXPECTED_VERSION.is_compatible(&config.version) {
             return Err(Error::Invalid);
         }
 

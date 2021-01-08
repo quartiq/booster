@@ -21,3 +21,10 @@ pub struct SemVersion {
     minor: u8,
     patch: u8,
 }
+
+impl SemVersion {
+    /// Determine if this version is compatible with `rhs`.
+    pub fn is_compatible(&self, rhs: &SemVersion) -> bool {
+        (self.major == rhs.major) && (self.minor <= rhs.minor)
+    }
+}

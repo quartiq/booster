@@ -73,8 +73,8 @@ impl BoosterChannelData {
             return Err(Error::Invalid);
         }
 
-        // Validate the CRC of the settings.
-        if config.version != EXPECTED_VERSION {
+        // Validate the version of the settings.
+        if !EXPECTED_VERSION.is_compatible(&config.version) {
             return Err(Error::Invalid);
         }
 
