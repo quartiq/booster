@@ -5,13 +5,22 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
-use super::{SinaraBoardId, SinaraConfiguration};
+use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 use crate::{linear_transformation::LinearTransformation, Error, I2cProxy};
 use microchip_24aa02e48::Microchip24AA02E48;
+
+/// The expected semver of the BoosterChannelSettings. This version must be updated whenever the
+/// `BoosterChannelData` layout is updated.
+const EXPECTED_VERSION: SemVersion = SemVersion {
+    major: 1,
+    minor: 0,
+    patch: 1,
+};
 
 /// Represents booster channel-specific configuration values.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct BoosterChannelData {
+    version: SemVersion,
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,
     pub enabled: bool,
@@ -24,6 +33,7 @@ impl BoosterChannelData {
     /// Generate default booster channel data.
     pub fn default() -> Self {
         Self {
+            version: EXPECTED_VERSION,
             output_interlock_threshold: 0.0,
             bias_voltage: -3.2,
             enabled: false,
@@ -60,6 +70,11 @@ impl BoosterChannelData {
 
         // Validate configuration parameters.
         if config.bias_voltage < -3.3 || config.bias_voltage > 0.0 {
+            return Err(Error::Invalid);
+        }
+
+        // Validate the version of the settings.
+        if !EXPECTED_VERSION.is_compatible(&config.version) {
             return Err(Error::Invalid);
         }
 
