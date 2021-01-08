@@ -103,7 +103,7 @@ The USB port allows for configuration of:
 Additionally, the USB port allows the user to:
 * Read the MAC address of Booster
 * Reset booster
-* Enter DFU mode for upgrading firmware
+* Enter DFU mode for upgrading firmware (only available with the `unstable` feature and the `nightly` rust toolchain)
 
 ## Booster Units
 
