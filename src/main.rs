@@ -549,9 +549,9 @@ const APP: () = {
         c.resources.leds.update();
 
         // TODO: Replace hard-coded CPU cycles here.
-        // Schedule to run this task periodically at 50Hz.
+        // Schedule to run this task periodically at 10Hz.
         c.schedule
-            .channel_monitor(c.scheduled + Duration::from_cycles(168_000_000 / 50))
+            .channel_monitor(c.scheduled + Duration::from_cycles(168_000_000 / 10))
             .unwrap();
     }
 
