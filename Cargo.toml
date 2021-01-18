@@ -25,6 +25,7 @@ shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
 usb-device = "0.2.6"
 postcard = "0.5.1"
 crc-any = { version = "2.3.5", default-features = false }
+panic-persist = { git = "https://github.com/jamesmunns/panic-persist", branch = "master", features = ["custom-panic-handler"] }
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq"

@@ -13,11 +13,14 @@ use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 pub const MAXIMUM_REFLECTED_POWER_DBM: f32 = 30.0;
 
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
+fn panic(info: &core::panic::PanicInfo) -> ! {
     cortex_m::interrupt::disable();
 
     // Shutdown all of the RF channels.
     shutdown_channels();
+
+    // Write panic info to RAM.
+    panic_persist::report_panic_info(info);
 
     // Reset the device in `release` configuration.
     #[cfg(not(debug_assertions))]

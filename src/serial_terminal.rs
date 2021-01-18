@@ -57,6 +57,9 @@ enum Token {
 
     #[regex(r"[a-zA-Z0-9]+")]
     DeviceIdentifier,
+
+    #[token("service")]
+    ServiceInfo,
 }
 
 #[derive(PartialEq)]
@@ -74,6 +77,7 @@ pub enum Request {
     ResetBootloader,
     Help,
     Read(Property),
+    ServiceInfo,
     WriteIpAddress(Property, Ipv4Addr),
     WriteIdentifier(String<consts::U32>),
 }
@@ -150,6 +154,25 @@ impl SerialTerminal {
                     self.write(
                         "Reset to DFU bootloader not supported with stable toolchain".as_bytes(),
                     );
+                }
+
+                Request::ServiceInfo => {
+                    self.write("Panic Info: ".as_bytes());
+                    self.write(
+                        panic_persist::get_panic_message_bytes().unwrap_or("None".as_bytes()),
+                    );
+                    self.write("\n".as_bytes());
+
+                    self.write("Watchdog Detected: ".as_bytes());
+                    if platform::watchdog_detected() {
+                        self.write("True\n".as_bytes())
+                    } else {
+                        self.write("False\n".as_bytes())
+                    }
+
+                    // Reading the panic message above clears the panic message, so similarly, we
+                    // should also clear the watchdog once read.
+                    platform::clear_reset_flags();
                 }
 
                 Request::WriteIpAddress(prop, addr) => match prop {
@@ -312,6 +335,7 @@ gateway, netmask]
 netmask, gateway] and <IP> must be an IP address (e.g.  192.168.1.1)
 * `write id <ID>` - Write the MQTT client ID of the device. <ID> must be 23 or less ASCII \
 characters.
+* `service` - Read the service information. Service infromation clears once read.
 ".as_bytes(),
         );
     }
@@ -335,6 +359,7 @@ characters.
             Token::Reset => Request::Reset,
             Token::Dfu => Request::ResetBootloader,
             Token::Help => Request::Help,
+            Token::ServiceInfo => Request::ServiceInfo,
             Token::Read => {
                 // Validate that there is one valid token following.
                 let property_token = lex.next().ok_or("Malformed command")?;

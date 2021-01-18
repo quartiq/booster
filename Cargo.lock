@@ -103,6 +103,7 @@ dependencies = [
  "mcp3221",
  "microchip-24aa02e48",
  "minimq",
+ "panic-persist",
  "postcard",
  "serde",
  "serde-json-core",
@@ -474,6 +475,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "panic-persist"
+version = "0.2.1"
+source = "git+https://github.com/jamesmunns/panic-persist?branch=master#3f892297e97adc6a415145193000e3749b1959df"
+dependencies = [
+ "cortex-m",
 ]
 
 [[package]]
