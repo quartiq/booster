@@ -71,13 +71,25 @@ impl PropertyWriteRequest {
     /// # Returns
     /// The property if it could be deserialized. Otherwise, an error is returned.
     pub fn property(&self) -> Result<ChannelProperty, Error> {
-        // Convert the property
+        // Convert escaped quotes back to normal quotes.
+        let mut escaped: bool = false;
+        let mut data: String<consts::U256> = String::new();
+        for character in self.data.as_str().chars() {
+            if character == '\\' {
+                if !escaped {
+                    escaped = true;
+                    continue;
+                }
+            }
+            escaped = false;
+            data.push(character).unwrap();
+        }
+
         let prop = match self.prop {
             ChannelPropertyId::OutputInterlockThreshold => {
                 // Due to a bug in serde-json-core, trailing data must be present for a float to be
                 // properly parsed. For more information, refer to:
                 // https://github.com/rust-embedded-community/serde-json-core/issues/47
-                let mut data: String<consts::U65> = String::from(self.data.as_str());
                 data.push(' ').unwrap();
                 ChannelProperty::OutputInterlockThreshold(
                     serde_json_core::from_str::<f32>(&data)
@@ -86,17 +98,17 @@ impl PropertyWriteRequest {
                 )
             }
             ChannelPropertyId::OutputPowerTransform => ChannelProperty::OutputPowerTransform(
-                serde_json_core::from_str::<LinearTransformation>(&self.data)
+                serde_json_core::from_str::<LinearTransformation>(&data)
                     .map_err(|_| Error::Invalid)?
                     .0,
             ),
             ChannelPropertyId::InputPowerTransform => ChannelProperty::InputPowerTransform(
-                serde_json_core::from_str::<LinearTransformation>(&self.data)
+                serde_json_core::from_str::<LinearTransformation>(&data)
                     .map_err(|_| Error::Invalid)?
                     .0,
             ),
             ChannelPropertyId::ReflectedPowerTransform => ChannelProperty::ReflectedPowerTransform(
-                serde_json_core::from_str::<LinearTransformation>(&self.data)
+                serde_json_core::from_str::<LinearTransformation>(&data)
                     .map_err(|_| Error::Invalid)?
                     .0,
             ),

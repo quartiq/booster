@@ -190,39 +190,15 @@ To use `booster.py`, first install the prerequisites:
 python -m pip install gmqtt
 ```
 
-To enable a specific RF channel:
+`booster.py` contains built-in help information on usage:
 ```
-python booster.py --booster-id <ID> <CHANNEL> --enable
-```
-
-To disable a specific RF channel:
-```
-python booster.py --booster-id <ID> <CHANNEL> --disable
-```
-
-To configure interlock thresholds for a channel:
-```
-python booster.py --booster-id <ID> <CHANNEL> --thresholds <OUTPUT_DBM> <REFLECTED_DBM>
-```
-
-To set the gate bias voltage of an RF channel:
-```
-python booster.py --booster-id <ID> <CHANNEL> --bias <GATE_BIAS_VOLTAGE>
-```
-
-To tune the bias current of an RF channel to a desired drain current:
-```
-python booster.py --booster-id <ID> <CHANNEL> --tune <DRAIN_CURRENT>
-```
-
-Once a channel is configured as desired, the configuration can be stored permanently in Booster
-using:
-```
-python booster.py --booster-id <ID> <CHANNEL> --save
+python booster.py --help
 ```
 
 When settings are saved in booster, the current channel configuration will be the default state of
-the channel when Booster boots. Note that saving channel settings overwrites any existing channel configuration and calibrations including those from the old legacy firmware. The legacy firmware settings are incompatible.
+the channel when Booster boots. Note that saving channel settings overwrites any existing channel
+configuration and calibrations including those from the old legacy firmware. The legacy firmware
+settings are incompatible.
 
 
 # DFU Instructions
