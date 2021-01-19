@@ -7,6 +7,13 @@
 #![no_std]
 #![no_main]
 #![cfg_attr(feature = "unstable", feature(llvm_asm))]
+#[cfg(not(any(feature = "phy_enc424j600", feature = "phy_w5500")))]
+compile_error!(
+    "A least one PHY device must be enabled. Use a feature gate to
+    enable."
+);
+#[cfg(all(feature = "phy_enc424j600", feature = "phy_w5500"))]
+compile_error!("Cannot enable multiple ethernet PHY devices.");
 
 #[macro_use]
 extern crate log;
@@ -24,6 +31,8 @@ use usb_device::prelude::*;
 mod booster_channels;
 mod chassis_fans;
 mod delay;
+#[cfg(feature = "phy_enc424j600")]
+mod enc424j600_config;
 mod error;
 mod linear_transformation;
 mod logger;
@@ -38,6 +47,10 @@ mod watchdog;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
+#[cfg(feature = "phy_enc424j600")]
+use enc424j600::nal::NetworkStack;
+#[cfg(feature = "phy_enc424j600")]
+use enc424j600_config::Clock;
 use error::Error;
 use logger::BufferedLog;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
@@ -74,8 +87,16 @@ type SPI = hal::spi::Spi<
     ),
 >;
 
+#[cfg(feature = "phy_w5500")]
 type Ethernet =
     w5500::Interface<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
+#[cfg(feature = "phy_enc424j600")]
+type Ethernet = NetworkStack<
+    'static,
+    SPI,
+    hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>,
+    Clock,
+>;
 type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
@@ -369,7 +390,10 @@ const APP: () = {
                         c.device.SPI1,
                         (sck, miso, mosi),
                         mode,
+                        #[cfg(feature = "phy_w5500")]
                         1.mhz().into(),
+                        #[cfg(feature = "phy_enc424j600")]
+                        hal::time::Hertz(enc424j600::spi::interfaces::SPI_CLOCK_FREQ),
                         clocks,
                     )
                 };
@@ -380,24 +404,36 @@ const APP: () = {
                     pin
                 };
 
-                let mut w5500 = w5500::W5500::new(
-                    spi,
-                    cs,
-                    w5500::OnWakeOnLan::Ignore,
-                    w5500::OnPingRequest::Respond,
-                    w5500::ConnectionType::Ethernet,
-                    w5500::ArpResponses::Cache,
-                )
-                .unwrap();
+                #[cfg(feature = "phy_w5500")]
+                {
+                    let mut w5500 = w5500::W5500::new(
+                        spi,
+                        cs,
+                        w5500::OnWakeOnLan::Ignore,
+                        w5500::OnPingRequest::Respond,
+                        w5500::ConnectionType::Ethernet,
+                        w5500::ArpResponses::Cache,
+                    )
+                    .unwrap();
 
-                w5500.set_mac(settings.mac()).unwrap();
+                    w5500.set_mac(settings.mac()).unwrap();
 
-                // Set default netmask and gateway.
-                w5500.set_gateway(settings.gateway()).unwrap();
-                w5500.set_subnet(settings.subnet()).unwrap();
-                w5500.set_ip(settings.ip()).unwrap();
+                    // Set default netmask and gateway.
+                    w5500.set_gateway(settings.gateway()).unwrap();
+                    w5500.set_subnet(settings.subnet()).unwrap();
+                    w5500.set_ip(settings.ip()).unwrap();
 
-                w5500::Interface::new(w5500)
+                    w5500::Interface::new(w5500)
+                }
+
+                #[cfg(feature = "phy_enc424j600")]
+                {
+                    let delay_ns: fn(u32) -> () =
+                        |time_ns| cortex_m::asm::delay(time_ns * 21 / 125 + 1);
+                    let enc424j600 = enc424j600::SpiEth::new(spi, cs, delay_ns);
+                    let interface = enc424j600_config::setup(enc424j600, &settings);
+                    interface
+                }
             };
 
             minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
@@ -442,7 +478,16 @@ const APP: () = {
             // Generate a device serial number from the MAC address.
             *USB_SERIAL = {
                 let mut serial_string: String<heapless::consts::U64> = String::new();
+
+                #[cfg(feature = "phy_w5500")]
                 let octets = settings.mac().octets;
+                #[cfg(feature = "phy_enc424j600")]
+                let octets: [u8; 6] = {
+                    let mut array = [0; 6];
+                    array.copy_from_slice(settings.mac().as_bytes());
+                    array
+                };
+
                 write!(
                     &mut serial_string,
                     "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",

@@ -6,8 +6,14 @@
 //! Proprietary and confidential.
 use crate::{Eeprom, Error};
 use heapless::{consts, String};
+use minimq::embedded_nal::Ipv4Addr;
 use serde::{Deserialize, Serialize};
-use w5500::{Ipv4Addr, MacAddress};
+
+#[cfg(feature = "phy_w5500")]
+use w5500::MacAddress;
+
+#[cfg(feature = "phy_enc424j600")]
+use smoltcp::wire::EthernetAddress as MacAddress;
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 
@@ -255,7 +261,13 @@ impl BoosterSettings {
 
     /// Get the Booster MAC address.
     pub fn mac(&self) -> MacAddress {
-        MacAddress::from_bytes(self.eui48)
+        #[cfg(feature = "phy_w5500")]
+        {
+            MacAddress::from_bytes(self.eui48)
+        }
+
+        #[cfg(feature = "phy_enc424j600")]
+        MacAddress::from_bytes(&self.eui48)
     }
 
     /// Get the Booster IP address.
