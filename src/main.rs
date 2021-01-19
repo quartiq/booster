@@ -7,6 +7,13 @@
 #![no_std]
 #![no_main]
 #![cfg_attr(feature = "unstable", feature(llvm_asm))]
+#[cfg(not(any(feature = "phy_enc424j600", feature = "phy_w5500")))]
+compile_error!(
+    "A least one PHY device must be enabled. Use a feature gate to
+    enable."
+);
+#[cfg(all(feature = "phy_enc424j600", feature = "phy_w5500"))]
+compile_error!("Cannot enable multiple ethernet PHY devices.");
 
 #[macro_use]
 extern crate log;
@@ -33,6 +40,8 @@ mod platform;
 mod rf_channel;
 mod serial_terminal;
 mod settings;
+#[cfg(feature = "phy_enc424j600")]
+mod smoltcp_nal;
 mod user_interface;
 mod watchdog;
 use booster_channels::{BoosterChannels, Channel};
@@ -74,6 +83,7 @@ type SPI = hal::spi::Spi<
     ),
 >;
 
+#[cfg(feature = "phy_w5500")]
 type Ethernet =
     w5500::Interface<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
 type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
@@ -369,7 +379,11 @@ const APP: () = {
                         c.device.SPI1,
                         (sck, miso, mosi),
                         mode,
+                        #[cfg(feature = "phy_w5500")]
                         1.mhz().into(),
+                        
+                        #[cfg(feature = "phy_enc424j600")]
+                        hal::time::Hertz(enc424j600::spi::interfaces::SPI_CLOCK_FREQ),
                         clocks,
                     )
                 };
@@ -380,6 +394,8 @@ const APP: () = {
                     pin
                 };
 
+                #[cfg(feature = "phy_w5500")]
+                {
                 let mut w5500 = w5500::W5500::new(
                     spi,
                     cs,
@@ -398,6 +414,7 @@ const APP: () = {
                 w5500.set_ip(settings.ip()).unwrap();
 
                 w5500::Interface::new(w5500)
+                }
             };
 
             minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
