@@ -7,7 +7,13 @@
 use crate::{Eeprom, Error};
 use heapless::{consts, String};
 use serde::{Deserialize, Serialize};
-use w5500::{Ipv4Addr, MacAddress};
+use minimq::embedded_nal::Ipv4Addr;
+
+#[cfg(feature = "phy_w5500")]
+use w5500::MacAddress;
+
+#[cfg(feature = "phy_enc424j600")]
+use super::mac::MacAddress;
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 

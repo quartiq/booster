@@ -9,6 +9,9 @@ mod channel_settings;
 mod global_settings;
 mod sinara;
 
+#[cfg(feature = "phy_enc424j600")]
+mod mac;
+
 use sinara::{BoardId as SinaraBoardId, SinaraConfiguration};
 
 pub use channel_settings::BoosterChannelSettings;
