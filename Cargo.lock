@@ -17,6 +17,12 @@ dependencies = [
 
 [[package]]
 name = "aligned"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d39da9b88ae1a81c03c9c082b8db83f1d0e93914126041962af61034ab44c4a5"
+
+[[package]]
+name = "aligned"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c19796bd8d477f1a9d4ac2465b464a8b1359474f06a96bb3cda650b4fca309bf"
@@ -79,6 +85,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46afbd2983a5d5a7bd740ccb198caf5b82f45c40c09c0eed36052d91cb92e719"
 
 [[package]]
+name = "bitflags"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
+
+[[package]]
 name = "booster"
 version = "0.1.0"
 dependencies = [
@@ -86,7 +98,7 @@ dependencies = [
  "ads7924",
  "bbqueue",
  "bit_field",
- "cortex-m",
+ "cortex-m 0.6.3",
  "cortex-m-log",
  "cortex-m-rt",
  "cortex-m-rtic",
@@ -94,6 +106,7 @@ dependencies = [
  "dac7571",
  "debounced-pin",
  "embedded-hal",
+ "enc424j600",
  "enum-iterator",
  "heapless",
  "log",
@@ -107,6 +120,7 @@ dependencies = [
  "serde",
  "serde-json-core",
  "shared-bus",
+ "smoltcp",
  "stm32f4xx-hal",
  "tca9548",
  "usb-device",
@@ -137,11 +151,23 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
 name = "cortex-m"
+version = "0.5.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c0b159a1e8306949579de3698c841dba58058197b65c60807194e4fa1e7a554"
+dependencies = [
+ "aligned 0.2.0",
+ "bare-metal",
+ "cortex-m 0.6.3",
+ "volatile-register",
+]
+
+[[package]]
+name = "cortex-m"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2be99930c99669a74d986f7fd2162085498b322e6daae8ef63a97cc9ac1dc73c"
 dependencies = [
- "aligned",
+ "aligned 0.3.4",
  "bare-metal",
  "bitfield",
  "volatile-register",
@@ -153,7 +179,7 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d63959cb1e003dd97233fee6762351540253237eadf06fcdcb98cbfa3f9be4a"
 dependencies = [
- "cortex-m",
+ "cortex-m 0.6.3",
  "log",
 ]
 
@@ -184,7 +210,7 @@ version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b30efcb6b7920d9016182c485687f0012487032a14c415d2fce6e9862ef8260e"
 dependencies = [
- "cortex-m",
+ "cortex-m 0.6.3",
  "cortex-m-rt",
  "cortex-m-rtic-macros",
  "heapless",
@@ -265,6 +291,18 @@ dependencies = [
  "heapless",
  "nb 1.0.0",
  "no-std-net",
+]
+
+[[package]]
+name = "enc424j600"
+version = "0.1.0"
+source = "git+https://git.m-labs.hk/M-Labs/ENC424J600.git#26dabd4dc04214cb9f44ce098fcaf99c7174f36d"
+dependencies = [
+ "aligned 0.3.4",
+ "cortex-m 0.5.10",
+ "embedded-hal",
+ "smoltcp",
+ "volatile-register",
 ]
 
 [[package]]
@@ -391,6 +429,12 @@ dependencies = [
  "syn",
  "utf8-ranges",
 ]
+
+[[package]]
+name = "managed"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c75de51135344a4f8ed3cfe2720dc27736f7711989703a0b43aadf3753c55577"
 
 [[package]]
 name = "max6639"
@@ -606,8 +650,19 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f42e140835229dea9c0b2498d2c88afe52ed2bd42a7cc6068c95adb5134b541"
 dependencies = [
- "cortex-m",
+ "cortex-m 0.6.3",
  "embedded-hal",
+]
+
+[[package]]
+name = "smoltcp"
+version = "0.6.0"
+source = "git+https://github.com/smoltcp-rs/smoltcp.git?rev=2080152b#2080152b25ea3adba930aabb21d39fce178115a8"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "log",
+ "managed",
 ]
 
 [[package]]
@@ -623,7 +678,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11460b4de3a84f072e2cf6e76306c64d27f405a0e83bace0a726f555ddf4bf33"
 dependencies = [
  "bare-metal",
- "cortex-m",
+ "cortex-m 0.6.3",
  "cortex-m-rt",
  "vcell",
 ]
@@ -635,7 +690,7 @@ source = "git+https://github.com/stm32-rs/stm32f4xx-hal#1dabe771eb141139ff1a2ead
 dependencies = [
  "bare-metal",
  "cast",
- "cortex-m",
+ "cortex-m 0.6.3",
  "cortex-m-rt",
  "embedded-dma",
  "embedded-hal",
@@ -663,7 +718,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "461676dcf123675b3d3b02e2390e6a690cd186aacf2f439af7673c79e2561d53"
 dependencies = [
- "cortex-m",
+ "cortex-m 0.6.3",
  "usb-device",
  "vcell",
 ]
