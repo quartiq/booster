@@ -80,6 +80,7 @@ path = "tca9548"
 unstable = []
 phy_enc424j600 = [ "enc424j600", "smoltcp" ]
 phy_w5500 = [ "w5500" ]
+default = [ "phy_w5500" ]
 
 # Coerce ENC424J600 to use the latest smoltcp to accomodate minimq
 [patch.crates-io]
