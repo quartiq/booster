@@ -400,6 +400,10 @@ const APP: () = {
 
         let identifier: String<heapless::consts::U32> = String::from(settings.id());
 
+        // Store factory MAC address of enc424j600
+        #[cfg(feature = "phy_enc424j600")]
+        let mut eth_mac_addr: [u8; 6] = [0; 6];
+
         let mqtt_client = {
             let interface = {
                 let spi = {
@@ -467,7 +471,6 @@ const APP: () = {
                         },
                     }
 
-                    let mut eth_mac_addr: [u8; 6] = [0; 6];
                     enc424j600.read_from_mac(&mut eth_mac_addr).unwrap();
 
                     // Init Rx/Tx buffers
@@ -574,7 +577,12 @@ const APP: () = {
             // Generate a device serial number from the MAC address.
             *USB_SERIAL = {
                 let mut serial_string: String<heapless::consts::U64> = String::new();
+
+                #[cfg(feature = "phy_w5500")]
                 let octets = settings.mac().octets;
+                #[cfg(feature = "phy_enc424j600")]
+                let octets = eth_mac_addr;
+
                 write!(
                     &mut serial_string,
                     "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
@@ -595,7 +603,15 @@ const APP: () = {
             .device_class(usbd_serial::USB_CLASS_CDC)
             .build();
 
-            SerialTerminal::new(usb_device, usb_serial, settings)
+            #[cfg(feature = "phy_w5500")]
+            {
+                SerialTerminal::new(usb_device, usb_serial, settings)
+            }
+
+            #[cfg(feature = "phy_enc424j600")]
+            {
+                SerialTerminal::new(usb_device, usb_serial, settings.set_mac(eth_mac_addr))
+            }
         };
 
         info!("Startup complete");
