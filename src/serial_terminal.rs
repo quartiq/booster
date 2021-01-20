@@ -13,6 +13,10 @@ use usbd_serial::UsbError;
 use core::fmt::Write;
 use w5500::Ipv4Addr;
 
+mod build_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 #[derive(Logos)]
 enum Token {
     #[error]
@@ -158,7 +162,17 @@ impl SerialTerminal {
 
                 Request::ServiceInfo => {
                     let mut msg: String<consts::U256> = String::new();
-                    write!(&mut msg, "{:<20}: {}\n", "Version", env!("VERSION")).unwrap_or_else(
+                    write!(&mut msg, "{:<20}: {} [{}]\n", "Version",
+                            build_info::GIT_VERSION.unwrap_or("Unspecified"),
+                            build_info::PROFILE
+                        ).unwrap_or_else( |_| {
+                            msg = String::from("Version: too long");
+                        },
+                    );
+                    self.write(msg.as_bytes());
+
+                    msg.clear();
+                    write!(&mut msg, "{:<20}: {}\n", "Build Time", build_info::BUILT_TIME_UTC).unwrap_or_else(
                         |_| {
                             msg = String::from("Version: too long");
                         },
@@ -166,11 +180,20 @@ impl SerialTerminal {
                     self.write(msg.as_bytes());
 
                     msg.clear();
+                    write!(&mut msg, "{:<20}: {}\n", "Rustc Version", build_info::RUSTC_VERSION).unwrap_or_else(
+                        |_| {
+                            msg = String::from("Rustc Version: too long");
+                        },
+                    );
+                    self.write(msg.as_bytes());
+
+                    msg.clear();
                     write!(
                         &mut msg,
-                        "{:<20}: {}\n",
+                        "{:<20}: {} (dirty = {})\n",
                         "Git revision",
-                        env!("GIT_REVISION")
+                        build_info::GIT_COMMIT_HASH.unwrap_or("Unspecified"),
+                        build_info::GIT_DIRTY.unwrap_or(false)
                     )
                     .unwrap_or_else(|_| {
                         msg = String::from("Git revision: too long");
@@ -178,7 +201,7 @@ impl SerialTerminal {
                     self.write(msg.as_bytes());
 
                     msg.clear();
-                    write!(&mut msg, "{:<20}: {}\n", "Features", env!("ALL_FEATURES"))
+                    write!(&mut msg, "{:<20}: {}\n", "Features", build_info::FEATURES_STR)
                         .unwrap_or_else(|_| {
                             msg = String::from("Features: too long");
                         });
