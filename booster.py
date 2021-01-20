@@ -369,7 +369,7 @@ async def channel_configuration(args):
             await interface.write_property(args.channel,
                                            PropertyId.OutputInterlockThreshold,
                                            cmd_args[0])
-            print(f'Channel {args.channel}: Output power threshold = {args.threshold} dBm')
+            print(f'Channel {args.channel}: Output power threshold set')
 
         elif command == 'read':
             value = await interface.read_property(args.channel, cmd_args[0])
