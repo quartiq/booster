@@ -232,3 +232,13 @@ Bootloader USB interface.
 ```
 dfu-util -a 0 -s 0x08000000:leave --download booster.bin
 ```
+
+# Generating Releases
+
+When a release is ready, `develop` must be merged into `master`.
+
+The corresponding merge commit is then tagged with the version in the form of `vX.Y.Z`, where X, Y,
+and Z are the semantic version major, minor, and patch versions. The tag must be pushed using `git
+push origin vX.Y.Z`. This will automatically trigger CI to generate the release.
+
+After the tag is generated, `master` must be merged back into `develop`.
