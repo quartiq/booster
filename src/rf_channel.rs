@@ -54,7 +54,7 @@ pub struct SupplyMeasurements {
 pub enum ChannelFault {
     OverTemperature,
     UnderTemperature,
-    OverCurrent,
+    SupplyAlert,
 }
 
 /// Represents the three power interlocks present on the device.
@@ -97,8 +97,14 @@ pub enum ChannelState {
 impl serde::Serialize for ChannelState {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match *self {
-            ChannelState::Blocked(_) => {
-                serializer.serialize_unit_variant("ChannelState", 0, "Blocked")
+            ChannelState::Blocked(ChannelFault::SupplyAlert) => {
+                serializer.serialize_unit_variant("ChannelState", 0, "Blocked(SupplyAlert)")
+            }
+            ChannelState::Blocked(ChannelFault::UnderTemperature) => {
+                serializer.serialize_unit_variant("ChannelState", 0, "Blocked(UnderTempeterature)")
+            }
+            ChannelState::Blocked(ChannelFault::OverTemperature) => {
+                serializer.serialize_unit_variant("ChannelState", 0, "Blocked(OverTemperature)")
             }
             ChannelState::Disabled => {
                 serializer.serialize_unit_variant("ChannelState", 1, "Disabled")
@@ -579,7 +585,7 @@ impl RfChannel {
         } else if temperature < 5.0 {
             Some(ChannelFault::UnderTemperature)
         } else if self.pins.alert.is_low().unwrap() {
-            Some(ChannelFault::OverCurrent)
+            Some(ChannelFault::SupplyAlert)
         } else {
             None
         }
