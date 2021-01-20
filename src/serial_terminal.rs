@@ -157,34 +157,58 @@ impl SerialTerminal {
                 }
 
                 Request::ServiceInfo => {
-                    self.write("Panic Info: ".as_bytes());
+                    let mut msg: String<consts::U256> = String::new();
+                    write!(&mut msg, "{:<20}: {}\n", "Version", env!("VERSION")).unwrap_or_else(
+                        |_| {
+                            msg = String::from("Version: too long");
+                        },
+                    );
+                    self.write(msg.as_bytes());
+
+                    msg.clear();
+                    write!(
+                        &mut msg,
+                        "{:<20}: {}\n",
+                        "Git revision",
+                        env!("GIT_REVISION")
+                    )
+                    .unwrap_or_else(|_| {
+                        msg = String::from("Git revision: too long");
+                    });
+                    self.write(msg.as_bytes());
+
+                    msg.clear();
+                    write!(&mut msg, "{:<20}: {}\n", "Features", env!("ALL_FEATURES"))
+                        .unwrap_or_else(|_| {
+                            msg = String::from("Features: too long");
+                        });
+                    self.write(msg.as_bytes());
+
+                    msg.clear();
+                    // Note(unwrap): The msg size is long enough to always contain the provided
+                    // string.
+                    write!(&mut msg, "{:<20}: ", "Panic Info").unwrap();
+                    self.write(msg.as_bytes());
                     self.write(
                         panic_persist::get_panic_message_bytes().unwrap_or("None".as_bytes()),
                     );
                     self.write("\n".as_bytes());
 
-                    self.write("Watchdog Detected: ".as_bytes());
-                    if platform::watchdog_detected() {
-                        self.write("True\n".as_bytes())
-                    } else {
-                        self.write("False\n".as_bytes())
-                    }
+                    msg.clear();
+                    // Note(unwrap): The msg size is long enough to be sufficient for all possible
+                    // formats.
+                    write!(
+                        &mut msg,
+                        "{:<20}: {}\n",
+                        "Watchdog Detected",
+                        platform::watchdog_detected()
+                    )
+                    .unwrap();
+                    self.write(msg.as_bytes());
 
                     // Reading the panic message above clears the panic message, so similarly, we
                     // should also clear the watchdog once read.
                     platform::clear_reset_flags();
-
-                    self.write("Git revision: ".as_bytes());
-                    self.write(env!("GIT_REVISION").as_bytes());
-                    self.write("\n".as_bytes());
-
-                    self.write("Features: ".as_bytes());
-                    self.write(env!("ALL_FEATURES").as_bytes());
-                    self.write("\n".as_bytes());
-
-                    self.write("Version: ".as_bytes());
-                    self.write(env!("VERSION").as_bytes());
-                    self.write("\n".as_bytes());
                 }
 
                 Request::WriteIpAddress(prop, addr) => match prop {

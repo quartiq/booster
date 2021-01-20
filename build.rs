@@ -12,19 +12,34 @@ use std::process::Command;
 
 fn main() {
     // Inject the git revision into an environment variable for compilation.
+    let dirty_flag = if !Command::new("git")
+        .args(&["diff", "--quiet"])
+        .status()
+        .unwrap()
+        .success()
+    {
+        "-dirty"
+    } else {
+        ""
+    };
+
     let output = Command::new("git")
         .args(&["rev-parse", "HEAD"])
         .output()
         .unwrap();
     let revision = String::from_utf8(output.stdout).unwrap();
-    println!("cargo:rustc-env=GIT_REVISION={}", revision);
+    println!(
+        "cargo:rustc-env=GIT_REVISION={}{}",
+        revision.trim(),
+        dirty_flag
+    );
 
     let output = Command::new("git")
         .args(&["describe", "--tags"])
         .output()
         .unwrap();
     let version = String::from_utf8(output.stdout).unwrap();
-    println!("cargo:rustc-env=VERSION={}", version);
+    println!("cargo:rustc-env=VERSION={}", version.trim());
 
     // Collect all of the enabled features and inject them as an environment variable.
     let mut features: Vec<String> = Vec::new();
