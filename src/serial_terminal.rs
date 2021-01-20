@@ -173,6 +173,18 @@ impl SerialTerminal {
                     // Reading the panic message above clears the panic message, so similarly, we
                     // should also clear the watchdog once read.
                     platform::clear_reset_flags();
+
+                    self.write("Git revision: ".as_bytes());
+                    self.write(env!("GIT_REVISION").as_bytes());
+                    self.write("\n".as_bytes());
+
+                    self.write("Features: ".as_bytes());
+                    self.write(env!("ALL_FEATURES").as_bytes());
+                    self.write("\n".as_bytes());
+
+                    self.write("Version: ".as_bytes());
+                    self.write(env!("VERSION").as_bytes());
+                    self.write("\n".as_bytes());
                 }
 
                 Request::WriteIpAddress(prop, addr) => match prop {
