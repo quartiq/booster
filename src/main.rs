@@ -422,7 +422,6 @@ const APP: () = {
                         mode,
                         #[cfg(feature = "phy_w5500")]
                         1.mhz().into(),
-                        
                         #[cfg(feature = "phy_enc424j600")]
                         hal::time::Hertz(enc424j600::spi::interfaces::SPI_CLOCK_FREQ),
                         clocks,
@@ -446,29 +445,29 @@ const APP: () = {
                         w5500::ArpResponses::Cache,
                     )
                     .unwrap();
-    
+
                     w5500.set_mac(settings.mac()).unwrap();
-    
+
                     // Set default netmask and gateway.
                     w5500.set_gateway(settings.gateway()).unwrap();
                     w5500.set_subnet(settings.subnet()).unwrap();
                     w5500.set_ip(settings.ip()).unwrap();
-    
+
                     w5500::Interface::new(w5500)
                 }
 
                 #[cfg(feature = "phy_enc424j600")]
                 {
-                    use smoltcp as net;
                     use enc424j600::EthController;
+                    use smoltcp as net;
 
                     let mut enc424j600 = enc424j600::SpiEth::new(spi, cs);
 
                     match enc424j600.init_dev(&mut delay) {
-                        Ok(_) => {},
+                        Ok(_) => {}
                         Err(_) => {
                             panic!("ENC424J600 PHY initialization failed");
-                        },
+                        }
                     }
 
                     enc424j600.read_from_mac(&mut eth_mac_addr).unwrap();
@@ -479,33 +478,34 @@ const APP: () = {
 
                     let eth_iface = unsafe {
                         let device = enc424j600::smoltcp_phy::SmoltcpDevice::new(enc424j600);
-                        
+
                         // TODO: Restore IP config from EEPROM
                         NET_STORE.ip_addrs[0] = {
                             let ip = settings.ip().octets();
                             let subnet = settings.subnet().octets();
                             net::wire::IpCidr::new(
-                                net::wire::IpAddress::from(
-                                    net::wire::Ipv4Address::from_bytes(&ip)
-                                ),
-                                net::wire::IpAddress::from(
-                                    net::wire::Ipv4Address::from_bytes(&subnet)
-                                ).to_prefix_len().unwrap()
+                                net::wire::IpAddress::from(net::wire::Ipv4Address::from_bytes(&ip)),
+                                net::wire::IpAddress::from(net::wire::Ipv4Address::from_bytes(
+                                    &subnet,
+                                ))
+                                .to_prefix_len()
+                                .unwrap(),
                             )
                         };
 
                         let routes = {
                             // TODO: Restore gateway config from EEPROM
-                            let gateway = net::wire::Ipv4Address::from_bytes(
-                                &settings.gateway().octets()
-                            );
+                            let gateway =
+                                net::wire::Ipv4Address::from_bytes(&settings.gateway().octets());
 
-                            let mut routes = net::iface::Routes::new(&mut NET_STORE.routes_cache[..]);
+                            let mut routes =
+                                net::iface::Routes::new(&mut NET_STORE.routes_cache[..]);
                             routes.add_default_ipv4_route(gateway).unwrap();
                             routes
                         };
 
-                        let neighbor_cache = net::iface::NeighborCache::new(&mut NET_STORE.neighbor_cache[..]);
+                        let neighbor_cache =
+                            net::iface::NeighborCache::new(&mut NET_STORE.neighbor_cache[..]);
 
                         net::iface::EthernetInterfaceBuilder::new(device)
                             .ethernet_addr(net::wire::EthernetAddress(eth_mac_addr))
@@ -513,16 +513,18 @@ const APP: () = {
                             .ip_addrs(&mut NET_STORE.ip_addrs[..])
                             .routes(routes)
                             .finalize()
-
                     };
 
                     let socket_set = unsafe {
-                        let mut sockets = net::socket::SocketSet::new(&mut NET_STORE.socket_storage[..]);
-                
+                        let mut sockets =
+                            net::socket::SocketSet::new(&mut NET_STORE.socket_storage[..]);
+
                         let mut tcp_socket = {
-                            let tx_buffer = net::socket::TcpSocketBuffer::new(&mut DATA_STORE.tx_storage[..]);
-                            let rx_buffer = net::socket::TcpSocketBuffer::new(&mut DATA_STORE.rx_storage[..]);
-                
+                            let tx_buffer =
+                                net::socket::TcpSocketBuffer::new(&mut DATA_STORE.tx_storage[..]);
+                            let rx_buffer =
+                                net::socket::TcpSocketBuffer::new(&mut DATA_STORE.rx_storage[..]);
+
                             net::socket::TcpSocket::new(rx_buffer, tx_buffer)
                         };
                         tcp_socket.set_keep_alive(Some(net::time::Duration::from_millis(1000)));

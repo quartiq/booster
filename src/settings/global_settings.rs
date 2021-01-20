@@ -6,8 +6,8 @@
 //! Proprietary and confidential.
 use crate::{Eeprom, Error};
 use heapless::{consts, String};
-use serde::{Deserialize, Serialize};
 use minimq::embedded_nal::Ipv4Addr;
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "phy_w5500")]
 use w5500::MacAddress;

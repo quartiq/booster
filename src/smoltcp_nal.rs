@@ -1,11 +1,11 @@
 // Ripped off from minimq example
+use super::SPI;
 use core::cell::RefCell;
 use heapless::{consts, Vec};
 use minimq::embedded_nal as nal;
+use nal::nb;
 use smoltcp as net;
 use stm32f4xx_hal as hal;
-use nal::nb;
-use super::SPI;
 
 use rtic::cyccnt::Instant;
 
@@ -18,10 +18,14 @@ pub enum NetworkError {
     Unsupported,
 }
 
-type NetworkInterface =
-    net::iface::EthernetInterface<'static, 'static, 'static, enc424j600::smoltcp_phy::SmoltcpDevice<
-        enc424j600::SpiEth::<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>
-    >>;
+type NetworkInterface = net::iface::EthernetInterface<
+    'static,
+    'static,
+    'static,
+    enc424j600::smoltcp_phy::SmoltcpDevice<
+        enc424j600::SpiEth<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
+    >,
+>;
 
 pub struct NetworkStack<'a, 'b, 'c> {
     network_interface: RefCell<NetworkInterface>,
@@ -33,10 +37,7 @@ pub struct NetworkStack<'a, 'b, 'c> {
 }
 
 impl<'a, 'b, 'c> NetworkStack<'a, 'b, 'c> {
-    pub fn new(
-        interface: NetworkInterface,
-        sockets: net::socket::SocketSet<'a, 'b, 'c>
-    ) -> Self {
+    pub fn new(interface: NetworkInterface, sockets: net::socket::SocketSet<'a, 'b, 'c>) -> Self {
         let mut unused_handles: Vec<net::socket::SocketHandle, consts::U16> = Vec::new();
         for socket in sockets.iter() {
             unused_handles.push(socket.handle()).unwrap();
@@ -60,9 +61,7 @@ impl<'a, 'b, 'c> NetworkStack<'a, 'b, 'c> {
             let now = match *self.last_update_instant.borrow() {
                 // If it is the first time, do not advance time
                 // Simply store the current instant to initiate time updating
-                None => {
-                    Instant::now()
-                }
+                None => Instant::now(),
 
                 // If it was updated before, advance time and update last_update_instant
                 Some(instant) => {
@@ -70,7 +69,7 @@ impl<'a, 'b, 'c> NetworkStack<'a, 'b, 'c> {
                     let now = Instant::now();
                     let duration = now.duration_since(instant);
                     // Adjust duration into ms (note: decimal point truncated)
-                    self.advance_time(duration.as_cycles()/168_000);
+                    self.advance_time(duration.as_cycles() / 168_000);
                     now
                 }
             };
@@ -138,17 +137,18 @@ impl<'a, 'b, 'c> nal::TcpStack for NetworkStack<'a, 'b, 'c> {
             if internal_socket.is_open() {
                 return Ok(socket);
             }
-    
+
             match remote.ip() {
                 nal::IpAddr::V4(addr) => {
                     let octets = addr.octets();
-                    let address = net::wire::Ipv4Address::new(octets[0], octets[1], octets[2], octets[3]);
+                    let address =
+                        net::wire::Ipv4Address::new(octets[0], octets[1], octets[2], octets[3]);
                     internal_socket
                         .connect((address, remote.port()), self.get_ephemeral_port())
                         .map_err(|_| NetworkError::ConnectionFailure)?;
                     address
                 }
-                nal::IpAddr::V6(_) => {                    
+                nal::IpAddr::V6(_) => {
                     // Match W5500 behavior: Reject the use of IPV6
                     return Err(NetworkError::Unsupported);
                 }
@@ -179,7 +179,7 @@ impl<'a, 'b, 'c> nal::TcpStack for NetworkStack<'a, 'b, 'c> {
 
             // Delay for 1 ms, minimum time unit of smoltcp
             // TODO: Allow clock configuration, if supported in main
-            cortex_m::asm::delay(168_000_000/1_000);
+            cortex_m::asm::delay(168_000_000 / 1_000);
             {
                 self.advance_time(1);
             }
@@ -211,11 +211,11 @@ impl<'a, 'b, 'c> nal::TcpStack for NetworkStack<'a, 'b, 'c> {
                     if num_bytes != non_queued_bytes.len() {
                         self.update(true);
                     }
-                    
+
                     // Process the unwritten bytes again, if any
                     non_queued_bytes = &non_queued_bytes[num_bytes..]
                 }
-                Err(_) => return Err(nb::Error::Other(NetworkError::WriteFailure))
+                Err(_) => return Err(nb::Error::Other(NetworkError::WriteFailure)),
             }
         }
 
