@@ -21,24 +21,9 @@ pub struct MacAddress {
 
 impl MacAddress {
     /// Creates a new EUI-48 MAC address from six eight-bit octets.
-    ///
-    /// The result will represent the EUI-48 MAC address
-    /// `a`:`b`:`c`:`d`:`e`:`f`.
-    #[allow(clippy::many_single_char_names)]
-    pub const fn new(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8) -> MacAddress {
-        MacAddress {
-            octets: [a, b, c, d, e, f],
-        }
-    }
-
-    /// Creates a new EUI-48 MAC address from six eight-bit octets.
     pub const fn from_bytes(octets: [u8; 6]) -> MacAddress {
         MacAddress { octets }
     }
-
-    /// An EUI-48 MAC address representing an unspecified address:
-    /// 00:00:00:00:00:00
-    pub const UNSPECIFIED: Self = MacAddress::new(0, 0, 0, 0, 0, 0);
 }
 
 impl ::core::fmt::Display for MacAddress {
