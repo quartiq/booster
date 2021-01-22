@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use w5500::MacAddress;
 
 #[cfg(feature = "phy_enc424j600")]
-use super::mac::MacAddress;
+use smoltcp::wire::EthernetAddress as MacAddress;
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 
@@ -268,7 +268,15 @@ impl BoosterSettings {
 
     /// Get the Booster MAC address.
     pub fn mac(&self) -> MacAddress {
-        MacAddress::from_bytes(self.eui48)
+        #[cfg(feature = "phy_w5500")]
+        {
+            MacAddress::from_bytes(self.eui48)
+        }
+
+        #[cfg(feature = "phy_enc424j600")]
+        {
+            MacAddress::from_bytes(&self.eui48)
+        }
     }
 
     /// Get the Booster IP address.
