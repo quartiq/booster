@@ -359,12 +359,8 @@ impl Devices {
             .get_voltage(ads7924::Channel::Three)
             .expect("Power monitor did not respond");
 
-        // Configure alarm thresholds for the P5V0_MP signal.
-        // Ensure that P5V0MP remains valid. Note that
-        // the 5V rail is divided by 2.5 before entering the ADC.
-        ads7924
-            .set_thresholds(ads7924::Channel::Three, 0.0, 6.5 / 2.5)
-            .expect("Power monitor failed to set thresholds");
+        // Note: Due to hardware limitations, the ADS7924 ALERT output is not used. Refer to
+        // https://github.com/quartiq/booster/issues/130 for more information.
 
         // Verify that there is no active alarm condition.
         assert!(ads7924.clear_alarm().expect("Failed to clear alarm") == 0);
