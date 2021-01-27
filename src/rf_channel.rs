@@ -792,10 +792,30 @@ impl RfChannel {
 
     /// Get the temperature of the channel in celsius.
     pub fn get_temperature(&mut self) -> f32 {
-        self.i2c_devices
+        // Note: During testing, it was discovered that we occassionally observe I2C bus faults when
+        // communicating with the temperature sensor - it is likely due toa  hardware design issue.
+        // As such, we implement a retry mechanic for this transaction and reset the I2C bus if we
+        // ever observe a bus fault.
+        match self
+            .i2c_devices
             .temperature_monitor
             .get_remote_temperature()
-            .unwrap()
+        {
+            Ok(temp) => temp,
+            Err(_) => {
+                // Note(unsafe): This function is always run when resource synchronization is
+                // managed externally, so we cannot be pre-empted by other tasks that will use the
+                // bus during the reset procedure.
+                unsafe { platform::reset_shared_i2c_bus() };
+
+                // We unwrap after the second attempt - if a bus reset didn't fix the fault, there's
+                // not much more we can try. Reboot and try again.
+                self.i2c_devices
+                    .temperature_monitor
+                    .get_remote_temperature()
+                    .unwrap()
+            }
+        }
     }
 
     /// Set the bias of the channel.

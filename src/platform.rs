@@ -8,9 +8,93 @@ use super::hal;
 
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
+use asm_delay::bitrate::U32BitrateExt;
+
 // Booster hardware channels are capable of withstanding up to 1W of reflected RF power. This
 // corresponds with a value of 30 dBm.
 pub const MAXIMUM_REFLECTED_POWER_DBM: f32 = 30.0;
+
+struct GpioBOutput {
+    index: usize,
+    original_otyper: u32,
+    original_pupdr: u32,
+    original_moder: u32,
+}
+
+impl GpioBOutput {
+    /// Construct a GPIO_B output pin based on the pin index.
+    pub fn new(index: usize) -> Self {
+        assert!(index <= 16);
+        // Preserve MODER, PUPDR, OTYPER
+        let gpiob = unsafe { &*hal::stm32::GPIOB::ptr() };
+
+        let original_pupdr = gpiob.pupdr.read().bits();
+        let original_moder = gpiob.moder.read().bits();
+        let original_otyper = gpiob.otyper.read().bits();
+
+        let offset = 2 * index;
+
+        // Note(unsafe): We check that offset is always less than or equal to 16 so that it will fit
+        // in the 32-bit register.
+        unsafe {
+            // Force the pin to open-drain configuration.
+            gpiob
+                .pupdr
+                .modify(|r, w| w.bits(r.bits() & !(0b11 << offset)));
+            gpiob
+                .otyper
+                .modify(|r, w| w.bits(r.bits() | (0b1 << index)));
+            gpiob
+                .moder
+                .modify(|r, w| w.bits((r.bits() & !(0b11 << offset)) | (0b1 << offset)));
+        }
+
+        Self {
+            index,
+            original_moder,
+            original_pupdr,
+            original_otyper,
+        }
+    }
+
+    /// Release the GPIO_B pin and reconfigure it to whatever configuration was present before
+    /// construction.
+    pub fn free(self) {
+        // Restore MODER, PUPDR, OTYPER
+        let gpiob = unsafe { &*hal::stm32::GPIOB::ptr() };
+
+        // Note(unsafe): We are writing back a previous bit configuration, so this is always valid.
+        unsafe {
+            gpiob.pupdr.write(|w| w.bits(self.original_pupdr));
+            gpiob.otyper.write(|w| w.bits(self.original_otyper));
+            gpiob.moder.write(|w| w.bits(self.original_moder));
+        }
+    }
+}
+
+impl OutputPin for GpioBOutput {
+    type Error = ();
+
+    fn set_low(&mut self) -> Result<(), ()> {
+        // Note(unsafe): We are accessing a single register atomically here. We have a logical
+        // contract with the user that we own this specific pin setting.
+        unsafe {
+            let gpiob = &*hal::stm32::GPIOB::ptr();
+            gpiob.bsrr.write(|w| w.bits(1 << (self.index + 16)));
+        }
+        Ok(())
+    }
+
+    fn set_high(&mut self) -> Result<(), ()> {
+        // Note(unsafe): We are accessing a single register atomically here. We have a logical
+        // contract with the user that we own this specific pin setting.
+        unsafe {
+            let gpiob = &*hal::stm32::GPIOB::ptr();
+            gpiob.bsrr.write(|w| w.bits(1 << self.index));
+        }
+        Ok(())
+    }
+}
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -86,6 +170,53 @@ pub fn i2c_bus_reset(
     delay.delay_us(5);
     sda.set_high().ok();
     delay.delay_us(5);
+}
+
+/// An unsafe means of performing a forced I2C bus reset on the shared RF channel I2C bus.
+///
+/// # Safety
+/// This function is only safe to call if it is guaranteed that it will not be interrupted by
+/// another context that will attempt to use the I2C bus.
+///
+/// If a synchronization mechanism is not used (e.g. via RTIC resource sharing), interrupts should
+/// be disabled before calling this function.
+///
+/// # Note
+/// This function will manually overwrite the I2C pin configurations into push/pull mode in order to
+/// perform a bus reset. Once the reset is complete, pin configurations will be restored.
+pub unsafe fn reset_shared_i2c_bus() {
+    let mut delay = asm_delay::AsmDelay::new(168.mhz());
+
+    // Manually configure SCL/SDA into GPIO mode.
+    let mut scl = GpioBOutput::new(6);
+    let mut sda = GpioBOutput::new(7);
+
+    i2c_bus_reset(&mut sda, &mut scl, &mut delay);
+
+    // Restore SCL/SDA pin configurations. Note: Ordering matters, since these structures restore
+    // previous configurations. Freeing order is the exact opposite of the construction order.
+    sda.free();
+    scl.free();
+
+    let i2c1 = unsafe { &*hal::stm32::I2C1::ptr() };
+
+    let cr2 = i2c1.cr2.read();
+    let ccr = i2c1.ccr.read();
+    let trise = i2c1.trise.read();
+    let cr1 = i2c1.cr1.read();
+
+    // Reset the I2C peripheral state now that we've finished a bus clear.
+    // Note: We are currently not preserving own-address-register.
+    i2c1.cr1.modify(|_, w| w.swrst().set_bit());
+    i2c1.cr1.modify(|_, w| w.swrst().clear_bit());
+
+    // Note(unsafe): All bit setings are preserving register configurations after reset.
+    unsafe {
+        i2c1.cr2.write(|w| w.bits(cr2.bits()));
+        i2c1.trise.write(|w| w.bits(trise.bits()));
+        i2c1.ccr.write(|w| w.bits(ccr.bits()));
+        i2c1.cr1.write(|w| w.bits(cr1.bits()));
+    }
 }
 
 /// Check if a watchdog reset has been detected.

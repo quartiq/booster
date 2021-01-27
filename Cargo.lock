@@ -37,6 +37,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "asm-delay"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9a69a963b70ddacfcd382524f72a4576f359af9334b3bf48a79566590bb8bfa"
+dependencies = [
+ "bitrate",
+ "cortex-m",
+ "embedded-hal",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -79,11 +90,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46afbd2983a5d5a7bd740ccb198caf5b82f45c40c09c0eed36052d91cb92e719"
 
 [[package]]
+name = "bitrate"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c147d86912d04bef727828fda769a76ca81629a46d8ba311a8d58a26aa91473d"
+
+[[package]]
 name = "booster"
 version = "0.1.0"
 dependencies = [
  "ad5627",
  "ads7924",
+ "asm-delay",
  "bbqueue",
  "bit_field",
  "cortex-m",
