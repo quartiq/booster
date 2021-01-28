@@ -40,13 +40,13 @@ optional = true
 
 [dependencies.enc424j600]
 git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
-features = [ "smoltcp-phy", "cortex-m" ]
+features = [ "nal" ]
 optional = true
 
 # The TCP/IP stack was tested with commit 2080152b
 # Major changes were made to smoltcp afterwards
 [dependencies.smoltcp]
-version = "0.6.0"
+version = "0.7.0"
 default-features = false
 features = [ "ethernet", "proto-ipv4", "proto-ipv6", "socket-tcp" ]
 optional = true
@@ -80,10 +80,6 @@ unstable = []
 phy_enc424j600 = [ "enc424j600", "smoltcp" ]
 phy_w5500 = [ "w5500" ]
 default = [ "phy_w5500" ]
-
-# Coerce ENC424J600 to use the latest smoltcp to accomodate minimq
-[patch.crates-io]
-smoltcp = { git = "https://github.com/smoltcp-rs/smoltcp.git", rev = "2080152b" }
 
 [profile.release]
 codegen-units = 1 # better optimizations

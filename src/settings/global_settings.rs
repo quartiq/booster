@@ -222,13 +222,6 @@ impl BoosterSettings {
         settings
     }
 
-    /// Override MAC address during initialization
-    pub fn set_mac(mut self, mac: [u8; 6]) -> Self {
-        // MAC address is designed to be unchanged in EEPROM
-        self.eui48.copy_from_slice(&mac);
-        self
-    }
-
     /// Save the configuration settings to EEPROM for retrieval.
     pub fn save(&mut self) {
         let mut config = match self.load_config() {

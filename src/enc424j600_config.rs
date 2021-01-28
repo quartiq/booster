@@ -1,12 +1,13 @@
 use super::SPI;
-use crate::AsmDelay;
 use crate::BoosterSettings;
 use crate::NetworkStack;
+use cortex_m::peripheral::DWT;
+use enc424j600::nal::time;
 use stm32f4xx_hal as hal;
 
 /// Containers for smoltcp-related network configurations
 pub struct NetStorage {
-    pub socket_storage: [Option<smoltcp::socket::SocketSetItem<'static, 'static>>; 1],
+    pub socket_storage: [Option<smoltcp::socket::SocketSetItem<'static>>; 1],
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
     pub neighbor_cache: [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
     pub routes_cache: [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 8],
@@ -26,27 +27,40 @@ static mut NET_STORE: NetStorage = NetStorage {
     rx_storage: [0; 1024],
 };
 
-type Ethernet = NetworkStack<'static, 'static, 'static>;
-type EthSpiInterface =
-    enc424j600::SpiEth<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>;
+pub struct Clock;
+impl time::Clock for Clock {
+    type T = u32;
+    const SCALING_FACTOR: time::fraction::Fraction =
+        <time::fraction::Fraction>::new(1, 168_000_000);
 
-pub fn setup(
-    mut enc424j600: EthSpiInterface,
-    settings: &BoosterSettings,
-    mut delay: AsmDelay,
-) -> (Ethernet, [u8; 6]) {
+    fn try_now(&self) -> Result<time::Instant<Self>, time::clock::Error> {
+        Ok(time::Instant::new(DWT::get_cycle_count()))
+    }
+}
+
+type Ethernet = NetworkStack<
+    'static,
+    SPI,
+    hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>,
+    Clock,
+>;
+type EthSpiInterface =
+    enc424j600::SpiEth<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, fn(u32)>;
+
+pub fn setup(mut enc424j600: EthSpiInterface, settings: &BoosterSettings) -> Ethernet {
     use enc424j600::EthController;
     use smoltcp as net;
 
-    match enc424j600.init_dev(&mut delay) {
+    match enc424j600.init_dev() {
         Ok(_) => {}
         Err(_) => {
             panic!("ENC424J600 PHY initialization failed");
         }
     }
 
-    let mut eth_mac_addr: [u8; 6] = [0; 6];
-    enc424j600.read_from_mac(&mut eth_mac_addr).unwrap();
+    enc424j600
+        .write_mac_address(settings.mac().as_bytes())
+        .unwrap();
 
     // Init Rx/Tx buffers
     enc424j600.init_rxbuf().unwrap();
@@ -79,7 +93,9 @@ pub fn setup(
         let neighbor_cache = net::iface::NeighborCache::new(&mut NET_STORE.neighbor_cache[..]);
 
         net::iface::EthernetInterfaceBuilder::new(device)
-            .ethernet_addr(net::wire::EthernetAddress(eth_mac_addr))
+            .ethernet_addr(net::wire::EthernetAddress::from_bytes(
+                settings.mac().as_bytes(),
+            ))
             .neighbor_cache(neighbor_cache)
             .ip_addrs(&mut NET_STORE.ip_addrs[..])
             .routes(routes)
@@ -101,5 +117,5 @@ pub fn setup(
         sockets
     };
 
-    (NetworkStack::new(eth_iface, socket_set), eth_mac_addr)
+    NetworkStack::new(eth_iface, socket_set, Clock {})
 }

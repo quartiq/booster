@@ -42,20 +42,20 @@ mod platform;
 mod rf_channel;
 mod serial_terminal;
 mod settings;
-#[cfg(feature = "phy_enc424j600")]
-mod smoltcp_nal;
 mod user_interface;
 mod watchdog;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
+#[cfg(feature = "phy_enc424j600")]
+use enc424j600::nal::NetworkStack;
+#[cfg(feature = "phy_enc424j600")]
+use enc424j600_config::Clock;
 use error::Error;
 use logger::BufferedLog;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
 use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
-#[cfg(feature = "phy_enc424j600")]
-use smoltcp_nal::NetworkStack;
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
 use watchdog::{WatchdogClient, WatchdogManager};
 
@@ -91,8 +91,12 @@ type SPI = hal::spi::Spi<
 type Ethernet =
     w5500::Interface<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
 #[cfg(feature = "phy_enc424j600")]
-type Ethernet = NetworkStack<'static, 'static, 'static>;
-
+type Ethernet = NetworkStack<
+    'static,
+    SPI,
+    hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>,
+    Clock,
+>;
 type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
@@ -370,10 +374,6 @@ const APP: () = {
 
         let identifier: String<heapless::consts::U32> = String::from(settings.id());
 
-        // Store factory MAC address of enc424j600
-        #[cfg(feature = "phy_enc424j600")]
-        let mut eth_mac_addr: [u8; 6] = [0; 6];
-
         let mqtt_client = {
             let interface = {
                 let spi = {
@@ -428,13 +428,10 @@ const APP: () = {
 
                 #[cfg(feature = "phy_enc424j600")]
                 {
-                    let enc424j600 = enc424j600::SpiEth::new(spi, cs);
-                    let (interface, enc424j600_mac_addr) = enc424j600_config::setup(
-                        enc424j600,
-                        &settings,
-                        AsmDelay::new(clocks.sysclk().0),
-                    );
-                    eth_mac_addr.copy_from_slice(&enc424j600_mac_addr);
+                    let delay_ns: fn(u32) -> () =
+                        |time_ns| cortex_m::asm::delay(time_ns * 21 / 125 + 1);
+                    let enc424j600 = enc424j600::SpiEth::new(spi, cs, delay_ns);
+                    let interface = enc424j600_config::setup(enc424j600, &settings);
                     interface
                 }
             };
@@ -485,7 +482,11 @@ const APP: () = {
                 #[cfg(feature = "phy_w5500")]
                 let octets = settings.mac().octets;
                 #[cfg(feature = "phy_enc424j600")]
-                let octets = eth_mac_addr;
+                let octets: [u8; 6] = {
+                    let mut array = [0; 6];
+                    array.copy_from_slice(settings.mac().as_bytes());
+                    array
+                };
 
                 write!(
                     &mut serial_string,
@@ -507,15 +508,7 @@ const APP: () = {
             .device_class(usbd_serial::USB_CLASS_CDC)
             .build();
 
-            #[cfg(feature = "phy_w5500")]
-            {
-                SerialTerminal::new(usb_device, usb_serial, settings)
-            }
-
-            #[cfg(feature = "phy_enc424j600")]
-            {
-                SerialTerminal::new(usb_device, usb_serial, settings.set_mac(eth_mac_addr))
-            }
+            SerialTerminal::new(usb_device, usb_serial, settings)
         };
 
         info!("Startup complete");
