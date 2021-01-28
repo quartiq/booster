@@ -51,13 +51,7 @@ pub fn setup(mut enc424j600: EthSpiInterface, settings: &BoosterSettings) -> Eth
     use enc424j600::EthController;
     use smoltcp as net;
 
-    match enc424j600.init_dev() {
-        Ok(_) => {}
-        Err(_) => {
-            panic!("ENC424J600 PHY initialization failed");
-        }
-    }
-
+    enc424j600.init_dev().expect("PHY initialization failed");
     enc424j600
         .write_mac_address(settings.mac().as_bytes())
         .unwrap();
@@ -69,7 +63,6 @@ pub fn setup(mut enc424j600: EthSpiInterface, settings: &BoosterSettings) -> Eth
     let eth_iface = unsafe {
         let device = enc424j600::smoltcp_phy::SmoltcpDevice::new(enc424j600);
 
-        // TODO: Restore IP config from EEPROM
         NET_STORE.ip_addrs[0] = {
             let ip = settings.ip().octets();
             let subnet = settings.subnet().octets();
@@ -82,9 +75,7 @@ pub fn setup(mut enc424j600: EthSpiInterface, settings: &BoosterSettings) -> Eth
         };
 
         let routes = {
-            // TODO: Restore gateway config from EEPROM
             let gateway = net::wire::Ipv4Address::from_bytes(&settings.gateway().octets());
-
             let mut routes = net::iface::Routes::new(&mut NET_STORE.routes_cache[..]);
             routes.add_default_ipv4_route(gateway).unwrap();
             routes
