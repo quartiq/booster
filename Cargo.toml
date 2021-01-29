@@ -43,8 +43,6 @@ git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
 features = [ "nal" ]
 optional = true
 
-# The TCP/IP stack was tested with commit 2080152b
-# Major changes were made to smoltcp afterwards
 [dependencies.smoltcp]
 version = "0.7.0"
 default-features = false

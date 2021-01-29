@@ -267,9 +267,7 @@ impl BoosterSettings {
         }
 
         #[cfg(feature = "phy_enc424j600")]
-        {
-            MacAddress::from_bytes(&self.eui48)
-        }
+        MacAddress::from_bytes(&self.eui48)
     }
 
     /// Get the Booster IP address.
