@@ -2,8 +2,12 @@ MEMORY
 {
   /* NOTE 1 K = 1 KiBi = 1024 bytes */
   FLASH : ORIGIN = 0x08000000, LENGTH = 1M
-  RAM : ORIGIN = 0x20000000, LENGTH = 128K
+  RAM : ORIGIN = 0x20000000, LENGTH = 127K
+  PANDUMP : ORIGIN = 0x2001FC00, LENGTH = 1K
 }
+
+_panic_dump_start = ORIGIN(PANDUMP);
+_panic_dump_end = ORIGIN(PANDUMP) + LENGTH(PANDUMP);
 
 /* This is where the call stack will be allocated. */
 /* The stack is of the full descending type. */

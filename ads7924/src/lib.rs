@@ -7,6 +7,8 @@
 #![no_std]
 #![deny(warnings)]
 
+use core::convert::TryInto;
+
 use bit_field::BitField;
 
 use embedded_hal::blocking::{
@@ -26,12 +28,15 @@ where
 
 #[derive(Copy, Clone, PartialEq)]
 #[doc(hidden)]
+#[allow(dead_code)]
 enum OperationMode {
-    Active = 0b100000,
+    Idle = 0b000000,
+    Awake = 0b100000,
     ManualSingle = 0b110000,
     AutoscanWithSleep = 0b111011,
 }
 
+#[derive(Copy, Clone)]
 #[doc(hidden)]
 #[allow(dead_code)]
 enum Register {
@@ -71,15 +76,22 @@ pub enum Channel {
 
 /// Indicates errors that the ADC may encounter.
 #[derive(Debug)]
-pub enum Error {
-    Interface,
+pub enum Error<E> {
+    Interface(E),
     Size,
     Bounds,
+}
+
+impl<E> From<E> for Error<E> {
+    fn from(err: E) -> Error<E> {
+        Error::Interface(err)
+    }
 }
 
 impl<I2C> Ads7924<I2C>
 where
     I2C: Write + WriteRead,
+    <I2C as Write>::Error: Into<<I2C as WriteRead>::Error>,
 {
     /// Create a new ADC driver.
     ///
@@ -93,7 +105,7 @@ where
         address: u8,
         avdd: f32,
         delay: &mut impl DelayUs<u16>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Error<<I2C as WriteRead>::Error>> {
         let mut ads7924 = Ads7924 {
             i2c: i2c,
             address: address,
@@ -101,6 +113,9 @@ where
         };
 
         ads7924.reset(delay)?;
+
+        // Bring the ADC from idle to awake mode unconditionally.
+        ads7924.set_mode(OperationMode::Awake, None)?;
 
         // Configure the interrupt pin to operate in alarm mode when thresholds are exceeded once.
         let interrupt_config = *0u8.set_bits(5..8, 0b1);
@@ -120,21 +135,19 @@ where
     /// # Args
     /// * `i2c` - The I2C interface to use to communicate with the device.
     /// * `delay` - A means of delaying during initialization.
-    pub fn default(i2c: I2C, delay: &mut impl DelayUs<u16>) -> Result<Self, Error> {
+    pub fn default(
+        i2c: I2C,
+        delay: &mut impl DelayUs<u16>,
+    ) -> Result<Self, Error<<I2C as WriteRead>::Error>> {
         Ads7924::new(i2c, 0x49, 3.434, delay)
     }
 
-    fn set_mode(&mut self, mode: OperationMode, channel: Option<Channel>) -> Result<(), Error> {
+    fn set_mode(
+        &mut self,
+        mode: OperationMode,
+        channel: Option<Channel>,
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         let mut mode_control: [u8; 1] = [0];
-        self.read(Register::ModeCntrl, &mut mode_control)?;
-
-        // The datasheet indicates that the device should always transition to active when switching
-        // operational modes to ensure internal logic is synchronized.
-        if mode != OperationMode::Active {
-            mode_control[0].set_bits(2..8, OperationMode::Active as u8);
-            self.write(Register::ModeCntrl, &mode_control)?;
-        }
-
         if let Some(channel) = channel {
             mode_control[0].set_bits(0..3, channel as u8);
         }
@@ -145,7 +158,10 @@ where
         Ok(())
     }
 
-    fn reset(&mut self, delay: &mut impl DelayUs<u16>) -> Result<(), Error> {
+    fn reset(
+        &mut self,
+        delay: &mut impl DelayUs<u16>,
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         self.write(Register::Reset, &[0xAA])?;
 
         // Wait a small delay to ensure the device is processing the reset request.
@@ -154,7 +170,11 @@ where
         Ok(())
     }
 
-    fn write(&mut self, register: Register, data: &[u8]) -> Result<(), Error> {
+    fn write(
+        &mut self,
+        register: Register,
+        data: &[u8],
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         if data.len() > 2 {
             return Err(Error::Size);
         }
@@ -169,12 +189,16 @@ where
 
         self.i2c
             .write(self.address, &write_data[..data.len() + 1])
-            .map_err(|_| Error::Interface)?;
+            .map_err(|err| err.into())?;
 
         Ok(())
     }
 
-    fn read(&mut self, register: Register, data: &mut [u8]) -> Result<(), Error> {
+    fn read(
+        &mut self,
+        register: Register,
+        data: &mut [u8],
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         let mut command_byte = register as u8;
 
         // Set the INC bit in the command byte if reading more than 1 register.
@@ -182,9 +206,7 @@ where
             command_byte.set_bit(7, true);
         }
 
-        self.i2c
-            .write_read(self.address, &[command_byte], data)
-            .map_err(|_| Error::Interface)?;
+        self.i2c.write_read(self.address, &[command_byte], data)?;
 
         Ok(())
     }
@@ -200,7 +222,7 @@ where
         channel: Channel,
         low_threshold: f32,
         high_threshold: f32,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         if high_threshold < low_threshold || low_threshold < 0.0 || high_threshold < 0.0 {
             return Err(Error::Bounds);
         }
@@ -245,7 +267,7 @@ where
     /// # Returns
     /// A bit mask of which channel caused the alarm. The position of the bit corresponds with the
     /// channel number.
-    pub fn clear_alarm(&mut self) -> Result<u8, Error> {
+    pub fn clear_alarm(&mut self) -> Result<u8, Error<<I2C as WriteRead>::Error>> {
         // Clearing the alarm is completed by reading the interrupt control register.
         let mut alarm_status: [u8; 1] = [0];
         self.read(Register::IntCntrl, &mut alarm_status)?;
@@ -265,16 +287,25 @@ where
     ///
     /// # Returns
     /// The analog measurement of the specified channel in volts.
-    pub fn get_voltage(&mut self, channel: Channel) -> Result<f32, Error> {
+    pub fn get_voltage(
+        &mut self,
+        channel: Channel,
+    ) -> Result<f32, Error<<I2C as WriteRead>::Error>> {
         let upper_data_register = match channel {
             Channel::Zero => Register::Data0Upper,
             Channel::One => Register::Data1Upper,
             Channel::Two => Register::Data2Upper,
             Channel::Three => Register::Data3Upper,
         };
+        // First, disable Autoscan mode.
+        self.set_mode(OperationMode::Idle, None)?;
 
         let mut voltage_register: [u8; 2] = [0; 2];
         self.read(upper_data_register, &mut voltage_register)?;
+
+        // Reenable Autoscan.
+        self.set_mode(OperationMode::Awake, None)?;
+        self.set_mode(OperationMode::AutoscanWithSleep, None)?;
 
         // Convert the voltage register to an ADC code. The code is stored MSB-aligned, so we need
         // to shift it back into alignment.
@@ -283,25 +314,30 @@ where
         Ok(code as f32 * self.volts_per_lsb)
     }
 
-    /// Get an up-to-date analog voltage of a channel.
-    ///
-    /// # Note
-    /// This function will force the ADC to perform a new analog conversion, so results will be as
-    /// up-to-date as possible.
-    ///
-    /// # Args
-    /// * `channel` - The channel to get the voltage of.
+    /// Get the analog voltages of all channels.
     ///
     /// # Returns
-    /// The analog measurement of the specified channel in volts.
-    pub fn measure_voltage(&mut self, channel: Channel) -> Result<f32, Error> {
-        // First, update the mode to be manual-single.
-        self.set_mode(OperationMode::ManualSingle, Some(channel))?;
+    /// The analog measurements of all channel in volts.
+    pub fn get_voltages(&mut self) -> Result<[f32; 4], Error<<I2C as WriteRead>::Error>> {
+        // First, disable Autoscan mode.
+        self.set_mode(OperationMode::Idle, None)?;
 
-        let voltage = self.get_voltage(channel)?;
+        // Read all ADC data registers
+        let mut data = [0u8; 4 * 2];
+        self.read(Register::Data0Upper, &mut data)?;
 
+        // Reenable Autoscan.
+        self.set_mode(OperationMode::Awake, None)?;
         self.set_mode(OperationMode::AutoscanWithSleep, None)?;
 
-        Ok(voltage)
+        let mut voltages = [0f32; 4];
+        // Convert the voltage registers to an ADC code. The code is stored MSB-aligned,
+        // so we need to shift it back into alignment.
+        for i in 0..4 {
+            let code = u16::from_be_bytes(data[2 * i..2 * (i + 1)].try_into().unwrap());
+            voltages[i] = (code >> 4) as f32 * self.volts_per_lsb;
+        }
+
+        Ok(voltages)
     }
 }

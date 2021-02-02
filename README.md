@@ -1,3 +1,5 @@
+[![QUARTIQ Matrix Chat](https://img.shields.io/matrix/quartiq:matrix.org)](https://matrix.to/#/#quartiq:matrix.org)
+
 # Booster NGFW (Next-Generation Firmware)
 
 Updated firmware for the Sinara Booster hardware
@@ -21,6 +23,13 @@ Proprietary and confidential.
 
 You may purchase a [license](LICENSE) to use this software from
 [QUARTIQ](mailto:sales@quartiq.com).
+
+# Hardware
+
+Booster is an 8 channel RF power amplifier in the Sinara open hardware ecosystem.
+The open hardware designs and hardware discussions are located at
+https://github.com/sinara-hw/Booster/wiki.
+The hardware is available from Creotech, QUARTIQ, Technosyste, and M-Labs.
 
 # Getting Started
 
@@ -94,9 +103,13 @@ The USB port allows for configuration of:
 Additionally, the USB port allows the user to:
 * Read the MAC address of Booster
 * Reset booster
-* Enter DFU mode for upgrading firmware
+* Enter DFU mode for upgrading firmware (only available with the `unstable` feature and the `nightly` rust toolchain)
 
-## Ethernet
+## Booster Units
+
+Booster uses SI units (Volt, Ampere, Celsius) for telemetry messages and properties. Power measurements are specified in dBm.
+
+## Ethernet Telemetry and Control
 
 Booster uses MQTT for telemetry and control of RF channels. All booster MQTT topics are prefixed
 with the booster ID, which defaults to a combination of `booster` and the MAC address of the device.
@@ -106,7 +119,7 @@ transmitted in human-readable JSON format for logging purposes.
 
 Booster also supports a control interface over MQTT using the following topics:
 * `<ID>/channel/state` - Used to configure the power state of an RF channel
-* `<ID>/channel/tune` - Used to tune the drain current of an RF channel to tune the amplification
+* `<ID>/channel/bias` - Used to set the gate bias voltage of an RF channel
 * `<ID>/channel/read` - Used to read Booster properties, such as the interlock thresholds or the
   power transforms
 * `<ID>/channel/write` - Used to write Booster properties, such as the interlock thresholds or the
@@ -117,6 +130,18 @@ respond to the `ResponseTopic` property provided with the MQTT message. If no `R
 property is provided, Booster will respond by default to `<ID>/log`.
 
 For a reference implementation of the API to control booster over MQTT, refer to `booster.py`
+
+**Note**: When using mosquitto, the channel telemetry can be read using:
+```
+mosquitto_sub -h mqtt -v -t <ID>/ch<N>
+```
+Note in the above that <N> is an integer between 0 and 7 (inclusive). <ID> is as specified above.
+
+### Booster Properties
+
+Throughout the code, any reference to a "Property" refers to a value that is configurable by the
+user. Telemetry outputs, such as temperature or power measurements, are not considered to be
+properties of Booster.
 
 ### Special Note on Booster properties
 
@@ -165,34 +190,15 @@ To use `booster.py`, first install the prerequisites:
 python -m pip install gmqtt
 ```
 
-To enable a specific RF channel:
+`booster.py` contains built-in help information on usage:
 ```
-python booster.py --booster-id <ID> <CHANNEL> --enable
-```
-
-To disable a specific RF channel:
-```
-python booster.py --booster-id <ID> <CHANNEL> --disable
-```
-
-To configure interlock thresholds for a channel:
-```
-python booster.py --booster-id <ID> <CHANNEL> --thresholds <OUTPUT_DBM> <REFLECTED_DBM>
-```
-
-To tune the bias current of an RF channel to a desired drain current:
-```
-python booster.py --booster-id <ID> <CHANNEL> --bias <DRAIN_CURRENT>
-```
-
-Once a channel is configured as desired, the configuration can be stored permanently in Booster
-using:
-```
-python booster.py --booster-id <ID> <CHANNEL> --save
+python booster.py --help
 ```
 
 When settings are saved in booster, the current channel configuration will be the default state of
-the channel when Booster boots. Note that saving channel settings overwrites any existing channel configuration and calibrations including those from the old legacy firmware. The legacy firmware settings are incompatible.
+the channel when Booster boots. Note that saving channel settings overwrites any existing channel
+configuration and calibrations including those from the old legacy firmware. The legacy firmware
+settings are incompatible.
 
 
 # DFU Instructions
@@ -200,7 +206,11 @@ the channel when Booster boots. Note that saving channel settings overwrites any
 **Prerequisites**
 * Ensure `dfu-util` is installed. On Ubuntu, install it from `apt` using `sudo apt-get install
 dfu-util`
-* If building your own firmware, install `cargo-binutils`: `cargo install cargo-binutils`
+* If building your own firmware, [`cargo-binutils`](https://github.com/rust-embedded/cargo-binutils#installation)) must be installed:
+```
+cargo install cargo-binutils
+rustup component add llvm-tools-preview
+```
 
 The following instructions describe the process of uploading a new firmware image over the DFU
 Bootloader USB interface.
@@ -210,7 +220,7 @@ Bootloader USB interface.
     - Note: You may also use the latest [pre-built](https://github.com/quartiq/booster/releases) assets instead of building firmware.
 
 1. Generate the binary file for your firmware build: `cargo objcopy -- -O binary booster.bin`
-    - Note: If you built with `--release`, replace `debug` with `release` in the above command.
+    - Note: If you built with `--release`, use the commmand: `cargo objcopy --release -- -O binary booster.bin`
 
 1. Reset Booster into DFU mode:
     - Insert a pin into the DFU Bootloader hole to press the DFU button
@@ -222,3 +232,13 @@ Bootloader USB interface.
 ```
 dfu-util -a 0 -s 0x08000000:leave --download booster.bin
 ```
+
+# Generating Releases
+
+When a release is ready, `develop` must be merged into `master`.
+
+The corresponding merge commit is then tagged with the version in the form of `vX.Y.Z`, where X, Y,
+and Z are the semantic version major, minor, and patch versions. The tag must be pushed using `git
+push origin vX.Y.Z`. This will automatically trigger CI to generate the release.
+
+After the tag is generated, `master` must be merged back into `develop`.

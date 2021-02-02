@@ -9,9 +9,17 @@ use heapless::{consts, String};
 use serde::{Deserialize, Serialize};
 use w5500::{Ipv4Addr, MacAddress};
 
-use super::{SinaraBoardId, SinaraConfiguration};
+use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 
 use core::fmt::Write;
+
+/// The expected semver of the BoosterChannelSettings. This version must be updated whenever the
+/// `BoosterMainBoardData` layout is updated.
+const EXPECTED_VERSION: SemVersion = SemVersion {
+    major: 1,
+    minor: 0,
+    patch: 1,
+};
 
 fn array_to_addr(addr: &[u8; 4]) -> Ipv4Addr {
     Ipv4Addr::new(addr[0], addr[1], addr[2], addr[3])
@@ -24,6 +32,7 @@ fn identifier_is_valid<'a>(id: &'a str) -> bool {
 /// Represents booster mainboard-specific configuration values.
 #[derive(Serialize, Deserialize)]
 struct BoosterMainBoardData {
+    version: SemVersion,
     ip_address: [u8; 4],
     broker_address: [u8; 4],
     gateway_address: [u8; 4],
@@ -50,6 +59,7 @@ impl BoosterMainBoardData {
         id[..name.len()].copy_from_slice(name.as_str().as_bytes());
 
         Self {
+            version: EXPECTED_VERSION,
             ip_address: [10, 0, 0, 1],
             broker_address: [10, 0, 0, 2],
             gateway_address: [10, 0, 0, 0],
@@ -69,6 +79,11 @@ impl BoosterMainBoardData {
     /// The configuration if deserialization was successful. Otherwise, returns an error.
     pub fn deserialize(data: &[u8; 64]) -> Result<Self, Error> {
         let config: BoosterMainBoardData = postcard::from_bytes(data).unwrap();
+
+        // Validate the version of the settings.
+        if !EXPECTED_VERSION.is_compatible(&config.version) {
+            return Err(Error::Invalid);
+        }
 
         // Validate configuration parameters.
         let identifier = core::str::from_utf8(config.id()).map_err(|_| Error::Invalid)?;

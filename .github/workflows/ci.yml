@@ -52,26 +52,54 @@ jobs:
           - beta
     steps:
       - uses: actions/checkout@v2
+
       - name: Install Rust ${{ matrix.toolchain }}
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
           target: thumbv7em-none-eabihf
           override: true
-      - name: cargo check
+          components: llvm-tools-preview
+
+      - name: Install Binutils
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-binutils
+
+      - name: Style Check
         uses: actions-rs/cargo@v1
         with:
           command: check
           args: --verbose
-      - name: cargo build
+
+      - name: Build [Debug]
         uses: actions-rs/cargo@v1
         with:
           command: build
-      - name: cargo build release
+
+      - name: Build [Release]
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release
+
+      - name: Generate Release
+        uses: actions-rs/cargo@v1
+        with:
+          command: objcopy
+          args: --release --verbose -- -O binary booster-release.bin
+
+      - name: Upload Release
+        uses: actions/upload-artifact@v2
+        if: ${{ matrix.toolchain == 'stable' }} &&
+            (${{ github.ref == 'refs/heads/master' }} ||
+             ${{ github.ref == 'refs/heads/develop' }})
+        with:
+          name: Firmware Images
+          path: |
+            target/*/release/booster
+            booster-release.bin
 
   compile-unstable:
     runs-on: ubuntu-latest

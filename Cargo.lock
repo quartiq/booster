@@ -103,6 +103,7 @@ dependencies = [
  "mcp3221",
  "microchip-24aa02e48",
  "minimq",
+ "panic-persist",
  "postcard",
  "serde",
  "serde-json-core",
@@ -235,6 +236,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "embedded-dma"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46c8c02e4347a0267ca60813c952017f4c5948c232474c6010a381a337f1bda4"
+dependencies = [
+ "stable_deref_trait",
 ]
 
 [[package]]
@@ -416,7 +426,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/minimq#4a2b850b647b575d832122eeb2ffdeaa3677835a"
+source = "git+https://github.com/quartiq/minimq#83e946544cebd09c9dd07ff1271be639138ec1ce"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -465,6 +475,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "panic-persist"
+version = "0.2.1"
+source = "git+https://github.com/jamesmunns/panic-persist?branch=master#3f892297e97adc6a415145193000e3749b1959df"
+dependencies = [
+ "cortex-m",
 ]
 
 [[package]]
@@ -572,9 +590,9 @@ dependencies = [
 
 [[package]]
 name = "serde-json-core"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf406405ada9ef326ca78677324ac66994ff348fc48a16030be08caeed29825"
+checksum = "89fd6016a00149b485f66da701f76d909210d319040c97b6eff300f6e2ba2153"
 dependencies = [
  "heapless",
  "serde",
@@ -622,16 +640,16 @@ dependencies = [
 [[package]]
 name = "stm32f4xx-hal"
 version = "0.8.3"
-source = "git+https://github.com/quartiq/stm32f4xx-hal#0a837e6154ac71b521f2bfe1a9a4a0d457cde180"
+source = "git+https://github.com/stm32-rs/stm32f4xx-hal#1dabe771eb141139ff1a2ead4f97a9036b4e9521"
 dependencies = [
  "bare-metal",
  "cast",
  "cortex-m",
  "cortex-m-rt",
+ "embedded-dma",
  "embedded-hal",
  "nb 0.1.3",
  "rand_core",
- "stable_deref_trait",
  "stm32f4",
  "synopsys-usb-otg",
  "void",

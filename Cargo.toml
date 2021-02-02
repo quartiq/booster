@@ -3,7 +3,7 @@ authors = ["Ryan Summers <ryan.summers@vertigo-designs.com>"]
 edition = "2018"
 readme = "README.md"
 name = "booster"
-version = "0.1.0"
+version = "0.2.0"
 
 [dependencies]
 cortex-m = "0.6.3"
@@ -17,7 +17,7 @@ heapless = { version = "0.5.5", features = ["serde"] }
 bit_field = "0.10.0"
 debounced-pin = "0.3.0"
 serde = {version = "1.0", features = ["derive"], default-features = false }
-serde-json-core = "0.1"
+serde-json-core = "0.2"
 logos = { version = "0.11.4", default-features = false, features = ["export_derive"] }
 bbqueue = "0.4.10"
 usbd-serial = "0.1.0"
@@ -25,12 +25,13 @@ shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
 usb-device = "0.2.6"
 postcard = "0.5.1"
 crc-any = { version = "2.3.5", default-features = false }
+panic-persist = { git = "https://github.com/jamesmunns/panic-persist", branch = "master", features = ["custom-panic-handler"] }
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq"
 
 [dependencies.stm32f4xx-hal]
-git = "https://github.com/quartiq/stm32f4xx-hal"
+git = "https://github.com/stm32-rs/stm32f4xx-hal"
 features = ["stm32f407", "rt", "usb_fs"]
 
 [dependencies.w5500]

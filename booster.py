@@ -26,7 +26,7 @@ CHANNEL = [
 
 class PropertyId(enum.Enum):
     """ Represents a property ID for Booster RF channels. """
-    InterlockThresholds = 'InterlockThresholds'
+    OutputInterlockThreshold = 'OutputInterlockThreshold'
     OutputPowerTransform = 'OutputPowerTransform'
     InputPowerTransform = 'InputPowerTransform'
     ReflectedPowerTransform = 'ReflectedPowerTransform'
@@ -47,6 +47,77 @@ def generate_request(**kwargs):
         kwargs: A list of keyword-value argument pairs to construct the message from.
     """
     return json.dumps(kwargs)
+
+
+# A dictionary of all the available commands, their number of arguments, argument type, and help
+# information about the command.
+CMDS = {
+    'enable': {
+        'nargs': 0,
+        'help': 'Enable the channel',
+    },
+    'disable': {
+        'nargs': 0,
+        'help': 'Disable the channel',
+    },
+    'save': {
+        'nargs': 0,
+        'help': 'Save channel configuration',
+    },
+    'bias': {
+        'nargs': 1,
+        'type': float,
+        'help': 'Specify the channel bias voltage',
+    },
+    'tune': {
+        'nargs': 1,
+        'type': float,
+        'help': 'Tune the channel RF drain current to the specified amps',
+    },
+    'output_interlock_threshold': {
+        'nargs': 1,
+        'type': float,
+        'help': 'Specify the output interlock threshold in dBm',
+    },
+    'input_power_transform': {
+        'nargs': 2,
+        'type': float,
+        'help': 'Specify the input power transform in the provided <slope>,<intercept>',
+    },
+    'output_power_transform': {
+        'nargs': 2,
+        'type': float,
+        'help': 'Specify the output power transform in the provided <slope>,<intercept>',
+    },
+    'reflected_power_transform': {
+        'nargs': 2,
+        'type': float,
+        'help': 'Specify the reflfected power transform in the provided <slope>,<intercept>',
+    },
+    'read': {
+        'nargs': 1,
+        'help': 'Read a property from booster. Options: ' + ', '.join([x.value for x in PropertyId]),
+        'type': PropertyId,
+    },
+}
+
+def parse_command(entry):
+    """ Parse a command string into a command and arguments. """
+    try:
+        pieces = entry.split('=')
+        assert 1 <= len(pieces) <= 2, 'Invalid command format'
+
+        cmd = pieces[0]
+        tail = pieces[1] if len(pieces) > 1 else None
+        args = tail.split(',') if tail else []
+
+        assert cmd in CMDS, f'Unknown command specified: {cmd}'
+        assert CMDS[cmd]['nargs'] == len(args), \
+            f'Invalid args specified. Expected {CMDS[cmd]["nargs"]}, but found {len(args)}'
+        return (cmd, [CMDS[cmd]['type'](x) for x in args])
+
+    except Exception as exception:
+        raise Exception(f'Failed to parse command "{entry}": {exception}')
 
 
 class BoosterApi:
@@ -167,7 +238,7 @@ class BoosterApi:
         request = generate_request(prop=prop.value, channel=CHANNEL[channel])
 
         response = await self.command("channel/read", request)
-        return json.loads(response['data'].replace("'", '"'))
+        return json.loads(response['data'])
 
 
     async def write_property(self, channel, prop_id, value):
@@ -179,32 +250,89 @@ class BoosterApi:
             value: The value to write to the property.
         """
         request = generate_request(prop=prop_id.value, channel=CHANNEL[channel],
-                                   data=json.dumps(value).replace('"', "'"))
+                                   data=json.dumps(value))
 
         await self.command("channel/write", request)
 
 
-    async def tune_bias(self, channel, desired_current):
-        """ Tune a booster RF bias current.
+    async def set_bias(self, channel, voltage):
+        """ Set a booster RF bias voltage.
 
         Args:
             channel: The channel index to configure.
-            desired_current: The desired booster output current.
+            voltage: The bias voltage.
 
         Returns:
-            (Vgs, Ids) where Vgs is the tuned bias voltage and Ids is the RF amplifier drain
+            (Vgs, Ids) where Vgs is the bias voltage and Ids is the RF amplifier drain
             current.
         """
 
-        # Power up the channel. Wait 200ms for the channel to fully power-up before continuing.
+        # Power up the channel. Wait for the channel to fully power-up before continuing.
         await self._update_channel_state(channel, Action.Powerup)
-        time.sleep(0.200)
+        await asyncio.sleep(0.4)
 
         request = generate_request(channel=CHANNEL[channel],
-                                   current=float(desired_current))
-        response = await self.command("channel/tune", request)
+                                   voltage=voltage)
+        response = await self.command("channel/bias", request)
 
         return (response['vgs'], response['ids'])
+
+    async def tune_bias(self, channel, current):
+        """ Set a booster RF bias current.
+
+        Args:
+            channel: The channel index to configure.
+            current: The bias current.
+
+        Returns:
+            (Vgs, Ids) where Vgs is the actual bias voltage and Ids is
+            the measured RF amplifier drain current.
+        """
+        # Power up the channel. Wait for the channel to fully power-up before continuing.
+        await self._update_channel_state(channel, Action.Powerup)
+        await asyncio.sleep(0.4)
+
+        async def set_bias(voltage):
+            request = generate_request(channel=CHANNEL[channel],
+                                       voltage=voltage)
+            response = await self.command("channel/bias", request)
+            vgs, ids = response['vgs'], response['ids']
+            print(f'Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
+            return vgs, ids
+
+        # v_gsq from datasheet
+        voltage = -2.1
+        vgs_max = -0.3
+        ids_max = .2
+
+        # scan upwards in steps of 20 mV to just above target
+        last_ids = 0.
+        while True:
+            if voltage > vgs_max:
+                raise ValueError(f'Voltage out of bounds')
+            vgs, ids = await set_bias(voltage)
+            if ids > ids_max:
+                raise ValueError(f'Ids out of range')
+            if ids < last_ids - .02:
+                raise ValueError(f'Foldback')
+            last_ids = ids
+            if ids > current:
+                break
+            voltage += .02
+        vgs_max = voltage
+
+        # scan downwards in steps of 1 mV to just below target
+        while True:
+            voltage -= .001
+            if not vgs_max - .03 <= voltage <= vgs_max:
+                raise ValueError(f'Voltage out of bounds')
+            vgs, ids = await set_bias(voltage)
+            if ids > ids_max:
+                raise ValueError(f'Ids out of range')
+            if ids <= current:
+                break
+
+        return vgs, ids
 
 
 async def channel_configuration(args):
@@ -213,30 +341,52 @@ async def channel_configuration(args):
     # Establish a communication interface with Booster.
     interface = await BoosterApi.create(args.booster_id, args.broker)
 
-    if args.enable:
-        await interface.enable_channel(args.channel)
-        print(f'Channel {args.channel} enabled')
+    for command in args.commands:
+        command, cmd_args = parse_command(command)
+        if command == 'enable':
+            # The channel internally must power up over time.
+            await interface.enable_channel(args.channel)
+            time.sleep(1)
+            print(f'Channel {args.channel} enabled')
 
-    if args.thresholds:
-        thresholds = {
-            'output': args.thresholds[0],
-            'reflected': args.thresholds[1],
-        }
-        await interface.write_property(args.channel, PropertyId.InterlockThresholds, thresholds)
-        print(f'Channel {args.channel}: Output power threshold = {args.thresholds[0]} dBm, '
-              f'Reflected power interlock threshold = {args.thresholds[1]} dBm')
+        elif command == 'disable':
+            await interface.disable_channel(args.channel)
+            print(f'Channel {args.channel} disabled')
 
-    if args.bias:
-        vgs, ids = await interface.tune_bias(args.channel, args.bias)
-        print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
+        elif command == 'save':
+            await interface.save_channel(args.channel)
+            print(f'Channel {args.channel} configuration saved')
 
-    if args.disable:
-        await interface.disable_channel(args.channel)
-        print(f'Channel {args.channel} disabled')
+        elif command == 'tune':
+            vgs, ids = await interface.tune_bias(args.channel, cmd_args[0])
+            print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
 
-    if args.save:
-        await interface.save_channel(args.channel)
-        print(f'Channel {args.channel} configuration saved')
+        elif command == 'bias':
+            vgs, ids = await interface.set_bias(args.channel, cmd_args[0])
+            print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
+
+        elif command == 'output_interlock_threshold':
+            await interface.write_property(args.channel,
+                                           PropertyId.OutputInterlockThreshold,
+                                           cmd_args[0])
+            print(f'Channel {args.channel}: Output power threshold set')
+
+        elif command == 'read':
+            value = await interface.read_property(args.channel, cmd_args[0])
+            print(f'{cmd_args[0]} = {value}')
+
+        elif command.endswith('transform'):
+            transform = {
+                'slope': cmd_args[0],
+                'offset': cmd_args[1],
+            }
+            property_id = {
+                'output_power_transform': PropertyId.OutputPowerTransform,
+                'input_power_transform': PropertyId.InputPowerTransform,
+                'reflected_power_transform': PropertyId.ReflectedPowerTransform,
+            }
+
+            await interface.write_property(args.channel, property_id[command], transform)
 
     await interface.client.disconnect()
 
@@ -244,21 +394,25 @@ async def channel_configuration(args):
 def main():
     """ Main program entry point. """
     parser = argparse.ArgumentParser(
-        description='Modify booster RF channel configuration',
-        epilog='*Note*: The positional argument should be the channel index. For example, to '
-               'enable channel 0, the call would appear as `python booster.py 0 --enable`')
+        formatter_class=argparse.RawTextHelpFormatter,
+        description='Modify booster RF channel configuration')
     parser.add_argument('--booster-id', required=True, type=str,
                         help='The identifier of the booster to configure')
-    parser.add_argument('channel', type=int, choices=list(range(8)))
+    parser.add_argument('--channel', required=True, type=int, choices=range(8),
+                        help='The RF channel index to control')
     parser.add_argument('--broker', default='10.0.0.2', type=str, help='The MQTT broker address')
-    parser.add_argument('--bias', type=float,
-                        help='Tune the RF channel bias current to the provided value')
-    parser.add_argument('--enable', action='store_true', help='Enable the RF channel')
-    parser.add_argument('--disable', action='store_true', help='Disable the RF channel')
-    parser.add_argument('--thresholds', type=float, nargs=2,
-                        help='The interlock thresholds in the following order: '
-                             '<output> <reflected>')
-    parser.add_argument('--save', action='store_true', help='Save the RF channel configuration')
+
+    command_help = 'Individual commands. Options:\n'
+    for cmd, info in CMDS.items():
+        line = f'{cmd}'
+        if info['nargs'] == 1:
+            line += '=x'
+        if info['nargs'] == 2:
+            line += '=x,y'
+
+        command_help += f'{line:<30} | {info["help"]}\n'
+
+    parser.add_argument('commands', nargs='+', help=command_help)
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(channel_configuration(parser.parse_args()))
