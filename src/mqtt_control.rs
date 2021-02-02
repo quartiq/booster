@@ -310,6 +310,12 @@ impl ControlState {
                 // to re-establish them once we reconnect.
                 Err(minimq::Error::Disconnected) => self.subscribed = false,
 
+                // Note: There's a race condition where the W5500 may disconnect the socket
+                // immediately before Minimq tries to use it. In these cases, a NotReady error is
+                // returned to indicate the socket is no longer connected. On the next processing
+                // cycle of Minimq, the device should detect and handle the broker disconnection.
+                Err(minimq::Error::Network(w5500::Error::NotReady)) => {}
+
                 Err(e) => error!("Unexpected error: {:?}", e),
             }
         });
