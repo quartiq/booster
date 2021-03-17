@@ -80,7 +80,7 @@ checksum = "46afbd2983a5d5a7bd740ccb198caf5b82f45c40c09c0eed36052d91cb92e719"
 
 [[package]]
 name = "booster"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ad5627",
  "ads7924",
@@ -758,3 +758,8 @@ dependencies = [
  "no-std-net",
  "num_enum",
 ]
+
+[[patch.unused]]
+name = "stm32f4xx-hal"
+version = "0.8.3"
+source = "git+https://github.com/quartiq/stm32f4xx-hal?branch=rs/issue-274/i2c-bus-errors#47ba4649ba8c8dafce8c9613ee821ea140d59223"

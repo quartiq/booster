@@ -34,6 +34,10 @@ git = "https://github.com/quartiq/minimq"
 git = "https://github.com/stm32-rs/stm32f4xx-hal"
 features = ["stm32f407", "rt", "usb_fs"]
 
+[patch.crates-io.stm32f4xx-hal]
+git = "https://github.com/quartiq/stm32f4xx-hal"
+branch = "rs/issue-274/i2c-bus-errors"
+
 [dependencies.w5500]
 git = "https://github.com/quartiq/w5500"
 branch = "feature/tcp-nal"
