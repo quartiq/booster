@@ -82,17 +82,17 @@ CMDS = {
     'input_power_transform': {
         'nargs': 2,
         'type': float,
-        'help': 'Specify the input power transform in the provided <slope>,<intercept>',
+        'help': 'Specify the input power transform as <slope>,<offset> (`power_dBm = slope*input_Volt + offset`)',
     },
     'output_power_transform': {
         'nargs': 2,
         'type': float,
-        'help': 'Specify the output power transform in the provided <slope>,<intercept>',
+        'help': 'Specify the output power transform as <slope>,<offset> (`power_dBm = slope*input_Volt + offset`)',
     },
     'reflected_power_transform': {
         'nargs': 2,
         'type': float,
-        'help': 'Specify the reflfected power transform in the provided <slope>,<intercept>',
+        'help': 'Specify the reflfected power transform as <slope>,<offset> (`power_dBm = slope*input_Volt + offset`)',
     },
     'read': {
         'nargs': 1,
