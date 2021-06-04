@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use w5500::MacAddress;
 
 #[cfg(feature = "phy_enc424j600")]
-use smoltcp::wire::EthernetAddress as MacAddress;
+use smoltcp_nal::smoltcp::wire::EthernetAddress as MacAddress;
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 

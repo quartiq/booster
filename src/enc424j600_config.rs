@@ -1,6 +1,7 @@
 use super::{Enc424j600, Ethernet};
 use crate::BoosterSettings;
 use embedded_hal::blocking::delay::DelayUs;
+use smoltcp_nal::smoltcp;
 
 /// Containers for smoltcp-related network configurations
 pub struct NetStorage {

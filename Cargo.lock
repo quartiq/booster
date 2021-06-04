@@ -120,7 +120,6 @@ dependencies = [
  "serde",
  "serde-json-core",
  "shared-bus",
- "smoltcp",
  "smoltcp-nal",
  "stm32f4xx-hal",
  "tca9548",
