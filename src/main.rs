@@ -389,7 +389,7 @@ const APP: () = {
                         #[cfg(feature = "phy_w5500")]
                         1.mhz().into(),
                         #[cfg(feature = "phy_enc424j600")]
-                        hal::time::Hertz(enc424j600::spi::interfaces::SPI_CLOCK_FREQ),
+                        14.mhz().into(),
                         clocks,
                     )
                 };
