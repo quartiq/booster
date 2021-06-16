@@ -13,17 +13,21 @@ pub struct NetStorage {
     pub rx_storage: [u8; 1024],
 }
 
-static mut NET_STORE: NetStorage = NetStorage {
-    // Placeholder for the real IP address, which is initialized at runtime.
-    ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
-        smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
-    )],
-    neighbor_cache: [None; 8],
-    routes_cache: [None; 8],
-    socket_storage: [None; 1],
-    tx_storage: [0; 4096],
-    rx_storage: [0; 1024],
-};
+// Mutable reference to a singleton instance of NetStorage
+fn net_store_as_mut() -> &'static mut NetStorage {
+    cortex_m::singleton!(: NetStorage = NetStorage {
+        // Placeholder for the real IP address, which is initialized at runtime.
+        ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
+            smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
+        )],
+        neighbor_cache: [None; 8],
+        routes_cache: [None; 8],
+        socket_storage: [None; 1],
+        tx_storage: [0; 4096],
+        rx_storage: [0; 1024],
+    })
+    .unwrap()
+}
 
 pub fn setup(
     mut enc424j600: Enc424j600,
@@ -39,10 +43,12 @@ pub fn setup(
         .write_mac_addr(settings.mac().as_bytes())
         .unwrap();
 
-    let eth_iface = unsafe {
+    let net_store = net_store_as_mut();
+
+    let eth_iface = {
         let device = enc424j600::smoltcp_phy::SmoltcpDevice::new(enc424j600);
 
-        NET_STORE.ip_addrs[0] = {
+        net_store.ip_addrs[0] = {
             let ip = settings.ip().octets();
             let subnet = settings.subnet().octets();
             net::wire::IpCidr::new(
@@ -55,29 +61,29 @@ pub fn setup(
 
         let routes = {
             let gateway = net::wire::Ipv4Address::from_bytes(&settings.gateway().octets());
-            let mut routes = net::iface::Routes::new(&mut NET_STORE.routes_cache[..]);
+            let mut routes = net::iface::Routes::new(&mut net_store.routes_cache[..]);
             routes.add_default_ipv4_route(gateway).unwrap();
             routes
         };
 
-        let neighbor_cache = net::iface::NeighborCache::new(&mut NET_STORE.neighbor_cache[..]);
+        let neighbor_cache = net::iface::NeighborCache::new(&mut net_store.neighbor_cache[..]);
 
         net::iface::EthernetInterfaceBuilder::new(device)
             .ethernet_addr(net::wire::EthernetAddress::from_bytes(
                 settings.mac().as_bytes(),
             ))
             .neighbor_cache(neighbor_cache)
-            .ip_addrs(&mut NET_STORE.ip_addrs[..])
+            .ip_addrs(&mut net_store.ip_addrs[..])
             .routes(routes)
             .finalize()
     };
 
-    let sockets = unsafe {
-        let mut sockets = net::socket::SocketSet::new(&mut NET_STORE.socket_storage[..]);
+    let sockets = {
+        let mut sockets = net::socket::SocketSet::new(&mut net_store.socket_storage[..]);
 
         let mut tcp_socket = {
-            let tx_buffer = net::socket::TcpSocketBuffer::new(&mut NET_STORE.tx_storage[..]);
-            let rx_buffer = net::socket::TcpSocketBuffer::new(&mut NET_STORE.rx_storage[..]);
+            let tx_buffer = net::socket::TcpSocketBuffer::new(&mut net_store.tx_storage[..]);
+            let rx_buffer = net::socket::TcpSocketBuffer::new(&mut net_store.rx_storage[..]);
 
             net::socket::TcpSocket::new(rx_buffer, tx_buffer)
         };
