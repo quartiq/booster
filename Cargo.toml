@@ -28,6 +28,7 @@ crc-any = { version = "2.3.5", default-features = false }
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq"
+rev = "d2ec3e8351fa403ea96defd98c0b4410cbaa18a4"
 
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/stm32-rs/stm32f4xx-hal"

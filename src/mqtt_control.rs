@@ -306,9 +306,11 @@ impl ControlState {
             }) {
                 Ok(_) => {}
 
-                // Whenever MQTT disconnects, we will lose our pending subscriptions. We will need
-                // to re-establish them once we reconnect.
-                Err(minimq::Error::Disconnected) => self.subscribed = false,
+                // Whenever the MQTT broker stops maintaining the session,
+                // this MQTT client will reset the session,
+                // and we will lose our pending subscriptions.
+                // We will need to re-establish them once we reconnect.
+                Err(minimq::Error::SessionReset) => self.subscribed = false,
 
                 Err(e) => error!("Unexpected error: {:?}", e),
             }
