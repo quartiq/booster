@@ -89,11 +89,10 @@ type SPI = hal::spi::Spi<
 type Ethernet =
     w5500::Interface<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
 #[cfg(feature = "phy_enc424j600")]
-type EthSpiInterface =
-    enc424j600::SpiEth<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, fn(u32)>;
+type Enc424j600 =
+    enc424j600::Enc424j600<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>;
 #[cfg(feature = "phy_enc424j600")]
-type Ethernet =
-    NetworkStack<'static, 'static, enc424j600::smoltcp_phy::SmoltcpDevice<EthSpiInterface>>;
+type Ethernet = NetworkStack<'static, 'static, enc424j600::smoltcp_phy::SmoltcpDevice<Enc424j600>>;
 type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
@@ -425,10 +424,8 @@ const APP: () = {
 
                 #[cfg(feature = "phy_enc424j600")]
                 {
-                    let delay_ns: fn(u32) -> () =
-                        |time_ns| cortex_m::asm::delay(time_ns * 21 / 125 + 1);
-                    let enc424j600 = enc424j600::SpiEth::new(spi, cs, delay_ns);
-                    let interface = enc424j600_config::setup(enc424j600, &settings);
+                    let enc424j600 = Enc424j600::new(spi, cs).cpu_freq_mhz(168);
+                    let interface = enc424j600_config::setup(enc424j600, &settings, &mut delay);
                     interface
                 }
             };

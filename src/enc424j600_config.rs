@@ -1,6 +1,6 @@
-use super::{Ethernet, SPI};
+use super::{Enc424j600, Ethernet};
 use crate::BoosterSettings;
-use stm32f4xx_hal as hal;
+use embedded_hal::blocking::delay::DelayUs;
 
 /// Containers for smoltcp-related network configurations
 pub struct NetStorage {
@@ -24,21 +24,19 @@ static mut NET_STORE: NetStorage = NetStorage {
     rx_storage: [0; 1024],
 };
 
-type EthSpiInterface =
-    enc424j600::SpiEth<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, fn(u32)>;
-
-pub fn setup(mut enc424j600: EthSpiInterface, settings: &BoosterSettings) -> Ethernet {
-    use enc424j600::EthController;
+pub fn setup(
+    mut enc424j600: Enc424j600,
+    settings: &BoosterSettings,
+    delay: &mut impl DelayUs<u16>,
+) -> Ethernet {
     use smoltcp as net;
 
-    enc424j600.init_dev().expect("PHY initialization failed");
+    enc424j600.init(delay).expect("PHY initialization failed");
+    // Overriding the MAC address stored on ENC424J600 is currently for consistency;
+    // the value stored on the chip is currently unused for transmitting packets.
     enc424j600
-        .write_mac_address(settings.mac().as_bytes())
+        .write_mac_addr(settings.mac().as_bytes())
         .unwrap();
-
-    // Init Rx/Tx buffers
-    enc424j600.init_rxbuf().unwrap();
-    enc424j600.init_txbuf().unwrap();
 
     let eth_iface = unsafe {
         let device = enc424j600::smoltcp_phy::SmoltcpDevice::new(enc424j600);
