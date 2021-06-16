@@ -1,8 +1,5 @@
-use super::SPI;
+use super::{Ethernet, SPI};
 use crate::BoosterSettings;
-use crate::NetworkStack;
-use cortex_m::peripheral::DWT;
-use enc424j600::nal::time;
 use stm32f4xx_hal as hal;
 
 /// Containers for smoltcp-related network configurations
@@ -27,23 +24,6 @@ static mut NET_STORE: NetStorage = NetStorage {
     rx_storage: [0; 1024],
 };
 
-pub struct Clock;
-impl time::Clock for Clock {
-    type T = u32;
-    const SCALING_FACTOR: time::fraction::Fraction =
-        <time::fraction::Fraction>::new(1, 168_000_000);
-
-    fn try_now(&self) -> Result<time::Instant<Self>, time::clock::Error> {
-        Ok(time::Instant::new(DWT::get_cycle_count()))
-    }
-}
-
-type Ethernet = NetworkStack<
-    'static,
-    SPI,
-    hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>,
-    Clock,
->;
 type EthSpiInterface =
     enc424j600::SpiEth<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, fn(u32)>;
 
@@ -93,7 +73,7 @@ pub fn setup(mut enc424j600: EthSpiInterface, settings: &BoosterSettings) -> Eth
             .finalize()
     };
 
-    let socket_set = unsafe {
+    let sockets = unsafe {
         let mut sockets = net::socket::SocketSet::new(&mut NET_STORE.socket_storage[..]);
 
         let mut tcp_socket = {
@@ -104,9 +84,9 @@ pub fn setup(mut enc424j600: EthSpiInterface, settings: &BoosterSettings) -> Eth
         };
         tcp_socket.set_keep_alive(Some(net::time::Duration::from_millis(1000)));
 
-        let _handle = sockets.add(tcp_socket);
+        sockets.add(tcp_socket);
         sockets
     };
 
-    NetworkStack::new(eth_iface, socket_set, Clock {})
+    Ethernet::new(eth_iface, sockets)
 }

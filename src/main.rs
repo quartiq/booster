@@ -47,15 +47,13 @@ mod watchdog;
 use booster_channels::{BoosterChannels, Channel};
 use chassis_fans::ChassisFans;
 use delay::AsmDelay;
-#[cfg(feature = "phy_enc424j600")]
-use enc424j600::nal::NetworkStack;
-#[cfg(feature = "phy_enc424j600")]
-use enc424j600_config::Clock;
 use error::Error;
 use logger::BufferedLog;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
 use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
+#[cfg(feature = "phy_enc424j600")]
+use smoltcp_nal::NetworkStack;
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
 use watchdog::{WatchdogClient, WatchdogManager};
 
@@ -91,12 +89,11 @@ type SPI = hal::spi::Spi<
 type Ethernet =
     w5500::Interface<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
 #[cfg(feature = "phy_enc424j600")]
-type Ethernet = NetworkStack<
-    'static,
-    SPI,
-    hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>,
-    Clock,
->;
+type EthSpiInterface =
+    enc424j600::SpiEth<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, fn(u32)>;
+#[cfg(feature = "phy_enc424j600")]
+type Ethernet =
+    NetworkStack<'static, 'static, enc424j600::smoltcp_phy::SmoltcpDevice<EthSpiInterface>>;
 type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
