@@ -241,9 +241,21 @@ impl ControlState {
     /// * `resources` - The `idle` resources containing the client and RF channels.
     pub fn update(&mut self, resources: &mut Resources) {
         use rtic::Mutex as _;
-        // Subscribe to any control topics necessary.
-        if !self.subscribed {
-            resources.eth_mgr.lock(|eth_mgr| {
+        resources.eth_mgr.lock(|eth_mgr| {
+            // Update the NAL stack
+            #[cfg(feature = "phy_enc424j600")]
+            match eth_mgr.nal_clock.now() {
+                Ok(now) => {
+                    // Note: smoltcp-nal 0.1.0 ONLY returns boolean, and does NOT
+                    // raise errors from smoltcp.
+                    // TODO: Bump smoltcp-nal
+                    eth_mgr.mqtt_client.network_stack.poll(now);
+                }
+                Err(e) => error!("Network poll error: {:?}", e),
+            }
+
+            // Subscribe to any control topics necessary.
+            if !self.subscribed {
                 if eth_mgr.mqtt_client.is_connected().unwrap() {
                     for topic in [
                         "channel/state",
@@ -260,8 +272,8 @@ impl ControlState {
                     }
                     self.subscribed = true;
                 }
-            });
-        }
+            }
+        });
 
         let main_bus = &mut resources.main_bus;
         let delay = &mut resources.delay;
