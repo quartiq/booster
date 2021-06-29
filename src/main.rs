@@ -18,6 +18,8 @@ compile_error!("Cannot enable multiple ethernet PHY devices.");
 #[macro_use]
 extern crate log;
 
+use panic_persist as _;
+
 use core::fmt::Write;
 
 use enum_iterator::IntoEnumIterator;
@@ -533,9 +535,6 @@ const APP: () = {
         c.schedule.usb(c.start).unwrap();
         c.schedule.fans(c.start).unwrap();
 
-        // Clear the reset flags now that initialization has completed.
-        platform::clear_reset_flags();
-
         init::LateResources {
             // Note that these share a resource because they both exist on the same I2C bus.
             main_bus: MainBus { fans, channels },
@@ -605,9 +604,9 @@ const APP: () = {
         c.resources.leds.update();
 
         // TODO: Replace hard-coded CPU cycles here.
-        // Schedule to run this task periodically at 50Hz.
+        // Schedule to run this task periodically at 10Hz.
         c.schedule
-            .channel_monitor(c.scheduled + Duration::from_cycles(168_000_000 / 50))
+            .channel_monitor(c.scheduled + Duration::from_cycles(168_000_000 / 10))
             .unwrap();
     }
 

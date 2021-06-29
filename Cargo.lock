@@ -92,7 +92,7 @@ checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
 name = "booster"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ad5627",
  "ads7924",
@@ -117,6 +117,7 @@ dependencies = [
  "mcp3221",
  "microchip-24aa02e48",
  "minimq",
+ "panic-persist",
  "postcard",
  "serde",
  "serde-json-core",
@@ -149,6 +150,16 @@ name = "cfg-if"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
+
+[[package]]
+name = "chrono"
+version = "0.4.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "670ad68c9088c2a963aaa298cb369688cf3f9465ce5e2d4ca10e6e0098a1ce73"
+dependencies = [
+ "num-integer",
+ "num-traits",
+]
 
 [[package]]
 name = "cortex-m"
@@ -606,6 +617,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "panic-persist"
+version = "0.2.1"
+source = "git+https://github.com/jamesmunns/panic-persist?branch=master#3f892297e97adc6a415145193000e3749b1959df"
+dependencies = [
+ "cortex-m 0.6.3",
+]
+
+[[package]]
 name = "postcard"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -657,6 +676,15 @@ name = "regex-syntax"
 version = "0.6.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26412eb97c6b088a6997e05f69403a802a92d520de2f8e63c2b65f9e0f47c4e8"
+
+[[package]]
+name = "rtcc"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1048f7217bcd4bd977c01288e4973a69cf9195681f8b0b3a45d92ea21148f4a8"
+dependencies = [
+ "chrono",
+]
 
 [[package]]
 name = "rtic-core"
@@ -782,7 +810,7 @@ dependencies = [
 [[package]]
 name = "stm32f4xx-hal"
 version = "0.8.3"
-source = "git+https://github.com/stm32-rs/stm32f4xx-hal#1dabe771eb141139ff1a2ead4f97a9036b4e9521"
+source = "git+https://github.com/stm32-rs/stm32f4xx-hal#c8b11b200ac3c5f9be802f8f9e39755b1cb5933a"
 dependencies = [
  "bare-metal",
  "cast",
@@ -792,6 +820,7 @@ dependencies = [
  "embedded-hal",
  "nb 0.1.3",
  "rand_core",
+ "rtcc",
  "stm32f4",
  "synopsys-usb-otg",
  "void",
