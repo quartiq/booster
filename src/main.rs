@@ -32,7 +32,7 @@ mod booster_channels;
 mod chassis_fans;
 mod delay;
 #[cfg(feature = "phy_enc424j600")]
-mod enc424j600_config;
+mod enc424j600_api;
 mod error;
 mod linear_transformation;
 mod logger;
@@ -425,7 +425,7 @@ const APP: () = {
                 #[cfg(feature = "phy_enc424j600")]
                 {
                     let enc424j600 = Enc424j600::new(spi, cs).cpu_freq_mhz(168);
-                    let interface = enc424j600_config::setup(enc424j600, &settings, &mut delay);
+                    let interface = enc424j600_api::setup(enc424j600, &settings, &mut delay);
                     interface
                 }
             };
