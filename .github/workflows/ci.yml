@@ -43,13 +43,19 @@ jobs:
         with:
           command: clippy
 
-  compile-w5500:
+  compile:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         toolchain:
           - stable
           - beta
+        variant: [w5500, enc424j600]
+        include:
+          - variant: w5500
+            cargo-args: ''
+          - variant: enc424j600
+            cargo-args: --no-default-features --features phy_enc424j600
     steps:
       - uses: actions/checkout@v2
 
@@ -77,18 +83,19 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
+          args: ${{ matrix.cargo-args }}
 
       - name: Build [Release]
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release
+          args: --release ${{ matrix.cargo-args }}
 
       - name: Generate Release
         uses: actions-rs/cargo@v1
         with:
           command: objcopy
-          args: --release --verbose -- -O binary booster-release.bin
+          args: --release ${{ matrix.cargo-args }} --verbose -- -O binary booster-release.bin
 
       - name: Upload Release
         uses: actions/upload-artifact@v2
@@ -96,72 +103,21 @@ jobs:
             (${{ github.ref == 'refs/heads/master' }} ||
              ${{ github.ref == 'refs/heads/develop' }})
         with:
-          name: Firmware Images (W5500)
-          path: |
-            target/*/release/booster
-            booster-release.bin
-
-  compile-enc424j600:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
-          - beta
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Install Rust ${{ matrix.toolchain }}
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.toolchain }}
-          target: thumbv7em-none-eabihf
-          override: true
-          components: llvm-tools-preview
-
-      - name: Install Binutils
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cargo-binutils
-
-      - name: Style Check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --verbose
-
-      - name: Build [Debug]
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --no-default-features --features phy_enc424j600
-
-      - name: Build [Release]
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --no-default-features --features phy_enc424j600
-
-      - name: Generate Release
-        uses: actions-rs/cargo@v1
-        with:
-          command: objcopy
-          args: --release --verbose -- -O binary booster-release.bin
-
-      - name: Upload Release
-        uses: actions/upload-artifact@v2
-        if: ${{ matrix.toolchain == 'stable' }} &&
-            (${{ github.ref == 'refs/heads/master' }} ||
-             ${{ github.ref == 'refs/heads/develop' }})
-        with:
-          name: Firmware Images (ENC424J600)
+          name: Firmware Images (${{ matrix.variant }})
           path: |
             target/*/release/booster
             booster-release.bin
 
   compile-unstable:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        variant: [w5500, enc424j600]
+        include:
+          - variant: w5500
+            cargo-args: ''
+          - variant: enc424j600
+            cargo-args: --no-default-features --features phy_enc424j600
     steps:
       - uses: actions/checkout@v2
       - name: Install Rust Nightly
@@ -170,23 +126,13 @@ jobs:
           toolchain: nightly
           target: thumbv7em-none-eabihf
           override: true
-      - name: cargo build+unstable+w5500
+      - name: cargo build+unstable
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --features unstable
-      - name: cargo build+release+unstable+w5500
+          args: --features unstable ${{ matrix.cargo-args }}
+      - name: cargo build+release+unstable
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --features unstable
-      - name: cargo build+unstable+enc424j600
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --no-default-features --features "unstable phy_enc424j600"
-      - name: cargo build+release+unstable+enc424j600
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --no-default-features  --features "unstable phy_enc424j600"
+          args: --release --features unstable ${{ matrix.cargo-args }}
