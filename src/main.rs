@@ -93,6 +93,8 @@ type Enc424j600 =
     enc424j600::Enc424j600<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>;
 #[cfg(feature = "phy_enc424j600")]
 type Ethernet = NetworkStack<'static, 'static, enc424j600::smoltcp_phy::SmoltcpDevice<Enc424j600>>;
+#[cfg(feature = "phy_enc424j600")]
+type NalClock = enc424j600_api::EpochClock<168_000_000>;
 type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
@@ -166,6 +168,13 @@ pub struct MainBus {
     pub fans: ChassisFans,
 }
 
+/// Container method for all Ethernet-related structs.
+pub struct EthernetManager {
+    pub mqtt_client: MqttClient,
+    #[cfg(feature = "phy_enc424j600")]
+    pub nal_clock: NalClock,
+}
+
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
@@ -173,7 +182,7 @@ const APP: () = {
         buttons: UserButtons,
         leds: UserLeds,
         usb_terminal: SerialTerminal,
-        mqtt_client: MqttClient,
+        eth_mgr: EthernetManager,
         watchdog: WatchdogManager,
         identifier: String<heapless::consts::U32>,
         delay: AsmDelay,
@@ -370,72 +379,80 @@ const APP: () = {
 
         let identifier: String<heapless::consts::U32> = String::from(settings.id());
 
-        let mqtt_client = {
-            let interface = {
-                let spi = {
-                    let sck = gpioa.pa5.into_alternate_af5();
-                    let miso = gpioa.pa6.into_alternate_af5();
-                    let mosi = gpioa.pa7.into_alternate_af5();
+        let eth_mgr = {
+            let mqtt_client = {
+                let interface = {
+                    let spi = {
+                        let sck = gpioa.pa5.into_alternate_af5();
+                        let miso = gpioa.pa6.into_alternate_af5();
+                        let mosi = gpioa.pa7.into_alternate_af5();
 
-                    let mode = hal::spi::Mode {
-                        polarity: hal::spi::Polarity::IdleLow,
-                        phase: hal::spi::Phase::CaptureOnFirstTransition,
+                        let mode = hal::spi::Mode {
+                            polarity: hal::spi::Polarity::IdleLow,
+                            phase: hal::spi::Phase::CaptureOnFirstTransition,
+                        };
+
+                        hal::spi::Spi::spi1(
+                            c.device.SPI1,
+                            (sck, miso, mosi),
+                            mode,
+                            #[cfg(feature = "phy_w5500")]
+                            1.mhz().into(),
+                            #[cfg(feature = "phy_enc424j600")]
+                            14.mhz().into(),
+                            clocks,
+                        )
                     };
 
-                    hal::spi::Spi::spi1(
-                        c.device.SPI1,
-                        (sck, miso, mosi),
-                        mode,
-                        #[cfg(feature = "phy_w5500")]
-                        1.mhz().into(),
-                        #[cfg(feature = "phy_enc424j600")]
-                        14.mhz().into(),
-                        clocks,
-                    )
+                    let cs = {
+                        let mut pin = gpioa.pa4.into_push_pull_output();
+                        pin.set_high().unwrap();
+                        pin
+                    };
+
+                    #[cfg(feature = "phy_w5500")]
+                    {
+                        let mut w5500 = w5500::W5500::new(
+                            spi,
+                            cs,
+                            w5500::OnWakeOnLan::Ignore,
+                            w5500::OnPingRequest::Respond,
+                            w5500::ConnectionType::Ethernet,
+                            w5500::ArpResponses::Cache,
+                        )
+                        .unwrap();
+
+                        w5500.set_mac(settings.mac()).unwrap();
+
+                        // Set default netmask and gateway.
+                        w5500.set_gateway(settings.gateway()).unwrap();
+                        w5500.set_subnet(settings.subnet()).unwrap();
+                        w5500.set_ip(settings.ip()).unwrap();
+
+                        w5500::Interface::new(w5500)
+                    }
+
+                    #[cfg(feature = "phy_enc424j600")]
+                    {
+                        let enc424j600 = Enc424j600::new(spi, cs).cpu_freq_mhz(168);
+                        let interface = enc424j600_api::setup(enc424j600, &settings, &mut delay);
+                        interface
+                    }
                 };
 
-                let cs = {
-                    let mut pin = gpioa.pa4.into_push_pull_output();
-                    pin.set_high().unwrap();
-                    pin
-                };
-
-                #[cfg(feature = "phy_w5500")]
-                {
-                    let mut w5500 = w5500::W5500::new(
-                        spi,
-                        cs,
-                        w5500::OnWakeOnLan::Ignore,
-                        w5500::OnPingRequest::Respond,
-                        w5500::ConnectionType::Ethernet,
-                        w5500::ArpResponses::Cache,
-                    )
-                    .unwrap();
-
-                    w5500.set_mac(settings.mac()).unwrap();
-
-                    // Set default netmask and gateway.
-                    w5500.set_gateway(settings.gateway()).unwrap();
-                    w5500.set_subnet(settings.subnet()).unwrap();
-                    w5500.set_ip(settings.ip()).unwrap();
-
-                    w5500::Interface::new(w5500)
-                }
-
-                #[cfg(feature = "phy_enc424j600")]
-                {
-                    let enc424j600 = Enc424j600::new(spi, cs).cpu_freq_mhz(168);
-                    let interface = enc424j600_api::setup(enc424j600, &settings, &mut delay);
-                    interface
-                }
+                minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
+                    minimq::embedded_nal::IpAddr::V4(settings.broker()),
+                    settings.id(),
+                    interface,
+                )
+                .unwrap()
             };
 
-            minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
-                minimq::embedded_nal::IpAddr::V4(settings.broker()),
-                settings.id(),
-                interface,
-            )
-            .unwrap()
+            EthernetManager {
+                mqtt_client,
+                #[cfg(feature = "phy_enc424j600")]
+                nal_clock: NalClock::new(),
+            }
         };
 
         let mut fans = {
@@ -524,7 +541,7 @@ const APP: () = {
             main_bus: MainBus { fans, channels },
             buttons: buttons,
             leds: leds,
-            mqtt_client,
+            eth_mgr,
             usb_terminal,
             watchdog: watchdog_manager,
             identifier,
@@ -628,7 +645,7 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, mqtt_client, watchdog, identifier])]
+    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, eth_mgr, watchdog, identifier])]
     fn telemetry(mut c: telemetry::Context) {
         let id = &c.resources.identifier;
 
@@ -653,7 +670,7 @@ const APP: () = {
                 let message: String<heapless::consts::U1024> =
                     serde_json_core::to_string(&measurements).unwrap();
 
-                match c.resources.mqtt_client.publish(
+                match c.resources.eth_mgr.mqtt_client.publish(
                     topic.as_str(),
                     &message.into_bytes(),
                     QoS::AtMostOnce,
@@ -738,7 +755,7 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[main_bus, mqtt_client, watchdog, identifier, delay])]
+    #[idle(resources=[main_bus, eth_mgr, watchdog, identifier, delay])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = c
             .resources

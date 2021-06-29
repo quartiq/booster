@@ -243,8 +243,8 @@ impl ControlState {
         use rtic::Mutex as _;
         // Subscribe to any control topics necessary.
         if !self.subscribed {
-            resources.mqtt_client.lock(|client| {
-                if client.is_connected().unwrap() {
+            resources.eth_mgr.lock(|eth_mgr| {
+                if eth_mgr.mqtt_client.is_connected().unwrap() {
                     for topic in [
                         "channel/state",
                         "channel/bias",
@@ -253,7 +253,8 @@ impl ControlState {
                     ]
                     .iter()
                     {
-                        client
+                        eth_mgr
+                            .mqtt_client
                             .subscribe(&self.generate_topic_string(topic), &[])
                             .unwrap();
                     }
@@ -265,45 +266,51 @@ impl ControlState {
         let main_bus = &mut resources.main_bus;
         let delay = &mut resources.delay;
 
-        resources.mqtt_client.lock(|client| {
-            match client.poll(|client, topic, message, properties| {
-                let (id, route) = topic.split_at(topic.find('/').unwrap());
-                let route = &route[1..];
+        resources.eth_mgr.lock(|eth_mgr| {
+            match eth_mgr
+                .mqtt_client
+                .poll(|client, topic, message, properties| {
+                    let (id, route) = topic.split_at(topic.find('/').unwrap());
+                    let route = &route[1..];
 
-                if id != self.id {
-                    warn!("Ignoring topic for identifier: {}", id);
-                    return;
-                }
-
-                let response = main_bus.lock(|main_bus| match route {
-                    "channel/state" => handle_channel_update(message, &mut main_bus.channels),
-                    "channel/bias" => handle_channel_bias(message, &mut main_bus.channels, *delay),
-                    "channel/read" => handle_channel_property_read(message, &mut main_bus.channels),
-                    "channel/write" => {
-                        handle_channel_property_write(message, &mut main_bus.channels)
+                    if id != self.id {
+                        warn!("Ignoring topic for identifier: {}", id);
+                        return;
                     }
-                    _ => Response::error_msg("Unexpected topic"),
-                });
 
-                if let Property::ResponseTopic(topic) = properties
-                    .iter()
-                    .find(|&prop| {
-                        if let Property::ResponseTopic(_) = *prop {
-                            true
-                        } else {
-                            false
+                    let response = main_bus.lock(|main_bus| match route {
+                        "channel/state" => handle_channel_update(message, &mut main_bus.channels),
+                        "channel/bias" => {
+                            handle_channel_bias(message, &mut main_bus.channels, *delay)
                         }
-                    })
-                    .or(Some(&Property::ResponseTopic(
-                        &self.generate_topic_string("log"),
-                    )))
-                    .unwrap()
-                {
-                    client
-                        .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
-                        .unwrap();
-                }
-            }) {
+                        "channel/read" => {
+                            handle_channel_property_read(message, &mut main_bus.channels)
+                        }
+                        "channel/write" => {
+                            handle_channel_property_write(message, &mut main_bus.channels)
+                        }
+                        _ => Response::error_msg("Unexpected topic"),
+                    });
+
+                    if let Property::ResponseTopic(topic) = properties
+                        .iter()
+                        .find(|&prop| {
+                            if let Property::ResponseTopic(_) = *prop {
+                                true
+                            } else {
+                                false
+                            }
+                        })
+                        .or(Some(&Property::ResponseTopic(
+                            &self.generate_topic_string("log"),
+                        )))
+                        .unwrap()
+                    {
+                        client
+                            .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
+                            .unwrap();
+                    }
+                }) {
                 Ok(_) => {}
 
                 // Whenever the MQTT broker stops maintaining the session,
