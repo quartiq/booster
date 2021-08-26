@@ -44,7 +44,7 @@ optional = true
 
 [dependencies.enc424j600]
 git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
-rev = "bb6824b9447fda14a97ab277e05b760ca0959e6a"
+rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
 features = [ "smoltcp-phy", "cortex-m-cpu" ]
 optional = true
 
