@@ -83,13 +83,12 @@ pub fn setup(
     let sockets = {
         let mut sockets = net::socket::SocketSet::new(&mut net_store.socket_storage[..]);
 
-        let mut tcp_socket = {
+        let tcp_socket = {
             let tx_buffer = net::socket::TcpSocketBuffer::new(&mut net_store.tx_storage[..]);
             let rx_buffer = net::socket::TcpSocketBuffer::new(&mut net_store.rx_storage[..]);
 
             net::socket::TcpSocket::new(rx_buffer, tx_buffer)
         };
-        tcp_socket.set_keep_alive(Some(net::time::Duration::from_millis(1000)));
 
         sockets.add(tcp_socket);
         sockets
