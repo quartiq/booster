@@ -51,6 +51,7 @@ use watchdog::{WatchdogClient, WatchdogManager};
 use rtic::cyccnt::Duration;
 
 // Convenience type definition for the I2C bus used for booster RF channels.
+#[cfg(not(feature = "i2c_bitbang"))]
 type I2C = hal::i2c::I2c<
     hal::stm32::I2C1,
     (
@@ -58,13 +59,24 @@ type I2C = hal::i2c::I2c<
         hal::gpio::gpiob::PB7<hal::gpio::AlternateOD<hal::gpio::AF4>>,
     ),
 >;
+#[cfg(feature = "i2c_bitbang")]
+type I2C = i2c_bitbang::I2cBitBang<
+    hal::gpio::gpiob::PB6<hal::gpio::Output<hal::gpio::OpenDrain>>,
+    hal::gpio::gpiob::PB7<hal::gpio::Output<hal::gpio::OpenDrain>>,
+>;
 
+#[cfg(not(feature = "i2c_bitbang"))]
 type I2C2 = hal::i2c::I2c<
     hal::stm32::I2C2,
     (
         hal::gpio::gpiob::PB10<hal::gpio::AlternateOD<hal::gpio::AF4>>,
         hal::gpio::gpiob::PB11<hal::gpio::AlternateOD<hal::gpio::AF4>>,
     ),
+>;
+#[cfg(feature = "i2c_bitbang")]
+type I2C2 = i2c_bitbang::I2cBitBang<
+    hal::gpio::gpiob::PB10<hal::gpio::Output<hal::gpio::OpenDrain>>,
+    hal::gpio::gpiob::PB11<hal::gpio::Output<hal::gpio::OpenDrain>>,
 >;
 
 type SPI = hal::spi::Spi<
@@ -232,11 +244,16 @@ const APP: () = {
 
             platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
 
+            #[cfg(not(feature = "i2c_bitbang"))]
             let i2c = {
                 let scl = scl.into_alternate_af4_open_drain();
                 let sda = sda.into_alternate_af4_open_drain();
+
                 hal::i2c::I2c::i2c1(i2c_peripheral, (scl, sda), 100.khz(), clocks)
             };
+
+            #[cfg(feature = "i2c_bitbang")]
+            let i2c = i2c_bitbang::I2cBitBang::new(scl, sda, 100_000, 168_000_000);
 
             new_atomic_check_manager!(I2C = i2c).unwrap()
         };
@@ -343,13 +360,20 @@ const APP: () = {
                 let mut sda = gpiob.pb11.into_open_drain_output();
                 platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
 
-                let scl = scl.into_alternate_af4_open_drain();
-                let sda = sda.into_alternate_af4_open_drain();
+                #[cfg(not(feature = "i2c_bitbang"))]
+                {
+                    let scl = scl.into_alternate_af4_open_drain();
+                    let sda = sda.into_alternate_af4_open_drain();
 
-                hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
+                    hal::i2c::I2c::i2c2(c.device.I2C2, (scl, sda), 100.khz(), clocks)
+                }
+
+                #[cfg(feature = "i2c_bitbang")]
+                i2c_bitbang::I2cBitBang::new(scl, sda, 100_000, 168_000_000)
             };
 
             let eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
+
             BoosterSettings::new(eui)
         };
 

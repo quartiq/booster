@@ -96,6 +96,7 @@ dependencies = [
  "embedded-hal",
  "enum-iterator",
  "heapless",
+ "i2c-bitbang",
  "log",
  "logos",
  "max6639",
@@ -358,6 +359,14 @@ dependencies = [
  "hash32",
  "serde",
  "stable_deref_trait",
+]
+
+[[package]]
+name = "i2c-bitbang"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "embedded-hal",
 ]
 
 [[package]]

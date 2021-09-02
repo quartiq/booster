@@ -62,8 +62,13 @@ path = "microchip-24aa02e48"
 [dependencies.tca9548]
 path = "tca9548"
 
+[dependencies.i2c-bitbang]
+path = "i2c-bitbang"
+optional = true
+
 [features]
 unstable = []
+i2c_bitbang = ["i2c-bitbang"]
 
 [profile.release]
 codegen-units = 1 # better optimizations
