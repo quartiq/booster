@@ -1,0 +1,11 @@
+[package]
+name = "i2c-bitbang"
+version = "0.1.0"
+authors = ["Harry Ho <hh@m-labs.hk>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+embedded-hal = { version = "0.2.4", features = ["unproven"] }
+cortex-m = "0.6.3"
