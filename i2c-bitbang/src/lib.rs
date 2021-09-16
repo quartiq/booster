@@ -82,6 +82,14 @@ where
         Ok(())
     }
 
+    fn prepare_restart(&mut self) -> Result<(), Error> {
+        self.sda.set_high().ok();
+        self.half_period();
+        self.scl.set_high().ok();
+        self.half_period();
+        Ok(())
+    }
+
     fn stop(&mut self) -> Result<(), Error> {
         self.half_period();
         self.scl.set_high().ok();
@@ -192,7 +200,14 @@ where
     type Error = Error;
 
     fn read(&mut self, addr: u8, buffer: &mut [u8]) -> Result<(), Self::Error> {
-        self.read_bytes(addr, buffer)?;
+        // WIP: keep retrying until there is no NoAck
+        loop {
+            match self.read_bytes(addr, buffer) {
+                Err(Error::NoAck) => self.prepare_restart()?,
+                Err(e) => return Err(e),
+                _ => break,
+            }
+        }
         // Send STOP
         self.stop()?;
         Ok(())
@@ -207,7 +222,14 @@ where
     type Error = Error;
 
     fn write(&mut self, addr: u8, bytes: &[u8]) -> Result<(), Self::Error> {
-        self.write_bytes(addr, bytes)?;
+        // WIP: keep retrying until there is no NoAck
+        loop {
+            match self.write_bytes(addr, bytes) {
+                Err(Error::NoAck) => self.prepare_restart()?,
+                Err(e) => return Err(e),
+                _ => break,
+            }
+        }
         // Send STOP
         self.stop()?;
         Ok(())
@@ -222,7 +244,16 @@ where
     type Error = Error;
 
     fn write_read(&mut self, addr: u8, bytes: &[u8], buffer: &mut [u8]) -> Result<(), Self::Error> {
-        self.write_bytes(addr, bytes)?;
+        // WIP: keep retrying until there is no NoAck
+        loop {
+            match self.write_bytes(addr, bytes) {
+                Err(Error::NoAck) => self.prepare_restart()?,
+                Err(e) => return Err(e),
+                _ => break,
+            }
+        }
+        // (Note: Since the direction is switched from write to read,
+        //  the START condition for the read is implicitly a "repeated START".)
         self.read(addr, buffer)?;
         // Send STOP
         self.stop()?;
