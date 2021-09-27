@@ -53,9 +53,9 @@ jobs:
         variant: [w5500, enc424j600]
         include:
           - variant: w5500
-            cargo-args: ''
+            variant-args: phy_w5500
           - variant: enc424j600
-            cargo-args: --no-default-features --features phy_enc424j600
+            variant-args: phy_enc424j600
     steps:
       - uses: actions/checkout@v2
 
@@ -83,19 +83,19 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: ${{ matrix.cargo-args }}
+          args: --no-default-features --features "${{ matrix.variant-args }}"
 
       - name: Build [Release]
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release ${{ matrix.cargo-args }}
+          args: --release --no-default-features --features "${{ matrix.variant-args }}"
 
       - name: Generate Release
         uses: actions-rs/cargo@v1
         with:
           command: objcopy
-          args: --release ${{ matrix.cargo-args }} --verbose -- -O binary booster-release.bin
+          args: --release --no-default-features --features "${{ matrix.variant-args }}" --verbose -- -O binary booster-release.bin
 
       - name: Upload Release
         uses: actions/upload-artifact@v2
@@ -115,9 +115,9 @@ jobs:
         variant: [w5500, enc424j600]
         include:
           - variant: w5500
-            cargo-args: ''
+            variant-args: phy_w5500
           - variant: enc424j600
-            cargo-args: --no-default-features --features phy_enc424j600
+            variant-args: phy_enc424j600
     steps:
       - uses: actions/checkout@v2
       - name: Install Rust Nightly
@@ -130,9 +130,9 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --features unstable ${{ matrix.cargo-args }}
+          args: --no-default-features --features "unstable ${{ matrix.variant-args }}"
       - name: cargo build+release+unstable
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --features unstable ${{ matrix.cargo-args }}
+          args: --release --no-default-features --features "unstable ${{ matrix.variant-args }}"
