@@ -61,6 +61,8 @@ use watchdog::{WatchdogClient, WatchdogManager};
 
 use rtic::cyccnt::Duration;
 
+const CPU_FREQ: u32 = 168_000_000;
+
 // Convenience type definition for the I2C bus used for booster RF channels.
 type I2C = hal::i2c::I2c<
     hal::stm32::I2C1,
@@ -96,7 +98,7 @@ type Enc424j600 =
 #[cfg(feature = "phy_enc424j600")]
 type Ethernet = NetworkStack<'static, 'static, enc424j600::smoltcp_phy::SmoltcpDevice<Enc424j600>>;
 #[cfg(feature = "phy_enc424j600")]
-type NalClock = enc424j600_api::EpochClock<168_000_000>;
+type NalClock = enc424j600_api::EpochClock<CPU_FREQ>;
 type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
@@ -211,7 +213,7 @@ const APP: () = {
             .cfgr
             .use_hse(8.mhz())
             .sysclk(168.mhz())
-            .hclk(168.mhz())
+            .hclk(CPU_FREQ.hz())
             .pclk1(42.mhz())
             .require_pll48clk()
             .freeze();
@@ -436,7 +438,8 @@ const APP: () = {
 
                     #[cfg(feature = "phy_enc424j600")]
                     {
-                        let enc424j600 = Enc424j600::new(spi, cs).cpu_freq_mhz(168);
+                        let enc424j600 =
+                            Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
                         let interface = enc424j600_api::setup(enc424j600, &settings, &mut delay);
                         interface
                     }
@@ -606,7 +609,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 10Hz.
         c.schedule
-            .channel_monitor(c.scheduled + Duration::from_cycles(168_000_000 / 10))
+            .channel_monitor(c.scheduled + Duration::from_cycles(CPU_FREQ / 10))
             .unwrap();
     }
 
@@ -640,7 +643,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 1Hz.
         c.schedule
-            .fans(c.scheduled + Duration::from_cycles(168_000_000))
+            .fans(c.scheduled + Duration::from_cycles(CPU_FREQ))
             .unwrap();
     }
 
@@ -684,7 +687,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 2Hz.
         c.schedule
-            .telemetry(c.scheduled + Duration::from_cycles(168_000_000 / 2))
+            .telemetry(c.scheduled + Duration::from_cycles(CPU_FREQ / 2))
             .unwrap();
     }
 
@@ -730,7 +733,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task every 3ms.
         c.schedule
-            .button(c.scheduled + Duration::from_cycles(3 * (168_000_000 / 1000)))
+            .button(c.scheduled + Duration::from_cycles(3 * (CPU_FREQ / 1000)))
             .unwrap();
     }
 
@@ -750,7 +753,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task every 10ms.
         c.schedule
-            .usb(c.scheduled + Duration::from_cycles(10 * (168_000_000 / 1_000)))
+            .usb(c.scheduled + Duration::from_cycles(10 * (CPU_FREQ / 1_000)))
             .unwrap();
     }
 
