@@ -112,6 +112,8 @@ pub struct EpochClock<const CPUFREQ: u32> {
 
 impl<const CPUFREQ: u32> EpochClock<CPUFREQ> {
     pub fn new() -> Self {
+        assert!(CPUFREQ == crate::CPU_FREQ);
+
         Self {
             epoch_time_ms: Milliseconds::<u32>::new(0),
             epoch_time_ticks: Instant::<Self>::new(0),
