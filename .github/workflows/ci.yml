@@ -50,12 +50,7 @@ jobs:
         toolchain:
           - stable
           - beta
-        i2c: [default, bitbang]
-        include:
-          - i2c: default
-            i2c-args: ''
-          - i2c: bitbang
-            i2c-args: i2c_bitbang
+        i2c: ['', i2c_bitbang]
     steps:
       - uses: actions/checkout@v2
 
@@ -83,19 +78,19 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --features "${{ matrix.i2c-args }}"
+          args: --features "${{ matrix.i2c }}"
 
       - name: Build [Release]
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --features "${{ matrix.i2c-args }}"
+          args: --release --features "${{ matrix.i2c }}"
 
       - name: Generate Release
         uses: actions-rs/cargo@v1
         with:
           command: objcopy
-          args: --release --features "${{ matrix.i2c-args }}" --verbose -- -O binary booster-release.bin
+          args: --release --features "${{ matrix.i2c }}" --verbose -- -O binary booster-release.bin
 
       - name: Upload Release
         uses: actions/upload-artifact@v2
@@ -103,7 +98,7 @@ jobs:
             (${{ github.ref == 'refs/heads/master' }} ||
              ${{ github.ref == 'refs/heads/develop' }})
         with:
-          name: Firmware Images (${{ matrix.i2c }} I2C driver)
+          name: Firmware Images (i2c=${{ matrix.i2c }})
           path: |
             target/*/release/booster
             booster-release.bin
@@ -112,12 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        i2c: [default, bitbang]
-        include:
-          - i2c: default
-            i2c-args: ''
-          - i2c: bitbang
-            i2c-args: i2c_bitbang
+        i2c: ['', i2c_bitbang]
     steps:
       - uses: actions/checkout@v2
       - name: Install Rust Nightly
@@ -130,9 +120,9 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --features "unstable ${{ matrix.i2c-args }}"
+          args: --features "unstable ${{ matrix.i2c }}"
       - name: cargo build+release+unstable
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --features "unstable ${{ matrix.i2c-args }}"
+          args: --release --features "unstable ${{ matrix.i2c }}"
