@@ -97,11 +97,6 @@ pub fn setup(
     Ethernet::new(eth_iface, sockets)
 }
 
-#[derive(Debug)]
-pub enum ClockError {
-    TimeFault,
-}
-
 /// Simple struct for implementing embedded_time::Clock
 pub struct EpochClock<const CPUFREQ: u32> {
     /// Epoch time in milliseconds to store a greater value
@@ -124,18 +119,16 @@ impl<const CPUFREQ: u32> EpochClock<CPUFREQ> {
     ///
     /// Safe to call after RTIC #[init]. Returns Err() if DWT CYCCNT returns a
     /// smaller value than the last recorded time.
-    pub fn now(&mut self) -> Result<u32, ClockError> {
+    pub fn now(&mut self) -> Result<u32, ()> {
         use clock::Clock;
         use core::convert::TryInto;
 
-        let now = match self.try_now() {
-            Ok(now) => now,
-            Err(_) => return Err(ClockError::TimeFault),
-        };
-        let elapsed: Milliseconds<u32> = match now.checked_duration_since(&self.epoch_time_ticks) {
-            Some(elapsed) => elapsed.try_into().map_err(|_| ClockError::TimeFault)?,
-            None => return Err(ClockError::TimeFault),
-        };
+        let now = self.try_now().unwrap();
+        let elapsed: Milliseconds<u32> = now
+            .checked_duration_since(&self.epoch_time_ticks)
+            .unwrap()
+            .try_into()
+            .unwrap();
         self.epoch_time_ticks = now;
         self.epoch_time_ms = self.epoch_time_ms + elapsed;
         Ok(self.epoch_time_ms.integer())

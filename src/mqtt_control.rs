@@ -244,14 +244,12 @@ impl ControlState {
         resources.eth_mgr.lock(|eth_mgr| {
             // Update the NAL stack
             #[cfg(feature = "phy_enc424j600")]
-            match eth_mgr.nal_clock.now() {
-                Ok(now) => {
-                    // Note: smoltcp-nal 0.1.0 ONLY returns boolean, and does NOT
-                    // raise errors from smoltcp.
-                    // TODO: Bump smoltcp-nal
-                    eth_mgr.mqtt_client.network_stack.poll(now);
-                }
-                Err(e) => error!("Network poll error: {:?}", e),
+            {
+                let now = eth_mgr.nal_clock.now().unwrap();
+                // Note: smoltcp-nal 0.1.0 ONLY returns boolean, and does NOT
+                // raise errors from smoltcp.
+                // TODO: Bump smoltcp-nal
+                eth_mgr.mqtt_client.network_stack.poll(now);
             }
 
             // Subscribe to any control topics necessary.
