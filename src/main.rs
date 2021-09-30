@@ -7,6 +7,13 @@
 #![no_std]
 #![no_main]
 #![cfg_attr(feature = "unstable", feature(llvm_asm))]
+#[cfg(not(any(feature = "phy_enc424j600", feature = "phy_w5500")))]
+compile_error!(
+    "A least one PHY device must be enabled. Use a feature gate to
+    enable."
+);
+#[cfg(all(feature = "phy_enc424j600", feature = "phy_w5500"))]
+compile_error!("Cannot enable multiple ethernet PHY devices.");
 
 #[macro_use]
 extern crate log;
@@ -26,6 +33,8 @@ use usb_device::prelude::*;
 mod booster_channels;
 mod chassis_fans;
 mod delay;
+#[cfg(feature = "phy_enc424j600")]
+mod enc424j600_api;
 mod error;
 mod linear_transformation;
 mod logger;
@@ -45,10 +54,14 @@ use logger::BufferedLog;
 use rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins, ChannelState};
 use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
+#[cfg(feature = "phy_enc424j600")]
+use smoltcp_nal::NetworkStack;
 use user_interface::{ButtonEvent, Color, UserButtons, UserLeds};
 use watchdog::{WatchdogClient, WatchdogManager};
 
 use rtic::cyccnt::Duration;
+
+const CPU_FREQ: u32 = 168_000_000;
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 type I2C = hal::i2c::I2c<
@@ -76,8 +89,16 @@ type SPI = hal::spi::Spi<
     ),
 >;
 
+#[cfg(feature = "phy_w5500")]
 type Ethernet =
     w5500::Interface<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
+#[cfg(feature = "phy_enc424j600")]
+type Enc424j600 =
+    enc424j600::Enc424j600<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>;
+#[cfg(feature = "phy_enc424j600")]
+type Ethernet = NetworkStack<'static, 'static, enc424j600::smoltcp_phy::SmoltcpDevice<Enc424j600>>;
+#[cfg(feature = "phy_enc424j600")]
+type NalClock = enc424j600_api::EpochClock<CPU_FREQ>;
 type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
@@ -151,6 +172,13 @@ pub struct MainBus {
     pub fans: ChassisFans,
 }
 
+/// Container method for all Ethernet-related structs.
+pub struct EthernetManager {
+    pub mqtt_client: MqttClient,
+    #[cfg(feature = "phy_enc424j600")]
+    pub nal_clock: NalClock,
+}
+
 #[rtic::app(device = stm32f4xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
@@ -158,7 +186,7 @@ const APP: () = {
         buttons: UserButtons,
         leds: UserLeds,
         usb_terminal: SerialTerminal,
-        mqtt_client: MqttClient,
+        eth_mgr: EthernetManager,
         watchdog: WatchdogManager,
         identifier: String<heapless::consts::U32>,
         delay: AsmDelay,
@@ -185,7 +213,7 @@ const APP: () = {
             .cfgr
             .use_hse(8.mhz())
             .sysclk(168.mhz())
-            .hclk(168.mhz())
+            .hclk(CPU_FREQ.hz())
             .pclk1(42.mhz())
             .require_pll48clk()
             .freeze();
@@ -355,59 +383,81 @@ const APP: () = {
 
         let identifier: String<heapless::consts::U32> = String::from(settings.id());
 
-        let mqtt_client = {
-            let interface = {
-                let spi = {
-                    let sck = gpioa.pa5.into_alternate_af5();
-                    let miso = gpioa.pa6.into_alternate_af5();
-                    let mosi = gpioa.pa7.into_alternate_af5();
+        let eth_mgr = {
+            let mqtt_client = {
+                let interface = {
+                    let spi = {
+                        let sck = gpioa.pa5.into_alternate_af5();
+                        let miso = gpioa.pa6.into_alternate_af5();
+                        let mosi = gpioa.pa7.into_alternate_af5();
 
-                    let mode = hal::spi::Mode {
-                        polarity: hal::spi::Polarity::IdleLow,
-                        phase: hal::spi::Phase::CaptureOnFirstTransition,
+                        let mode = hal::spi::Mode {
+                            polarity: hal::spi::Polarity::IdleLow,
+                            phase: hal::spi::Phase::CaptureOnFirstTransition,
+                        };
+
+                        hal::spi::Spi::spi1(
+                            c.device.SPI1,
+                            (sck, miso, mosi),
+                            mode,
+                            #[cfg(feature = "phy_w5500")]
+                            1.mhz().into(),
+                            #[cfg(feature = "phy_enc424j600")]
+                            14.mhz().into(),
+                            clocks,
+                        )
                     };
 
-                    hal::spi::Spi::spi1(
-                        c.device.SPI1,
-                        (sck, miso, mosi),
-                        mode,
-                        1.mhz().into(),
-                        clocks,
-                    )
+                    let cs = {
+                        let mut pin = gpioa.pa4.into_push_pull_output();
+                        pin.set_high().unwrap();
+                        pin
+                    };
+
+                    #[cfg(feature = "phy_w5500")]
+                    {
+                        let mut w5500 = w5500::W5500::new(
+                            spi,
+                            cs,
+                            w5500::OnWakeOnLan::Ignore,
+                            w5500::OnPingRequest::Respond,
+                            w5500::ConnectionType::Ethernet,
+                            w5500::ArpResponses::Cache,
+                        )
+                        .unwrap();
+
+                        w5500.set_mac(settings.mac()).unwrap();
+
+                        // Set default netmask and gateway.
+                        w5500.set_gateway(settings.gateway()).unwrap();
+                        w5500.set_subnet(settings.subnet()).unwrap();
+                        w5500.set_ip(settings.ip()).unwrap();
+
+                        w5500::Interface::new(w5500)
+                    }
+
+                    #[cfg(feature = "phy_enc424j600")]
+                    {
+                        let enc424j600 =
+                            Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
+                        let interface = enc424j600_api::setup(enc424j600, &settings, &mut delay);
+                        interface
+                    }
                 };
 
-                let cs = {
-                    let mut pin = gpioa.pa4.into_push_pull_output();
-                    pin.set_high().unwrap();
-                    pin
-                };
-
-                let mut w5500 = w5500::W5500::new(
-                    spi,
-                    cs,
-                    w5500::OnWakeOnLan::Ignore,
-                    w5500::OnPingRequest::Respond,
-                    w5500::ConnectionType::Ethernet,
-                    w5500::ArpResponses::Cache,
+                minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
+                    minimq::embedded_nal::IpAddr::V4(settings.broker()),
+                    settings.id(),
+                    interface,
                 )
-                .unwrap();
-
-                w5500.set_mac(settings.mac()).unwrap();
-
-                // Set default netmask and gateway.
-                w5500.set_gateway(settings.gateway()).unwrap();
-                w5500.set_subnet(settings.subnet()).unwrap();
-                w5500.set_ip(settings.ip()).unwrap();
-
-                w5500::Interface::new(w5500)
+                .unwrap()
             };
 
-            minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
-                minimq::embedded_nal::IpAddr::V4(settings.broker()),
-                settings.id(),
-                interface,
-            )
-            .unwrap()
+            EthernetManager {
+                mqtt_client,
+                #[cfg(feature = "phy_enc424j600")]
+                nal_clock: NalClock::new(),
+            }
         };
 
         let mut fans = {
@@ -444,7 +494,16 @@ const APP: () = {
             // Generate a device serial number from the MAC address.
             *USB_SERIAL = {
                 let mut serial_string: String<heapless::consts::U64> = String::new();
+
+                #[cfg(feature = "phy_w5500")]
                 let octets = settings.mac().octets;
+                #[cfg(feature = "phy_enc424j600")]
+                let octets: [u8; 6] = {
+                    let mut array = [0; 6];
+                    array.copy_from_slice(settings.mac().as_bytes());
+                    array
+                };
+
                 write!(
                     &mut serial_string,
                     "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
@@ -484,7 +543,7 @@ const APP: () = {
             main_bus: MainBus { fans, channels },
             buttons: buttons,
             leds: leds,
-            mqtt_client,
+            eth_mgr,
             usb_terminal,
             watchdog: watchdog_manager,
             identifier,
@@ -550,7 +609,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 10Hz.
         c.schedule
-            .channel_monitor(c.scheduled + Duration::from_cycles(168_000_000 / 10))
+            .channel_monitor(c.scheduled + Duration::from_cycles(CPU_FREQ / 10))
             .unwrap();
     }
 
@@ -584,11 +643,11 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 1Hz.
         c.schedule
-            .fans(c.scheduled + Duration::from_cycles(168_000_000))
+            .fans(c.scheduled + Duration::from_cycles(CPU_FREQ))
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, mqtt_client, watchdog, identifier])]
+    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, eth_mgr, watchdog, identifier])]
     fn telemetry(mut c: telemetry::Context) {
         let id = &c.resources.identifier;
 
@@ -613,7 +672,7 @@ const APP: () = {
                 let message: String<heapless::consts::U1024> =
                     serde_json_core::to_string(&measurements).unwrap();
 
-                match c.resources.mqtt_client.publish(
+                match c.resources.eth_mgr.mqtt_client.publish(
                     topic.as_str(),
                     &message.into_bytes(),
                     QoS::AtMostOnce,
@@ -628,7 +687,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 2Hz.
         c.schedule
-            .telemetry(c.scheduled + Duration::from_cycles(168_000_000 / 2))
+            .telemetry(c.scheduled + Duration::from_cycles(CPU_FREQ / 2))
             .unwrap();
     }
 
@@ -674,7 +733,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task every 3ms.
         c.schedule
-            .button(c.scheduled + Duration::from_cycles(3 * (168_000_000 / 1000)))
+            .button(c.scheduled + Duration::from_cycles(3 * (CPU_FREQ / 1000)))
             .unwrap();
     }
 
@@ -694,11 +753,11 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task every 10ms.
         c.schedule
-            .usb(c.scheduled + Duration::from_cycles(10 * (168_000_000 / 1_000)))
+            .usb(c.scheduled + Duration::from_cycles(10 * (CPU_FREQ / 1_000)))
             .unwrap();
     }
 
-    #[idle(resources=[main_bus, mqtt_client, watchdog, identifier, delay])]
+    #[idle(resources=[main_bus, eth_mgr, watchdog, identifier, delay])]
     fn idle(mut c: idle::Context) -> ! {
         let mut manager = c
             .resources

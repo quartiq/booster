@@ -26,9 +26,12 @@ usb-device = "0.2.6"
 postcard = "0.5.1"
 crc-any = { version = "2.3.5", default-features = false }
 panic-persist = { git = "https://github.com/jamesmunns/panic-persist", branch = "master", features = ["custom-panic-handler"] }
+smoltcp-nal = { version = "0.1.0", optional = true }
+embedded-time = { version = "0.12.0", optional = true }
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq"
+rev = "d2ec3e8351fa403ea96defd98c0b4410cbaa18a4"
 
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/stm32-rs/stm32f4xx-hal"
@@ -37,6 +40,13 @@ features = ["stm32f407", "rt", "usb_fs"]
 [dependencies.w5500]
 git = "https://github.com/quartiq/w5500"
 branch = "feature/tcp-nal"
+optional = true
+
+[dependencies.enc424j600]
+git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
+rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
+features = [ "smoltcp-phy", "cortex-m-cpu" ]
+optional = true
 
 [dependencies.ad5627]
 path = "ad5627"
@@ -64,6 +74,9 @@ path = "tca9548"
 
 [features]
 unstable = []
+phy_enc424j600 = [ "enc424j600", "smoltcp-nal", "embedded-time" ]
+phy_w5500 = [ "w5500" ]
+default = [ "phy_w5500" ]
 
 [profile.release]
 codegen-units = 1 # better optimizations
