@@ -82,6 +82,7 @@ type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
 
 type I2cBusManager = mutex::AtomicCheckManager<I2C>;
 type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
+type I2cError = hal::i2c::Error;
 
 type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;
 type Eeprom = microchip_24aa02e48::Microchip24AA02E48<I2C2>;
