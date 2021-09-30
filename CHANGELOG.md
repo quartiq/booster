@@ -9,3 +9,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Fixed an issue with spurious resets by ignoring bus error detections on I2C (Refer to [issue
   #128](https://github.com/quartiq/booster/issues/128) for more information.
 * Added transform expression to CLI tool help ([#153](https://github.com/quartiq/booster/pull/153)).
+* Added support for ENC424J600 PHYs using Smoltcp. Bumped Minimq version.
+  [#156](https://github.com/quartiq/booster/pull/156)
