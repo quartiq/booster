@@ -105,8 +105,8 @@ impl ChassisFans {
     }
 
     fn set_duty_cycles(&mut self, duty_cycle: f32) {
-        // WIP: keep retrying until there is no NoAck
-        let i2c_retry_unwrap = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| -> () {
+        // Keep retrying until there is no NoAck
+        let retry_set = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| -> () {
             loop {
                 match fan.set_duty_cycle(subfan, duty_cycle) {
                     Err(max6639::Error::Interface(I2cError::NACK)) => {}
@@ -117,8 +117,8 @@ impl ChassisFans {
         };
 
         for fan in self.fans.iter_mut() {
-            i2c_retry_unwrap(fan, max6639::Fan::Fan1, duty_cycle);
-            i2c_retry_unwrap(fan, max6639::Fan::Fan2, duty_cycle);
+            retry_set(fan, max6639::Fan::Fan1, duty_cycle);
+            retry_set(fan, max6639::Fan::Fan2, duty_cycle);
         }
 
         // Deem the fans to be spinning if the duty cycle is greater than 5%. This is to avoid
