@@ -112,7 +112,7 @@ impl ChassisFans {
                 match fan.set_duty_cycle(subfan, duty_cycle) {
                     Err(max6639::Error::Interface(I2cError::NACK)) => {}
                     Err(e) => Err(e).unwrap(),
-                    _ => break,
+                    Ok(_) => break,
                 }
             }
         };
