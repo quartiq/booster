@@ -4,7 +4,7 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::I2cProxy;
+use super::{I2cError, I2cProxy};
 use max6639::Max6639;
 
 /// Provides control of the chassis-mounted cooling fans.
@@ -105,9 +105,21 @@ impl ChassisFans {
     }
 
     fn set_duty_cycles(&mut self, duty_cycle: f32) {
+        // Keep retrying until the configuration succeeds or the maximum number of retry
+        // attempts is exhausted.
+        let retry_set = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| -> () {
+            for _ in 0..2 {
+                match fan.set_duty_cycle(subfan, duty_cycle) {
+                    Err(max6639::Error::Interface(I2cError::NACK)) => {}
+                    Err(e) => Err(e).unwrap(),
+                    Ok(_) => break,
+                }
+            }
+        };
+
         for fan in self.fans.iter_mut() {
-            fan.set_duty_cycle(max6639::Fan::Fan1, duty_cycle).unwrap();
-            fan.set_duty_cycle(max6639::Fan::Fan2, duty_cycle).unwrap();
+            retry_set(fan, max6639::Fan::Fan1, duty_cycle);
+            retry_set(fan, max6639::Fan::Fan2, duty_cycle);
         }
 
         // Deem the fans to be spinning if the duty cycle is greater than 5%. This is to avoid
