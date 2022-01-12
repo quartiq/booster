@@ -162,29 +162,40 @@ impl SerialTerminal {
 
                 Request::ServiceInfo => {
                     let mut msg: String<consts::U256> = String::new();
-                    write!(&mut msg, "{:<20}: {} [{}]\n", "Version",
-                            build_info::GIT_VERSION.unwrap_or("Unspecified"),
-                            build_info::PROFILE
-                        ).unwrap_or_else( |_| {
-                            msg = String::from("Version: too long");
-                        },
-                    );
+                    write!(
+                        &mut msg,
+                        "{:<20}: {} [{}]\n",
+                        "Version",
+                        build_info::GIT_VERSION.unwrap_or("Unspecified"),
+                        build_info::PROFILE
+                    )
+                    .unwrap_or_else(|_| {
+                        msg = String::from("Version: too long");
+                    });
                     self.write(msg.as_bytes());
 
                     msg.clear();
-                    write!(&mut msg, "{:<20}: {}\n", "Build Time", build_info::BUILT_TIME_UTC).unwrap_or_else(
-                        |_| {
-                            msg = String::from("Build: too long");
-                        },
-                    );
+                    write!(
+                        &mut msg,
+                        "{:<20}: {}\n",
+                        "Build Time",
+                        build_info::BUILT_TIME_UTC
+                    )
+                    .unwrap_or_else(|_| {
+                        msg = String::from("Build: too long");
+                    });
                     self.write(msg.as_bytes());
 
                     msg.clear();
-                    write!(&mut msg, "{:<20}: {}\n", "Rustc Version", build_info::RUSTC_VERSION).unwrap_or_else(
-                        |_| {
-                            msg = String::from("Rustc Version: too long");
-                        },
-                    );
+                    write!(
+                        &mut msg,
+                        "{:<20}: {}\n",
+                        "Rustc Version",
+                        build_info::RUSTC_VERSION
+                    )
+                    .unwrap_or_else(|_| {
+                        msg = String::from("Rustc Version: too long");
+                    });
                     self.write(msg.as_bytes());
 
                     msg.clear();
@@ -201,10 +212,15 @@ impl SerialTerminal {
                     self.write(msg.as_bytes());
 
                     msg.clear();
-                    write!(&mut msg, "{:<20}: {}\n", "Features", build_info::FEATURES_STR)
-                        .unwrap_or_else(|_| {
-                            msg = String::from("Features: too long");
-                        });
+                    write!(
+                        &mut msg,
+                        "{:<20}: {}\n",
+                        "Features",
+                        build_info::FEATURES_STR
+                    )
+                    .unwrap_or_else(|_| {
+                        msg = String::from("Features: too long");
+                    });
                     self.write(msg.as_bytes());
 
                     msg.clear();
