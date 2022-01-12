@@ -48,7 +48,7 @@ branch = "feature/tcp-nal"
 optional = true
 
 [dependencies.enc424j600]
-git = "http://git.m-labs.hk/M-Labs/ENC424J600.git"
+git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
 rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
 features = [ "smoltcp-phy", "cortex-m-cpu" ]
 optional = true

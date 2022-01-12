@@ -174,7 +174,7 @@ impl SerialTerminal {
                     msg.clear();
                     write!(&mut msg, "{:<20}: {}\n", "Build Time", build_info::BUILT_TIME_UTC).unwrap_or_else(
                         |_| {
-                            msg = String::from("Version: too long");
+                            msg = String::from("Build: too long");
                         },
                     );
                     self.write(msg.as_bytes());

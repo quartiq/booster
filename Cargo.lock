@@ -355,7 +355,7 @@ dependencies = [
 [[package]]
 name = "enc424j600"
 version = "0.2.0"
-source = "git+http://git.m-labs.hk/M-Labs/ENC424J600.git?rev=fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a#fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
+source = "git+https://git.m-labs.hk/M-Labs/ENC424J600.git?rev=fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a#fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
 dependencies = [
  "aligned 0.3.4",
  "cortex-m 0.5.11",
