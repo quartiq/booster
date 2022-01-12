@@ -11,7 +11,7 @@ use logos::Logos;
 use usbd_serial::UsbError;
 
 use core::fmt::Write;
-use w5500::Ipv4Addr;
+use minimq::embedded_nal::Ipv4Addr;
 
 mod build_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));

@@ -54,7 +54,7 @@ pub struct SupplyMeasurements {
 pub enum ChannelFault {
     OverTemperature,
     UnderTemperature,
-    OverCurrent,
+    SupplyAlert,
 }
 
 /// Represents the three power interlocks present on the device.
@@ -97,8 +97,14 @@ pub enum ChannelState {
 impl serde::Serialize for ChannelState {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match *self {
-            ChannelState::Blocked(_) => {
-                serializer.serialize_unit_variant("ChannelState", 0, "Blocked")
+            ChannelState::Blocked(ChannelFault::SupplyAlert) => {
+                serializer.serialize_unit_variant("ChannelState", 0, "Blocked(SupplyAlert)")
+            }
+            ChannelState::Blocked(ChannelFault::UnderTemperature) => {
+                serializer.serialize_unit_variant("ChannelState", 0, "Blocked(UnderTempeterature)")
+            }
+            ChannelState::Blocked(ChannelFault::OverTemperature) => {
+                serializer.serialize_unit_variant("ChannelState", 0, "Blocked(OverTemperature)")
             }
             ChannelState::Disabled => {
                 serializer.serialize_unit_variant("ChannelState", 1, "Disabled")
@@ -353,12 +359,8 @@ impl Devices {
             .get_voltage(ads7924::Channel::Three)
             .expect("Power monitor did not respond");
 
-        // Configure alarm thresholds for the P5V0_MP signal.
-        // Ensure that P5V0MP remains valid. Note that
-        // the 5V rail is divided by 2.5 before entering the ADC.
-        ads7924
-            .set_thresholds(ads7924::Channel::Three, 0.0, 6.5 / 2.5)
-            .expect("Power monitor failed to set thresholds");
+        // Note: Due to hardware limitations, the ADS7924 ALERT output is not used. Refer to
+        // https://github.com/quartiq/booster/issues/130 for more information.
 
         // Verify that there is no active alarm condition.
         assert!(ads7924.clear_alarm().expect("Failed to clear alarm") == 0);
@@ -579,7 +581,7 @@ impl RfChannel {
         } else if temperature < 5.0 {
             Some(ChannelFault::UnderTemperature)
         } else if self.pins.alert.is_low().unwrap() {
-            Some(ChannelFault::OverCurrent)
+            Some(ChannelFault::SupplyAlert)
         } else {
             None
         }

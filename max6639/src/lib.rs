@@ -61,10 +61,16 @@ enum Register {
 
 /// An error that the fan controller driver may encounter.
 #[derive(Copy, Clone, Debug)]
-pub enum Error {
-    Interface,
+pub enum Error<E> {
+    Interface(E),
     FanFail,
     Bounds,
+}
+
+impl<E> From<E> for Error<E> {
+    fn from(err: E) -> Error<E> {
+        Error::Interface(err)
+    }
 }
 
 /// An indication of which fan to operate on.
@@ -77,13 +83,17 @@ pub enum Fan {
 impl<I2C> Max6639<I2C>
 where
     I2C: Write + WriteRead,
+    <I2C as Write>::Error: Into<<I2C as WriteRead>::Error>,
 {
     /// Create a new MAX6639 driver.
     ///
     /// # Args
     /// * `i2c` - The I2C interface used to communicate with the device.
     /// * `address_pin` - the pin state of the ADD input pin.
-    pub fn new(i2c: I2C, address_pin: AddressPin) -> Result<Self, Error> {
+    pub fn new(
+        i2c: I2C,
+        address_pin: AddressPin,
+    ) -> Result<Self, Error<<I2C as WriteRead>::Error>> {
         let mut device = Max6639 {
             i2c,
             address: address_pin as u8,
@@ -103,22 +113,25 @@ where
         Ok(device)
     }
 
-    fn write(&mut self, register: Register, value: u8) -> Result<(), Error> {
+    fn write(
+        &mut self,
+        register: Register,
+        value: u8,
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         let write_data: [u8; 2] = [register as u8, value];
 
         self.i2c
             .write(self.address, &write_data)
-            .map_err(|_| Error::Interface)?;
+            .map_err(|err| err.into())?;
 
         Ok(())
     }
 
-    fn read(&mut self, register: Register) -> Result<u8, Error> {
+    fn read(&mut self, register: Register) -> Result<u8, Error<<I2C as WriteRead>::Error>> {
         let mut result: [u8; 1] = [0; 1];
 
         self.i2c
-            .write_read(self.address, &[register as u8], &mut result)
-            .map_err(|_| Error::Interface)?;
+            .write_read(self.address, &[register as u8], &mut result)?;
 
         Ok(result[0])
     }
@@ -132,7 +145,11 @@ where
     /// # Args
     /// * `fan` - Specifies which fan the duty cycle should be configured on.
     /// * `duty_cycle` - The normalized duty cycle desired for the fan.
-    pub fn set_duty_cycle(&mut self, fan: Fan, duty_cycle: f32) -> Result<(), Error> {
+    pub fn set_duty_cycle(
+        &mut self,
+        fan: Fan,
+        duty_cycle: f32,
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         if duty_cycle < 0.0 || duty_cycle > 1.0 {
             return Err(Error::Bounds);
         }
@@ -165,7 +182,7 @@ where
     ///
     /// # Return
     /// True if a fan fault was detected. False otherwise.
-    pub fn check_fan_fault(&mut self, fan: Fan) -> Result<bool, Error> {
+    pub fn check_fan_fault(&mut self, fan: Fan) -> Result<bool, Error<<I2C as WriteRead>::Error>> {
         // Note that this register read will erase all status indications.
         let status_register = self.read(Register::Status)?;
 
@@ -182,7 +199,7 @@ where
     ///
     /// # Returns
     /// The current fan speed in RPMs (revolutions per minute).
-    pub fn current_rpms(&mut self, fan: Fan) -> Result<u16, Error> {
+    pub fn current_rpms(&mut self, fan: Fan) -> Result<u16, Error<<I2C as WriteRead>::Error>> {
         let tach_reg = match fan {
             Fan::Fan1 => Register::Fan1TachCount,
             Fan::Fan2 => Register::Fan2TachCount,

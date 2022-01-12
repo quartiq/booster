@@ -76,15 +76,22 @@ pub enum Channel {
 
 /// Indicates errors that the ADC may encounter.
 #[derive(Debug)]
-pub enum Error {
-    Interface,
+pub enum Error<E> {
+    Interface(E),
     Size,
     Bounds,
+}
+
+impl<E> From<E> for Error<E> {
+    fn from(err: E) -> Error<E> {
+        Error::Interface(err)
+    }
 }
 
 impl<I2C> Ads7924<I2C>
 where
     I2C: Write + WriteRead,
+    <I2C as Write>::Error: Into<<I2C as WriteRead>::Error>,
 {
     /// Create a new ADC driver.
     ///
@@ -98,7 +105,7 @@ where
         address: u8,
         avdd: f32,
         delay: &mut impl DelayUs<u16>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Error<<I2C as WriteRead>::Error>> {
         let mut ads7924 = Ads7924 {
             i2c: i2c,
             address: address,
@@ -128,11 +135,18 @@ where
     /// # Args
     /// * `i2c` - The I2C interface to use to communicate with the device.
     /// * `delay` - A means of delaying during initialization.
-    pub fn default(i2c: I2C, delay: &mut impl DelayUs<u16>) -> Result<Self, Error> {
+    pub fn default(
+        i2c: I2C,
+        delay: &mut impl DelayUs<u16>,
+    ) -> Result<Self, Error<<I2C as WriteRead>::Error>> {
         Ads7924::new(i2c, 0x49, 3.434, delay)
     }
 
-    fn set_mode(&mut self, mode: OperationMode, channel: Option<Channel>) -> Result<(), Error> {
+    fn set_mode(
+        &mut self,
+        mode: OperationMode,
+        channel: Option<Channel>,
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         let mut mode_control: [u8; 1] = [0];
         if let Some(channel) = channel {
             mode_control[0].set_bits(0..3, channel as u8);
@@ -144,7 +158,10 @@ where
         Ok(())
     }
 
-    fn reset(&mut self, delay: &mut impl DelayUs<u16>) -> Result<(), Error> {
+    fn reset(
+        &mut self,
+        delay: &mut impl DelayUs<u16>,
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         self.write(Register::Reset, &[0xAA])?;
 
         // Wait a small delay to ensure the device is processing the reset request.
@@ -153,7 +170,11 @@ where
         Ok(())
     }
 
-    fn write(&mut self, register: Register, data: &[u8]) -> Result<(), Error> {
+    fn write(
+        &mut self,
+        register: Register,
+        data: &[u8],
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         if data.len() > 2 {
             return Err(Error::Size);
         }
@@ -168,12 +189,16 @@ where
 
         self.i2c
             .write(self.address, &write_data[..data.len() + 1])
-            .map_err(|_| Error::Interface)?;
+            .map_err(|err| err.into())?;
 
         Ok(())
     }
 
-    fn read(&mut self, register: Register, data: &mut [u8]) -> Result<(), Error> {
+    fn read(
+        &mut self,
+        register: Register,
+        data: &mut [u8],
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         let mut command_byte = register as u8;
 
         // Set the INC bit in the command byte if reading more than 1 register.
@@ -181,9 +206,7 @@ where
             command_byte.set_bit(7, true);
         }
 
-        self.i2c
-            .write_read(self.address, &[command_byte], data)
-            .map_err(|_| Error::Interface)?;
+        self.i2c.write_read(self.address, &[command_byte], data)?;
 
         Ok(())
     }
@@ -199,7 +222,7 @@ where
         channel: Channel,
         low_threshold: f32,
         high_threshold: f32,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
         if high_threshold < low_threshold || low_threshold < 0.0 || high_threshold < 0.0 {
             return Err(Error::Bounds);
         }
@@ -244,7 +267,7 @@ where
     /// # Returns
     /// A bit mask of which channel caused the alarm. The position of the bit corresponds with the
     /// channel number.
-    pub fn clear_alarm(&mut self) -> Result<u8, Error> {
+    pub fn clear_alarm(&mut self) -> Result<u8, Error<<I2C as WriteRead>::Error>> {
         // Clearing the alarm is completed by reading the interrupt control register.
         let mut alarm_status: [u8; 1] = [0];
         self.read(Register::IntCntrl, &mut alarm_status)?;
@@ -264,7 +287,10 @@ where
     ///
     /// # Returns
     /// The analog measurement of the specified channel in volts.
-    pub fn get_voltage(&mut self, channel: Channel) -> Result<f32, Error> {
+    pub fn get_voltage(
+        &mut self,
+        channel: Channel,
+    ) -> Result<f32, Error<<I2C as WriteRead>::Error>> {
         let upper_data_register = match channel {
             Channel::Zero => Register::Data0Upper,
             Channel::One => Register::Data1Upper,
@@ -292,7 +318,7 @@ where
     ///
     /// # Returns
     /// The analog measurements of all channel in volts.
-    pub fn get_voltages(&mut self) -> Result<[f32; 4], Error> {
+    pub fn get_voltages(&mut self) -> Result<[f32; 4], Error<<I2C as WriteRead>::Error>> {
         // First, disable Autoscan mode.
         self.set_mode(OperationMode::Idle, None)?;
 
