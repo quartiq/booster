@@ -43,8 +43,8 @@ pub type AtomicCheckManager<T> = shared_bus::BusManager<AtomicCheckMutex<T>>;
 macro_rules! new_atomic_check_manager {
     ($bus_type:ty = $bus:expr) => {{
         let m: Option<&'static mut _> = cortex_m::singleton!(
-            : $crate::mutex::AtomicCheckManager<$bus_type> =
-                $crate::mutex::AtomicCheckManager::new($bus)
+            : $crate::hardware::mutex::AtomicCheckManager<$bus_type> =
+                $crate::hardware::mutex::AtomicCheckManager::new($bus)
         );
 
         m

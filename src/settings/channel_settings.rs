@@ -6,7 +6,7 @@
 //! Proprietary and confidential.
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
-use crate::{linear_transformation::LinearTransformation, Error, I2cProxy};
+use crate::{hardware::I2cProxy, linear_transformation::LinearTransformation, Error};
 use microchip_24aa02e48::Microchip24AA02E48;
 
 /// The expected semver of the BoosterChannelSettings. This version must be updated whenever the

@@ -4,13 +4,18 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::{idle::Resources, BoosterChannels, Channel, Error};
+use super::{
+    hardware::{
+        booster_channels::BoosterChannels,
+        rf_channel::{Property as ChannelProperty, PropertyId as ChannelPropertyId},
+    },
+    idle::Resources,
+    Channel, Error,
+};
 use core::fmt::Write;
 use embedded_hal::blocking::delay::DelayUs;
 use heapless::{consts, String};
 use minimq::{Property, QoS};
-
-use crate::rf_channel::{Property as ChannelProperty, PropertyId as ChannelPropertyId};
 
 use crate::linear_transformation::LinearTransformation;
 

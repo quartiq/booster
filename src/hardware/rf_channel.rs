@@ -11,10 +11,8 @@ use max6642::Max6642;
 use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
 
-use super::{I2cBusManager, I2cProxy};
-use crate::{
-    linear_transformation::LinearTransformation, platform, settings::BoosterChannelSettings, Error,
-};
+use super::{platform, I2cBusManager, I2cProxy};
+use crate::{linear_transformation::LinearTransformation, settings::BoosterChannelSettings, Error};
 use embedded_hal::blocking::delay::DelayUs;
 use stm32f4xx_hal::{
     self as hal,
