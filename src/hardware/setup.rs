@@ -14,6 +14,9 @@ use super::{
     Ethernet, MqttClient, UsbBus, CPU_FREQ, I2C,
 };
 
+#[cfg(feature = "phy_enc424j600")]
+use super::{enc424j600_api, Enc424j600, NalClock};
+
 use crate::{delay::AsmDelay, new_atomic_check_manager, settings::BoosterSettings};
 
 use stm32f4xx_hal as hal;
