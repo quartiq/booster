@@ -46,7 +46,7 @@ use hardware::{
     rf_channel::ChannelState,
     setup::{EthernetManager, MainBus},
     user_interface::{ButtonEvent, Color, UserButtons, UserLeds},
-    Channel,
+    Channel, CPU_FREQ,
 };
 
 use watchdog::{WatchdogClient, WatchdogManager};
@@ -170,7 +170,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 10Hz.
         c.schedule
-            .channel_monitor(c.scheduled + Duration::from_cycles(hardware::CPU_FREQ / 10))
+            .channel_monitor(c.scheduled + Duration::from_cycles(CPU_FREQ / 10))
             .unwrap();
     }
 
@@ -204,7 +204,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 1Hz.
         c.schedule
-            .fans(c.scheduled + Duration::from_cycles(hardware::CPU_FREQ))
+            .fans(c.scheduled + Duration::from_cycles(CPU_FREQ))
             .unwrap();
     }
 
@@ -248,7 +248,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 2Hz.
         c.schedule
-            .telemetry(c.scheduled + Duration::from_cycles(hardware::CPU_FREQ / 2))
+            .telemetry(c.scheduled + Duration::from_cycles(CPU_FREQ / 2))
             .unwrap();
     }
 
@@ -294,7 +294,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task every 3ms.
         c.schedule
-            .button(c.scheduled + Duration::from_cycles(3 * (hardware::CPU_FREQ / 1000)))
+            .button(c.scheduled + Duration::from_cycles(3 * (CPU_FREQ / 1000)))
             .unwrap();
     }
 
@@ -314,7 +314,7 @@ const APP: () = {
         // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task every 10ms.
         c.schedule
-            .usb(c.scheduled + Duration::from_cycles(10 * (hardware::CPU_FREQ / 1_000)))
+            .usb(c.scheduled + Duration::from_cycles(10 * (CPU_FREQ / 1_000)))
             .unwrap();
     }
 

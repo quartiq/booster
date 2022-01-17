@@ -77,9 +77,6 @@ macro_rules! channel_pins {
     }};
 }
 
-// USB end-point memory.
-static mut USB_EP_MEMORY: [u32; 1024] = [0; 1024];
-
 /// Container method for all Ethernet-related structs.
 pub struct EthernetManager {
     pub mqtt_client: MqttClient,
@@ -93,6 +90,7 @@ pub struct MainBus {
     pub fans: ChassisFans,
 }
 
+/// Configured Booster hardware devices.
 pub struct BoosterDevices {
     pub leds: UserLeds,
     pub buttons: UserButtons,
@@ -105,13 +103,19 @@ pub struct BoosterDevices {
     pub delay: AsmDelay,
 }
 
+/// Configure Booster hardware peripherals and RF channels.
+///
+/// # Args
+/// * `core` - The RTIC core peripherals
+/// * `device` - The RTIC STM32 device peripherals.
+///
+/// # Returns
+/// The configured [BoosterDevices].
 pub fn setup(
     mut core: rtic::Peripherals,
     device: stm32f4xx_hal::stm32::Peripherals,
 ) -> BoosterDevices {
     // TODO: Move these into singletons to avoid unsafe static muts.
-    static mut USB_BUS: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None;
-    static mut USB_SERIAL: Option<String<heapless::consts::U64>> = None;
 
     // Install the logger
     log::set_logger(&crate::LOGGER)
@@ -390,7 +394,16 @@ pub fn setup(
     assert!(fans.self_test(&mut delay));
 
     // Set up the USB bus.
-    let (usb_device, usb_serial) = unsafe {
+    let (usb_device, usb_serial) = {
+        // Note(unwrap): The setup function is only safe to call once, so these unwraps should never
+        // fail.
+        let endpoint_memory = cortex_m::singleton!(: [u32; 1024] = [0; 1024]).unwrap();
+        let usb_bus =
+            cortex_m::singleton!(: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None)
+                .unwrap();
+        let serial_number =
+            cortex_m::singleton!(: Option<String<heapless::consts::U64>> = None).unwrap();
+
         let usb = hal::otg_fs::USB {
             usb_global: device.OTG_FS_GLOBAL,
             usb_device: device.OTG_FS_DEVICE,
@@ -400,12 +413,10 @@ pub fn setup(
             hclk: clocks.hclk(),
         };
 
-        USB_BUS = Some(hal::otg_fs::UsbBus::new(usb, &mut USB_EP_MEMORY));
-
-        let usb_serial = usbd_serial::SerialPort::new(USB_BUS.as_ref().unwrap());
+        usb_bus.replace(hal::otg_fs::UsbBus::new(usb, &mut endpoint_memory[..]));
 
         // Generate a device serial number from the MAC address.
-        USB_SERIAL = {
+        {
             let mut serial_string: String<heapless::consts::U64> = String::new();
 
             #[cfg(feature = "phy_w5500")]
@@ -423,19 +434,21 @@ pub fn setup(
                 octets[0], octets[1], octets[2], octets[3], octets[4], octets[5]
             )
             .unwrap();
-            Some(serial_string)
-        };
+            serial_number.replace(serial_string);
+        }
 
         let usb_device = UsbDeviceBuilder::new(
-            USB_BUS.as_ref().unwrap(),
+            usb_bus.as_ref().unwrap(),
             // TODO: Look into sub-licensing from ST.
             UsbVidPid(0x0483, 0x5740),
         )
         .manufacturer("ARTIQ/Sinara")
         .product("Booster")
-        .serial_number(USB_SERIAL.as_ref().unwrap().as_str())
+        .serial_number(serial_number.as_ref().unwrap().as_str())
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
+
+        let usb_serial = usbd_serial::SerialPort::new(usb_bus.as_ref().unwrap());
 
         (usb_device, usb_serial)
     };
