@@ -4,7 +4,7 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use crate::{Eeprom, Error};
+use crate::{hardware::Eeprom, Error};
 use heapless::{consts, String};
 use minimq::embedded_nal::Ipv4Addr;
 use serde::{Deserialize, Serialize};

@@ -5,13 +5,14 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
+use super::Channel;
 use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal as hal;
 use tca9548::{self, Tca9548};
 
+use super::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
 use super::{I2cBusManager, I2cProxy};
-use crate::error::Error;
-use crate::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
+use crate::Error;
 use embedded_hal::blocking::delay::DelayUs;
 
 /// Represents a control structure for interfacing to booster RF channels.
@@ -19,19 +20,6 @@ pub struct BoosterChannels {
     channels: [Option<RfChannel>; 8],
     adc: hal::adc::Adc<hal::stm32::ADC3>,
     mux: Tca9548<I2cProxy>,
-}
-
-/// Indicates a booster RF channel.
-#[derive(IntoEnumIterator, Copy, Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub enum Channel {
-    Zero = 0,
-    One = 1,
-    Two = 2,
-    Three = 3,
-    Four = 4,
-    Five = 5,
-    Six = 6,
-    Seven = 7,
 }
 
 impl Into<tca9548::Bus> for Channel {

@@ -5,12 +5,13 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
-use super::{hal, Channel};
+use super::Channel;
 use bit_field::BitField;
 use embedded_hal::{
     blocking::spi::Write,
     digital::v2::{InputPin, OutputPin},
 };
+use stm32f4xx_hal as hal;
 
 use debounced_pin::{Debounce, DebounceState, DebouncedInputPin};
 

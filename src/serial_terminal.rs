@@ -4,7 +4,7 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::{platform, BoosterSettings, UsbBus};
+use super::{hardware::platform, hardware::UsbBus, BoosterSettings};
 use bbqueue::BBBuffer;
 use heapless::{consts, String, Vec};
 use logos::Logos;
