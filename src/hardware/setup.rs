@@ -105,6 +105,9 @@ pub struct BoosterDevices {
 
 /// Configure Booster hardware peripherals and RF channels.
 ///
+/// # Note
+/// It is only acceptable to call this function once per boot.
+///
 /// # Args
 /// * `core` - The RTIC core peripherals
 /// * `device` - The RTIC STM32 device peripherals.
@@ -115,8 +118,6 @@ pub fn setup(
     mut core: rtic::Peripherals,
     device: stm32f4xx_hal::stm32::Peripherals,
 ) -> BoosterDevices {
-    // TODO: Move these into singletons to avoid unsafe static muts.
-
     // Install the logger
     log::set_logger(&crate::LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Info))
