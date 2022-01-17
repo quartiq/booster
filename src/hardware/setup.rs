@@ -416,6 +416,8 @@ pub fn setup(
 
         usb_bus.replace(hal::otg_fs::UsbBus::new(usb, &mut endpoint_memory[..]));
 
+        let usb_serial = usbd_serial::SerialPort::new(usb_bus.as_ref().unwrap());
+
         // Generate a device serial number from the MAC address.
         {
             let mut serial_string: String<heapless::consts::U64> = String::new();
@@ -448,8 +450,6 @@ pub fn setup(
         .serial_number(serial_number.as_ref().unwrap().as_str())
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
-
-        let usb_serial = usbd_serial::SerialPort::new(usb_bus.as_ref().unwrap());
 
         (usb_device, usb_serial)
     };
