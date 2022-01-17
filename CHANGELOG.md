@@ -14,3 +14,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Fixed an issue where I2C NACK is encountered randomly while setting the MAX6639 fan speed
   ([#140](https://github.com/quartiq/booster/issues/140)), by using a I2C transfer retry mechanism.
   [#158](https://github.com/quartiq/booster/pull/158)
+* Code reorganized to move hardware configuration into a module
