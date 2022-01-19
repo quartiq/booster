@@ -24,7 +24,7 @@ logos = { version = "0.11.4", default-features = false, features = ["export_deri
 bbqueue = "0.5"
 usbd-serial = "0.1.0"
 shared-bus = { version = "0.2", features = ["cortex-m"] }
-usb-device = "0.2.6"
+usb-device = "0.2.8"
 postcard = "0.5.1"
 crc-any = { version = "2.3.5", default-features = false }
 panic-persist = { git = "https://github.com/jamesmunns/panic-persist", branch = "master", features = ["custom-panic-handler"] }
@@ -49,6 +49,10 @@ git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
 rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
 features = [ "smoltcp-phy", "cortex-m-cpu" ]
 optional = true
+
+[patch.crates-io.usb-device]
+git = "https://github.com/ryan-summers/usb-device"
+rev = "abdf004"
 
 [dependencies.ad5627]
 path = "ad5627"
