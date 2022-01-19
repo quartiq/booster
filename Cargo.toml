@@ -15,13 +15,13 @@ embedded-hal = "0.2.4"
 enum-iterator = "0.6.0"
 cortex-m-log = { version = "0.6.1", features = ["log-integration"] }
 log = "0.4.8"
-heapless = { version = "0.5.5", features = ["serde"] }
+heapless = { version = "0.7", features = ["serde"] }
 bit_field = "0.10.0"
 debounced-pin = "0.3.0"
 serde = {version = "1.0", features = ["derive"], default-features = false }
-serde-json-core = "0.2"
+serde-json-core = "0.4"
 logos = { version = "0.11.4", default-features = false, features = ["export_derive"] }
-bbqueue = "0.4.10"
+bbqueue = "0.5"
 usbd-serial = "0.1.0"
 shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
 usb-device = "0.2.6"

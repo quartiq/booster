@@ -405,8 +405,7 @@ pub fn setup(
         let usb_bus =
             cortex_m::singleton!(: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None)
                 .unwrap();
-        let serial_number =
-            cortex_m::singleton!(: Option<String<heapless::consts::U64>> = None).unwrap();
+        let serial_number = cortex_m::singleton!(: Option<String<64>> = None).unwrap();
 
         let usb = hal::otg_fs::USB {
             usb_global: device.OTG_FS_GLOBAL,
@@ -423,7 +422,7 @@ pub fn setup(
 
         // Generate a device serial number from the MAC address.
         {
-            let mut serial_string: String<heapless::consts::U64> = String::new();
+            let mut serial_string: String<64> = String::new();
 
             #[cfg(feature = "phy_w5500")]
             let octets = settings.mac().octets;
