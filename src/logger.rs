@@ -4,7 +4,7 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use heapless::{consts, String};
+use heapless::String;
 
 use super::SerialTerminal;
 use core::fmt::Write;
@@ -16,7 +16,7 @@ use core::fmt::Write;
 /// intended to be consumed asynchronously. In the case of booster, this log data is consumed in the
 /// USB task.
 pub struct BufferedLog {
-    logs: heapless::mpmc::Q16<heapless::String<consts::U128>>,
+    logs: heapless::mpmc::Q16<heapless::String<128>>,
 }
 
 impl BufferedLog {
@@ -48,7 +48,7 @@ impl log::Log for BufferedLog {
         let source_line = record.line().unwrap_or(u32::MAX);
 
         // Print the record into the buffer.
-        let mut string: String<consts::U128> = String::new();
+        let mut string: String<128> = String::new();
         match write!(
             &mut string,
             "[{}] {}:{} - {}\n",

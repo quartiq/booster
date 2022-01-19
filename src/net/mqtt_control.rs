@@ -4,17 +4,18 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::{
+use crate::{
     hardware::{
         booster_channels::BoosterChannels,
         rf_channel::{Property as ChannelProperty, PropertyId as ChannelPropertyId},
+        clock::EpochClock,
     },
-    idle::Resources,
     Channel, Error,
 };
+
 use core::fmt::Write;
 use embedded_hal::blocking::delay::DelayUs;
-use heapless::{consts, String};
+use heapless::String;
 use minimq::{Property, QoS};
 
 use crate::linear_transformation::LinearTransformation;
@@ -28,7 +29,7 @@ struct PropertyReadRequest {
 #[derive(serde::Serialize)]
 struct PropertyReadResponse {
     code: u32,
-    data: String<consts::U64>,
+    data: String<64>,
 }
 
 impl PropertyReadResponse {
@@ -37,9 +38,9 @@ impl PropertyReadResponse {
     /// # Args
     /// * `vgs` - The resulting gate voltage of the RF amplifier.
     /// * `ids` - The resulting drain current of the RF amplifier.
-    pub fn okay(prop: ChannelProperty) -> String<consts::U256> {
+    pub fn okay(prop: ChannelProperty) -> String<256> {
         // Serialize the property.
-        let data: String<consts::U64> = match prop {
+        let data: String<64> = match prop {
             ChannelProperty::OutputInterlockThreshold(threshold) => {
                 serde_json_core::to_string(&threshold).unwrap()
             }
@@ -67,7 +68,7 @@ impl PropertyReadResponse {
 struct PropertyWriteRequest {
     pub channel: Channel,
     prop: ChannelPropertyId,
-    data: String<consts::U64>,
+    data: String<64>,
 }
 
 impl PropertyWriteRequest {
@@ -78,7 +79,7 @@ impl PropertyWriteRequest {
     pub fn property(&self) -> Result<ChannelProperty, Error> {
         // Convert escaped quotes back to normal quotes.
         let mut escaped: bool = false;
-        let mut data: String<consts::U256> = String::new();
+        let mut data: String<256> = String::new();
         for character in self.data.as_str().chars() {
             if character == '\\' {
                 if !escaped {
@@ -160,7 +161,7 @@ impl ChannelBiasResponse {
     /// # Args
     /// * `vgs` - The resulting gate voltage of the RF amplifier.
     /// * `ids` - The resulting drain current of the RF amplifier.
-    pub fn okay(vgs: f32, ids: f32) -> String<consts::U256> {
+    pub fn okay(vgs: f32, ids: f32) -> String<256> {
         let response = Self {
             code: 200,
             vgs,
@@ -175,7 +176,7 @@ impl ChannelBiasResponse {
 #[derive(serde::Serialize)]
 struct Response {
     code: u32,
-    msg: String<heapless::consts::U256>,
+    msg: String<256>,
 }
 
 impl Response {
@@ -183,7 +184,7 @@ impl Response {
     ///
     /// # Args
     /// * `msg` - An additional user-readable message.
-    pub fn okay<'a>(msg: &'a str) -> String<consts::U256> {
+    pub fn okay<'a>(msg: &'a str) -> String<256> {
         let response = Response {
             code: 200,
             msg: String::from(msg),
@@ -196,7 +197,7 @@ impl Response {
     ///
     /// # Args
     /// * `msg` - An additional user-readable message.
-    pub fn error_msg<'a>(msg: &'a str) -> String<consts::U256> {
+    pub fn error_msg<'a>(msg: &'a str) -> String<256> {
         let response = Response {
             code: 400,
             msg: String::from(msg),
@@ -209,8 +210,8 @@ impl Response {
     ///
     /// # Args
     /// * `error` - The error that was encountered while the command was being processed.
-    pub fn error(error: Error) -> String<consts::U256> {
-        let mut msg = String::<consts::U256>::new();
+    pub fn error(error: Error) -> String<256> {
+        let mut msg = String::<256>::new();
         write!(&mut msg, "{:?}", error).unwrap();
 
         let response = Response { code: 400, msg };
@@ -221,21 +222,25 @@ impl Response {
 
 /// Represents a means of handling MQTT-based control interface.
 pub struct ControlState {
+    mqtt: super::MqttClient,
     subscribed: bool,
-    id: String<heapless::consts::U32>,
+    id: String<32>,
+    delay: AsmDelay,
 }
 
 impl ControlState {
     /// Construct the MQTT control state manager.
-    pub fn new<'a>(id: &'a str) -> Self {
+    pub fn new<'a>(broker: minimq::embedded_nal::IpAddr, stack: super::NetworkStackProxy, id: &'a str, delay: AsmDelay) -> Self {
         Self {
+            mqtt_client: minimq::Minimq::new(broker, super::get_client_id(id, "ctrl"), stack, EpochClock::new()),
             subscribed: false,
             id: String::from(id),
+            delay,
         }
     }
 
-    fn generate_topic_string<'a>(&self, topic_postfix: &'a str) -> String<heapless::consts::U64> {
-        let mut topic_string: String<heapless::consts::U64> = String::new();
+    fn generate_topic_string<'a>(&self, topic_postfix: &'a str) -> String<64> {
+        let mut topic_string: String<64> = String::new();
         write!(&mut topic_string, "{}/{}", self.id, topic_postfix).unwrap();
         topic_string
     }
@@ -244,106 +249,89 @@ impl ControlState {
     ///
     /// # Args
     /// * `resources` - The `idle` resources containing the client and RF channels.
-    pub fn update(&mut self, resources: &mut Resources) {
+    pub fn update(&mut self, main_bus: &mut rtic::Mutex<MainBus>) {
         use rtic::Mutex as _;
-        resources.eth_mgr.lock(|eth_mgr| {
-            // Update the NAL stack
-            #[cfg(feature = "phy_enc424j600")]
-            {
-                let now = eth_mgr.nal_clock.now().unwrap();
-                // Note: smoltcp-nal 0.1.0 ONLY returns boolean, and does NOT
-                // raise errors from smoltcp.
-                // TODO: Bump smoltcp-nal
-                eth_mgr.mqtt_client.network_stack.poll(now);
-            }
 
-            // Subscribe to any control topics necessary.
-            if !self.subscribed {
-                if eth_mgr.mqtt_client.is_connected().unwrap() {
-                    for topic in [
-                        "channel/state",
-                        "channel/bias",
-                        "channel/read",
-                        "channel/write",
-                    ]
-                    .iter()
-                    {
-                        eth_mgr
-                            .mqtt_client
-                            .subscribe(&self.generate_topic_string(topic), &[])
-                            .unwrap();
-                    }
-                    self.subscribed = true;
+        // Subscribe to any control topics necessary.
+        if !self.subscribed {
+            if self.mqtt.client.is_connected().unwrap() {
+                for topic in [
+                    "channel/state",
+                    "channel/bias",
+                    "channel/read",
+                    "channel/write",
+                ]
+                .iter()
+                {
+                    self.mqtt
+                        .client
+                        .subscribe(&self.generate_topic_string(topic), &[])
+                        .unwrap();
                 }
+                self.subscribed = true;
             }
-        });
+        }
 
-        let main_bus = &mut resources.main_bus;
-        let delay = &mut resources.delay;
+        match self.mqtt.client
+            .poll(|client, topic, message, properties| {
+                let (id, route) = topic.split_at(topic.find('/').unwrap());
+                let route = &route[1..];
 
-        resources.eth_mgr.lock(|eth_mgr| {
-            match eth_mgr
-                .mqtt_client
-                .poll(|client, topic, message, properties| {
-                    let (id, route) = topic.split_at(topic.find('/').unwrap());
-                    let route = &route[1..];
+                if id != self.id {
+                    warn!("Ignoring topic for identifier: {}", id);
+                    return;
+                }
 
-                    if id != self.id {
-                        warn!("Ignoring topic for identifier: {}", id);
-                        return;
+                let response = main_bus.lock(|main_bus| match route {
+                    "channel/state" => handle_channel_update(message, &mut main_bus.channels),
+                    "channel/bias" => {
+                        handle_channel_bias(message, &mut main_bus.channels, delay)
                     }
-
-                    let response = main_bus.lock(|main_bus| match route {
-                        "channel/state" => handle_channel_update(message, &mut main_bus.channels),
-                        "channel/bias" => {
-                            handle_channel_bias(message, &mut main_bus.channels, *delay)
-                        }
-                        "channel/read" => {
-                            handle_channel_property_read(message, &mut main_bus.channels)
-                        }
-                        "channel/write" => {
-                            handle_channel_property_write(message, &mut main_bus.channels)
-                        }
-                        _ => Response::error_msg("Unexpected topic"),
-                    });
-
-                    if let Property::ResponseTopic(topic) = properties
-                        .iter()
-                        .find(|&prop| {
-                            if let Property::ResponseTopic(_) = *prop {
-                                true
-                            } else {
-                                false
-                            }
-                        })
-                        .or(Some(&Property::ResponseTopic(
-                            &self.generate_topic_string("log"),
-                        )))
-                        .unwrap()
-                    {
-                        client
-                            .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
-                            .unwrap();
+                    "channel/read" => {
+                        handle_channel_property_read(message, &mut main_bus.channels)
                     }
-                }) {
-                Ok(_) => {}
+                    "channel/write" => {
+                        handle_channel_property_write(message, &mut main_bus.channels)
+                    }
+                    _ => Response::error_msg("Unexpected topic"),
+                });
 
-                // Whenever the MQTT broker stops maintaining the session,
-                // this MQTT client will reset the session,
-                // and we will lose our pending subscriptions.
-                // We will need to re-establish them once we reconnect.
-                Err(minimq::Error::SessionReset) => self.subscribed = false,
+                if let Property::ResponseTopic(topic) = properties
+                    .iter()
+                    .find(|&prop| {
+                        if let Property::ResponseTopic(_) = *prop {
+                            true
+                        } else {
+                            false
+                        }
+                    })
+                    .or(Some(&Property::ResponseTopic(
+                        &self.generate_topic_string("log"),
+                    )))
+                    .unwrap()
+                {
+                    client
+                        .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
+                        .unwrap();
+                }
+        }) {
+            Ok(_) => {}
 
-                // Note: There's a race condition where the W5500 may disconnect the socket
-                // immediately before Minimq tries to use it. In these cases, a NotReady error is
-                // returned to indicate the socket is no longer connected. On the next processing
-                // cycle of Minimq, the device should detect and handle the broker disconnection.
-                #[cfg(feature = "phy_w5500")]
-                Err(minimq::Error::Network(w5500::Error::NotReady)) => {}
+            // Whenever the MQTT broker stops maintaining the session,
+            // this MQTT client will reset the session,
+            // and we will lose our pending subscriptions.
+            // We will need to re-establish them once we reconnect.
+            Err(minimq::Error::SessionReset) => self.subscribed = false,
 
-                Err(e) => error!("Unexpected error: {:?}", e),
-            }
-        });
+            // Note: There's a race condition where the W5500 may disconnect the socket
+            // immediately before Minimq tries to use it. In these cases, a NotReady error is
+            // returned to indicate the socket is no longer connected. On the next processing
+            // cycle of Minimq, the device should detect and handle the broker disconnection.
+            #[cfg(feature = "phy_w5500")]
+            Err(minimq::Error::Network(w5500::Error::NotReady)) => {}
+
+            Err(e) => error!("Unexpected error: {:?}", e),
+        }
     }
 }
 
@@ -355,7 +343,7 @@ impl ControlState {
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> String<consts::U256> {
+fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> String<256> {
     let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
         Ok((data, _)) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
@@ -393,7 +381,7 @@ fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> Stri
 fn handle_channel_property_read(
     message: &[u8],
     channels: &mut BoosterChannels,
-) -> String<consts::U256> {
+) -> String<256> {
     let request = match serde_json_core::from_slice::<PropertyReadRequest>(message) {
         Ok((data, _)) => data,
         Err(_) => return Response::error_msg("Failed to decode read request"),
@@ -416,7 +404,7 @@ fn handle_channel_property_read(
 fn handle_channel_property_write(
     message: &[u8],
     channels: &mut BoosterChannels,
-) -> String<consts::U256> {
+) -> String<256> {
     let request = match serde_json_core::from_slice::<PropertyWriteRequest>(message) {
         Ok((data, _)) => data,
         Err(_) => return Response::error_msg("Failed to decode write request"),
@@ -446,7 +434,7 @@ fn handle_channel_bias(
     message: &[u8],
     channels: &mut BoosterChannels,
     delay: &mut impl DelayUs<u16>,
-) -> String<consts::U256> {
+) -> String<256> {
     let request = match serde_json_core::from_slice::<ChannelBiasRequest>(message) {
         Ok((data, _)) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),

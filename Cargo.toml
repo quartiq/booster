@@ -15,7 +15,7 @@ embedded-hal = "0.2.4"
 enum-iterator = "0.6.0"
 cortex-m-log = { version = "0.6.1", features = ["log-integration"] }
 log = "0.4.8"
-heapless = { version = "0.5.5", features = ["serde"] }
+heapless = { version = "0.7", features = ["serde"] }
 bit_field = "0.10.0"
 debounced-pin = "0.3.0"
 serde = {version = "1.0", features = ["derive"], default-features = false }
@@ -28,15 +28,12 @@ usb-device = "0.2.6"
 postcard = "0.5.1"
 crc-any = { version = "2.3.5", default-features = false }
 panic-persist = { git = "https://github.com/jamesmunns/panic-persist", branch = "master", features = ["custom-panic-handler"] }
-smoltcp-nal = { version = "0.1.0", optional = true }
+smoltcp-nal = { version = "0.2.0", optional = true }
 embedded-time = { version = "0.12.0", optional = true }
+minimq = "0.5"
 
 [build-dependencies]
 built = { version = "0.5", features = ["git2", "chrono"], default-features = false }
-
-[dependencies.minimq]
-git = "https://github.com/quartiq/minimq"
-rev = "d2ec3e8351fa403ea96defd98c0b4410cbaa18a4"
 
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/stm32-rs/stm32f4xx-hal"

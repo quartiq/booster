@@ -26,18 +26,16 @@ use panic_persist as _;
 use core::fmt::Write;
 
 use heapless::String;
-use minimq::QoS;
 
 mod delay;
 mod hardware;
 mod linear_transformation;
 mod logger;
-mod mqtt_control;
 mod serial_terminal;
 mod settings;
 mod watchdog;
+mod net;
 
-use delay::AsmDelay;
 use logger::BufferedLog;
 use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
@@ -74,10 +72,8 @@ const APP: () = {
         buttons: UserButtons,
         leds: UserLeds,
         usb_terminal: SerialTerminal,
-        eth_mgr: EthernetManager,
+        net_devices: new::NetworkDevices,
         watchdog: WatchdogManager,
-        identifier: String<heapless::consts::U32>,
-        delay: AsmDelay,
     }
 
     #[init(schedule = [telemetry, channel_monitor, button, usb, fans])]
@@ -87,7 +83,7 @@ const APP: () = {
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
 
-        let identifier: String<heapless::consts::U32> = String::from(booster.settings.id());
+        let identifier: String<32> = String::from(booster.settings.id());
 
         // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
@@ -100,15 +96,13 @@ const APP: () = {
             main_bus: booster.main_bus,
             buttons: booster.buttons,
             leds: booster.leds,
-            eth_mgr: booster.ethernet,
+            net_devices: net::NetworkDevices::new(booster.network_stack, identifier, booster.delay),
             usb_terminal: SerialTerminal::new(
                 booster.usb_device,
                 booster.usb_serial,
                 booster.settings,
             ),
             watchdog: watchdog_manager,
-            identifier,
-            delay: booster.delay,
         }
     }
 
@@ -208,10 +202,8 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, eth_mgr, watchdog, identifier])]
+    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, net_devices, watchdog])]
     fn telemetry(mut c: telemetry::Context) {
-        let id = &c.resources.identifier;
-
         // Check in with the watchdog.
         c.resources
             .watchdog
@@ -225,23 +217,9 @@ const APP: () = {
                     .map(channel, |ch, adc| Ok(ch.get_status(adc)))
             });
 
+            // Broadcast the measured data over the telemetry interface.
             if let Ok(measurements) = measurements {
-                // Broadcast the measured data over the telemetry interface.
-                let mut topic: String<heapless::consts::U32> = String::new();
-                write!(&mut topic, "{}/ch{}", id, channel as u8).unwrap();
-
-                let message: String<heapless::consts::U1024> =
-                    serde_json_core::to_string(&measurements).unwrap();
-
-                match c.resources.eth_mgr.mqtt_client.publish(
-                    topic.as_str(),
-                    &message.into_bytes(),
-                    QoS::AtMostOnce,
-                    &[],
-                ) {
-                    Err(e) => info!("Telemetry failure: {:?}", e),
-                    Ok(_) => {}
-                }
+                c.resources.net_devices.telemetry.report_telemetry(channel, measurements);
             }
         }
 
@@ -318,13 +296,8 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[main_bus, eth_mgr, watchdog, identifier, delay])]
+    #[idle(resources=[main_bus, net_devices, watchdog])]
     fn idle(mut c: idle::Context) -> ! {
-        let mut manager = c
-            .resources
-            .identifier
-            .lock(|id| mqtt_control::ControlState::new(&id));
-
         loop {
             // Check in with the watchdog.
             c.resources
@@ -332,7 +305,12 @@ const APP: () = {
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::IdleTask));
 
             // Handle the MQTT control interface.
-            manager.update(&mut c.resources);
+            // TODO: Handle this ownership inversion issue.
+            let main_bus = &mut c.resources.main_bus;
+            c.resources.net_devices.lock(|net| net.controller.update(main_bus));
+
+            // Handle the network stack processing if needed.
+            c.resources.net_devices.lock(|net| net.process());
 
             // TODO: Properly sleep here until there's something to process.
             cortex_m::asm::nop();
