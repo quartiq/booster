@@ -5,7 +5,7 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 use crate::{hardware::Eeprom, Error};
-use heapless::{consts, String};
+use heapless::String;
 use minimq::embedded_nal::Ipv4Addr;
 use serde::{Deserialize, Serialize};
 
@@ -53,7 +53,7 @@ impl BoosterMainBoardData {
     /// # Args
     /// * `eui48` - The EUI48 identifier of the booster mainboard.
     pub fn default(eui48: &[u8; 6]) -> Self {
-        let mut name: String<consts::U23> = String::new();
+        let mut name: String<23> = String::new();
         write!(
             &mut name,
             "booster{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",

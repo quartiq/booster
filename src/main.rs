@@ -76,7 +76,7 @@ const APP: () = {
         usb_terminal: SerialTerminal,
         eth_mgr: EthernetManager,
         watchdog: WatchdogManager,
-        identifier: String<heapless::consts::U32>,
+        identifier: String<32>,
         delay: AsmDelay,
     }
 
@@ -87,7 +87,7 @@ const APP: () = {
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
 
-        let identifier: String<heapless::consts::U32> = String::from(booster.settings.id());
+        let identifier: String<32> = String::from(booster.settings.id());
 
         // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
@@ -227,11 +227,10 @@ const APP: () = {
 
             if let Ok(measurements) = measurements {
                 // Broadcast the measured data over the telemetry interface.
-                let mut topic: String<heapless::consts::U32> = String::new();
+                let mut topic: String<32> = String::new();
                 write!(&mut topic, "{}/ch{}", id, channel as u8).unwrap();
 
-                let message: String<heapless::consts::U1024> =
-                    serde_json_core::to_string(&measurements).unwrap();
+                let message: String<1024> = serde_json_core::to_string(&measurements).unwrap();
 
                 match c.resources.eth_mgr.mqtt_client.publish(
                     topic.as_str(),
