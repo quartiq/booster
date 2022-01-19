@@ -11,6 +11,7 @@ use stm32f4xx_hal as hal;
 
 pub mod booster_channels;
 pub mod chassis_fans;
+pub mod clock;
 mod mutex;
 pub mod platform;
 pub mod rf_channel;
@@ -53,15 +54,16 @@ pub type NetworkStack = smoltcp_nal::NetworkStack<
     'static,
     'static,
     enc424j600::smoltcp_phy::SmoltcpDevice<
-        enc424j600::Enc424j600<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>
+        enc424j600::Enc424j600<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
     >,
-    enc424j600_api::EpochClock<CPU_FREQ>
+    enc424j600_api::EpochClock<CPU_FREQ>,
 >;
 
 #[cfg(feature = "phy_w5500")]
-pub type NetworkStack = w5500::Interface<hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>, SPI>;
-
-pub type MqttClient = minimq::MqttClient<minimq::consts::U1024, Ethernet>;
+pub type NetworkStack = w5500::Device<
+    w5500::bus::FourWire<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
+    w5500::Manual,
+>;
 
 pub type I2cBusManager = mutex::AtomicCheckManager<I2C>;
 pub type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;

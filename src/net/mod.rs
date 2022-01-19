@@ -1,14 +1,17 @@
-use crate::hardware::{Channel, clock::EpochClock, AsmDelay, NetworkStack};
+use crate::hardware::{clock::EpochClock, Channel, NetworkStack};
+use core::fmt::Write;
 use heapless::String;
 use serde::Serialize;
 
-mod shared;
+use crate::delay::AsmDelay;
+
 mod mqtt_control;
+mod shared;
 
 use mqtt_control::ControlState;
 
 use shared::NetworkManager;
-type NetworkStackProxy = super::shared::NetworkStackProxy<'static, NetworkStack>;
+type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
 type MqttClient = minimq::Minimq<NetworkStackProxy, EpochClock, 128, 1>;
 
 pub struct NetworkDevices {
@@ -18,8 +21,15 @@ pub struct NetworkDevices {
 }
 
 impl NetworkDevices {
-    pub fn new(broker: minimq::embedded_nal::IpAddr, stack: NetworkStack, identifier: &str, delay: AsmDelay) -> Self {
-        let shared = cortex_m::singleton!(: NetworkManager<NetworkStack> = NetworkManager::new(network)).unwrap();
+    pub fn new(
+        broker: minimq::embedded_nal::IpAddr,
+        stack: NetworkStack,
+        identifier: &str,
+        delay: AsmDelay,
+    ) -> Self {
+        let shared =
+            cortex_m::singleton!(: NetworkManager<NetworkStack> = NetworkManager::new(stack))
+                .unwrap();
 
         Self {
             telemetry: TelemetryClient::new(broker, shared.acquire_stack(), identifier),
@@ -30,43 +40,59 @@ impl NetworkDevices {
 
     pub fn process(&mut self) -> bool {
         #[cfg(feature = "phy_enc424j600")]
-        return self.stack.lock(|stack| stack.poll()).map_err(|_| Ok(true)).unwrap();
+        return self
+            .stack
+            .lock(|stack| stack.poll())
+            .map_err(|_| Ok(true))
+            .unwrap();
 
         false
     }
 }
 
 pub struct TelemetryClient {
-    mqtt_client: Mqttclient,
+    mqtt: MqttClient,
     prefix: String<128>,
 }
 
 impl TelemetryClient {
-
-    pub fn new(broker: minimq::embedded_nal::IpAddr, stack: NetworkStackProxy, identifier: &str) {
+    pub fn new(
+        broker: minimq::embedded_nal::IpAddr,
+        stack: NetworkStackProxy,
+        identifier: &str,
+    ) -> Self {
         let mut prefix: String<128> = String::new();
         write!(&mut prefix, "dt/sinara/{}/telemetry", identifier).unwrap();
 
         Self {
-            mqtt_client: minimq::Minimq::new(broker, &get_client_id(identifier, "tlm"), stack, EpochClock::new()),
+            mqtt: minimq::Minimq::new(
+                broker,
+                &get_client_id(identifier, "tlm"),
+                stack,
+                EpochClock::new(),
+            )
+            .unwrap(),
             prefix: prefix,
         }
     }
 
-    pub fn report_telemetry(&mut self, telemetry: &impl Serialize, channel: Channel) {
+    pub fn report_telemetry(&mut self, channel: Channel, telemetry: &impl Serialize) {
         let mut topic: String<64> = String::new();
         write!(&mut topic, "{}/ch{}", self.prefix, channel as u8).unwrap();
 
-        let message: String<1024> =
-            serde_json_core::to_string(telemetry).unwrap();
+        let message: String<1024> = serde_json_core::to_string(telemetry).unwrap();
 
         // All telemtry is published in a best-effort manner.
-        self.mqtt_client.publish(
-            topic.as_str(),
-            &message.into_bytes(),
-            minimq::QoS::AtMostOnce,
-            &[],
-        ).ok();
+        self.mqtt
+            .client
+            .publish(
+                topic.as_str(),
+                &message.into_bytes(),
+                minimq::QoS::AtMostOnce,
+                minimq::Retain::NotRetained,
+                &[],
+            )
+            .ok();
     }
 }
 
@@ -78,11 +104,8 @@ impl TelemetryClient {
 ///
 /// # Returns
 /// A client ID that may be used for MQTT client identification.
-pub fn get_client_id(
-    identifier: &str,
-    client: &str,
-) -> String<64> {
-    let mut identifier = String::new();
-    write!(&mut identifier, "{}-{}", identifier, client).unwrap();
-    identifier
+pub fn get_client_id(identifier: &str, client: &str) -> String<64> {
+    let mut client_identifier = String::new();
+    write!(&mut client_identifier, "{}-{}", identifier, client).unwrap();
+    client_identifier
 }

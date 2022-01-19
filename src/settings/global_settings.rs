@@ -263,7 +263,7 @@ impl BoosterSettings {
     pub fn mac(&self) -> MacAddress {
         #[cfg(feature = "phy_w5500")]
         {
-            MacAddress::from_bytes(self.eui48)
+            MacAddress { octets: self.eui48 }
         }
 
         #[cfg(feature = "phy_enc424j600")]

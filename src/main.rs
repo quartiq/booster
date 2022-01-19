@@ -23,18 +23,14 @@ extern crate log;
 
 use panic_persist as _;
 
-use core::fmt::Write;
-
-use heapless::String;
-
 mod delay;
 mod hardware;
 mod linear_transformation;
 mod logger;
+mod net;
 mod serial_terminal;
 mod settings;
 mod watchdog;
-mod net;
 
 use logger::BufferedLog;
 use serial_terminal::SerialTerminal;
@@ -42,7 +38,7 @@ use settings::BoosterSettings;
 
 use hardware::{
     rf_channel::ChannelState,
-    setup::{EthernetManager, MainBus},
+    setup::MainBus,
     user_interface::{ButtonEvent, Color, UserButtons, UserLeds},
     Channel, CPU_FREQ,
 };
@@ -72,7 +68,7 @@ const APP: () = {
         buttons: UserButtons,
         leds: UserLeds,
         usb_terminal: SerialTerminal,
-        net_devices: new::NetworkDevices,
+        net_devices: net::NetworkDevices,
         watchdog: WatchdogManager,
     }
 
@@ -82,8 +78,6 @@ const APP: () = {
         let booster = hardware::setup::setup(c.core, c.device);
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
-
-        let identifier: String<32> = String::from(booster.settings.id());
 
         // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
@@ -96,7 +90,12 @@ const APP: () = {
             main_bus: booster.main_bus,
             buttons: booster.buttons,
             leds: booster.leds,
-            net_devices: net::NetworkDevices::new(booster.network_stack, identifier, booster.delay),
+            net_devices: net::NetworkDevices::new(
+                minimq::embedded_nal::IpAddr::V4(booster.settings.broker()),
+                booster.network_stack,
+                booster.settings.id(),
+                booster.delay,
+            ),
             usb_terminal: SerialTerminal::new(
                 booster.usb_device,
                 booster.usb_serial,
@@ -218,8 +217,11 @@ const APP: () = {
             });
 
             // Broadcast the measured data over the telemetry interface.
-            if let Ok(measurements) = measurements {
-                c.resources.net_devices.telemetry.report_telemetry(channel, measurements);
+            if let Ok(ref measurements) = measurements {
+                c.resources
+                    .net_devices
+                    .telemetry
+                    .report_telemetry(channel, &measurements);
             }
         }
 
@@ -307,7 +309,9 @@ const APP: () = {
             // Handle the MQTT control interface.
             // TODO: Handle this ownership inversion issue.
             let main_bus = &mut c.resources.main_bus;
-            c.resources.net_devices.lock(|net| net.controller.update(main_bus));
+            c.resources
+                .net_devices
+                .lock(|net| net.controller.update(main_bus));
 
             // Handle the network stack processing if needed.
             c.resources.net_devices.lock(|net| net.process());

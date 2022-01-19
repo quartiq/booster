@@ -11,7 +11,7 @@ use super::{
     platform,
     rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
-    Ethernet, MqttClient, UsbBus, CPU_FREQ, I2C,
+    NetworkStack, UsbBus, CPU_FREQ, I2C,
 };
 
 #[cfg(feature = "phy_enc424j600")]
@@ -330,24 +330,20 @@ pub fn setup(
 
         #[cfg(feature = "phy_w5500")]
         {
-            let mut w5500 = w5500::W5500::new(
-                spi,
-                cs,
-                w5500::OnWakeOnLan::Ignore,
-                w5500::OnPingRequest::Respond,
-                w5500::ConnectionType::Ethernet,
-                w5500::ArpResponses::Cache,
-            )
-            .unwrap();
-
-            w5500.set_mac(settings.mac()).unwrap();
-
-            // Set default netmask and gateway.
-            w5500.set_gateway(settings.gateway()).unwrap();
-            w5500.set_subnet(settings.subnet()).unwrap();
-            w5500.set_ip(settings.ip()).unwrap();
-
-            w5500::Interface::new(w5500)
+            w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
+                .initialize_advanced(
+                    settings.mac(),
+                    settings.ip(),
+                    settings.gateway(),
+                    settings.subnet(),
+                    w5500::Mode {
+                        on_wake_on_lan: w5500::OnWakeOnLan::Ignore,
+                        on_ping_request: w5500::OnPingRequest::Respond,
+                        connection_type: w5500::ConnectionType::Ethernet,
+                        arp_responses: w5500::ArpResponses::Cache,
+                    },
+                )
+                .unwrap()
         }
 
         #[cfg(feature = "phy_enc424j600")]

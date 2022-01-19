@@ -1,6 +1,5 @@
 use super::{Enc424j600, Ethernet};
 use crate::BoosterSettings;
-use cortex_m::peripheral::DWT;
 use embedded_hal::blocking::delay::DelayUs;
 use smoltcp_nal::smoltcp;
 

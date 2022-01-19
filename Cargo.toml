@@ -23,7 +23,7 @@ serde-json-core = "0.4"
 logos = { version = "0.11.4", default-features = false, features = ["export_derive"] }
 bbqueue = "0.5"
 usbd-serial = "0.1.0"
-shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
+shared-bus = { version = "0.2", features = ["cortex-m"] }
 usb-device = "0.2.6"
 postcard = "0.5.1"
 crc-any = { version = "2.3.5", default-features = false }

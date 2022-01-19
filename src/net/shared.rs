@@ -1,3 +1,6 @@
+use minimq::embedded_nal;
+use shared_bus::{AtomicCheckMutex, BusMutex};
+
 /// A manager for a shared network stack.
 pub struct NetworkManager<S> {
     mutex: AtomicCheckMutex<S>,
@@ -63,9 +66,7 @@ impl<S> NetworkManager<S> {
     /// # Returns
     /// A proxy that can be used in place of the network stack. Note the requirements of
     /// concurrency listed in the description of this file for usage.
-    pub fn acquire_stack(
-        &'_ self,
-    ) -> NetworkStackProxy<'_, S> {
+    pub fn acquire_stack(&'_ self) -> NetworkStackProxy<'_, S> {
         NetworkStackProxy { mutex: &self.mutex }
     }
 }

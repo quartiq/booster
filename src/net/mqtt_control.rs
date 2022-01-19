@@ -5,12 +5,13 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 use crate::{
+    delay::AsmDelay,
     hardware::{
         booster_channels::BoosterChannels,
-        rf_channel::{Property as ChannelProperty, PropertyId as ChannelPropertyId},
         clock::EpochClock,
+        rf_channel::{Property as ChannelProperty, PropertyId as ChannelPropertyId},
     },
-    Channel, Error,
+    Channel, Error, MainBus,
 };
 
 use core::fmt::Write;
@@ -230,9 +231,20 @@ pub struct ControlState {
 
 impl ControlState {
     /// Construct the MQTT control state manager.
-    pub fn new<'a>(broker: minimq::embedded_nal::IpAddr, stack: super::NetworkStackProxy, id: &'a str, delay: AsmDelay) -> Self {
+    pub fn new<'a>(
+        broker: minimq::embedded_nal::IpAddr,
+        stack: super::NetworkStackProxy,
+        id: &'a str,
+        delay: AsmDelay,
+    ) -> Self {
         Self {
-            mqtt_client: minimq::Minimq::new(broker, super::get_client_id(id, "ctrl"), stack, EpochClock::new()),
+            mqtt: minimq::Minimq::new(
+                broker,
+                &super::get_client_id(id, "ctrl"),
+                stack,
+                EpochClock::new(),
+            )
+            .unwrap(),
             subscribed: false,
             id: String::from(id),
             delay,
@@ -249,12 +261,10 @@ impl ControlState {
     ///
     /// # Args
     /// * `resources` - The `idle` resources containing the client and RF channels.
-    pub fn update(&mut self, main_bus: &mut rtic::Mutex<MainBus>) {
-        use rtic::Mutex as _;
-
+    pub fn update(&mut self, main_bus: &mut impl rtic::Mutex<T = MainBus>) {
         // Subscribe to any control topics necessary.
         if !self.subscribed {
-            if self.mqtt.client.is_connected().unwrap() {
+            if self.mqtt.client.is_connected() {
                 for topic in [
                     "channel/state",
                     "channel/bias",
@@ -272,48 +282,49 @@ impl ControlState {
             }
         }
 
-        match self.mqtt.client
-            .poll(|client, topic, message, properties| {
-                let (id, route) = topic.split_at(topic.find('/').unwrap());
-                let route = &route[1..];
+        let response_topic = self.generate_topic_string("log");
+        let delay = &mut self.delay;
+        let my_id = &self.id;
 
-                if id != self.id {
-                    warn!("Ignoring topic for identifier: {}", id);
-                    return;
-                }
+        match self.mqtt.poll(|client, topic, message, properties| {
+            let (id, route) = topic.split_at(topic.find('/').unwrap());
+            let route = &route[1..];
 
-                let response = main_bus.lock(|main_bus| match route {
-                    "channel/state" => handle_channel_update(message, &mut main_bus.channels),
-                    "channel/bias" => {
-                        handle_channel_bias(message, &mut main_bus.channels, delay)
-                    }
-                    "channel/read" => {
-                        handle_channel_property_read(message, &mut main_bus.channels)
-                    }
-                    "channel/write" => {
-                        handle_channel_property_write(message, &mut main_bus.channels)
-                    }
-                    _ => Response::error_msg("Unexpected topic"),
-                });
+            if id != my_id {
+                warn!("Ignoring topic for identifier: {}", id);
+                return;
+            }
 
-                if let Property::ResponseTopic(topic) = properties
-                    .iter()
-                    .find(|&prop| {
-                        if let Property::ResponseTopic(_) = *prop {
-                            true
-                        } else {
-                            false
-                        }
-                    })
-                    .or(Some(&Property::ResponseTopic(
-                        &self.generate_topic_string("log"),
-                    )))
-                    .unwrap()
-                {
-                    client
-                        .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
-                        .unwrap();
-                }
+            let response = main_bus.lock(|main_bus| match route {
+                "channel/state" => handle_channel_update(message, &mut main_bus.channels),
+                "channel/bias" => handle_channel_bias(message, &mut main_bus.channels, delay),
+                "channel/read" => handle_channel_property_read(message, &mut main_bus.channels),
+                "channel/write" => handle_channel_property_write(message, &mut main_bus.channels),
+                _ => Response::error_msg("Unexpected topic"),
+            });
+
+            if let Property::ResponseTopic(topic) = properties
+                .iter()
+                .find(|&prop| {
+                    if let Property::ResponseTopic(_) = *prop {
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .or(Some(&Property::ResponseTopic(&response_topic)))
+                .unwrap()
+            {
+                client
+                    .publish(
+                        topic,
+                        &response.into_bytes(),
+                        QoS::AtMostOnce,
+                        minimq::Retain::NotRetained,
+                        &[],
+                    )
+                    .unwrap();
+            }
         }) {
             Ok(_) => {}
 
@@ -328,7 +339,7 @@ impl ControlState {
             // returned to indicate the socket is no longer connected. On the next processing
             // cycle of Minimq, the device should detect and handle the broker disconnection.
             #[cfg(feature = "phy_w5500")]
-            Err(minimq::Error::Network(w5500::Error::NotReady)) => {}
+            Err(minimq::Error::Network(w5500::tcp::TcpSocketError::NotReady)) => {}
 
             Err(e) => error!("Unexpected error: {:?}", e),
         }
