@@ -5,8 +5,10 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
+use miniconf::Miniconf;
+
 /// A structure for mapping values between two different domains.
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Miniconf, serde::Serialize, serde::Deserialize, Clone)]
 pub struct LinearTransformation {
     slope: f32,
     offset: f32,

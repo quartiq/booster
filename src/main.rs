@@ -27,6 +27,7 @@ use core::fmt::Write;
 
 use heapless::String;
 use minimq::QoS;
+use miniconf::Miniconf;
 
 mod delay;
 mod hardware;
@@ -49,6 +50,8 @@ use hardware::{
     Channel, CPU_FREQ,
 };
 
+use settings::channel_settings::ChannelSettings;
+
 use watchdog::{WatchdogClient, WatchdogManager};
 
 use rtic::cyccnt::Duration;
@@ -63,6 +66,11 @@ pub enum Error {
     Foldback,
     Bounds,
     Fault,
+}
+
+#[derive(Miniconf)]
+struct Settings {
+    channel: [ChannelSettings; 8],
 }
 
 static LOGGER: BufferedLog = BufferedLog::new();
@@ -100,7 +108,7 @@ const APP: () = {
             main_bus: booster.main_bus,
             buttons: booster.buttons,
             leds: booster.leds,
-            eth_mgr: booster.ethernet,
+            net_devices: net::NetworkDevices::new(booster.ethernet),
             usb_terminal: SerialTerminal::new(
                 booster.usb_device,
                 booster.usb_serial,
@@ -225,23 +233,9 @@ const APP: () = {
                     .map(channel, |ch, adc| Ok(ch.get_status(adc)))
             });
 
+            // Broadcast the measured data over the telemetry interface.
             if let Ok(measurements) = measurements {
-                // Broadcast the measured data over the telemetry interface.
-                let mut topic: String<heapless::consts::U32> = String::new();
-                write!(&mut topic, "{}/ch{}", id, channel as u8).unwrap();
-
-                let message: String<heapless::consts::U1024> =
-                    serde_json_core::to_string(&measurements).unwrap();
-
-                match c.resources.eth_mgr.mqtt_client.publish(
-                    topic.as_str(),
-                    &message.into_bytes(),
-                    QoS::AtMostOnce,
-                    &[],
-                ) {
-                    Err(e) => info!("Telemetry failure: {:?}", e),
-                    Ok(_) => {}
-                }
+                c.resources.net_devices.telemetry.report_telemetry(channel, measurements);
             }
         }
 
@@ -331,11 +325,15 @@ const APP: () = {
                 .watchdog
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::IdleTask));
 
-            // Handle the MQTT control interface.
-            manager.update(&mut c.resources);
+            // Handle the Miniconf settings interface.
+            match c.resources.net_devices.lock(|net| net.settings.update()) {
+                Ok(true) => c.spawn.update_settings.spawn(),
+                Ok(false) => cortex_m::asm::wfi(),
+                other => log::warn!("Miniconf update failure: {:?}", other)
+            }
 
-            // TODO: Properly sleep here until there's something to process.
-            cortex_m::asm::nop();
+            // Handle requests/responses.
+            c.rmanager.update(&mut c.resources);
         }
     }
 

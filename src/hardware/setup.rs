@@ -83,8 +83,6 @@ macro_rules! channel_pins {
 /// Container method for all Ethernet-related structs.
 pub struct EthernetManager {
     pub mqtt_client: MqttClient,
-    #[cfg(feature = "phy_enc424j600")]
-    pub nal_clock: NalClock,
 }
 
 /// Container method for all devices on the main I2C bus.
@@ -98,7 +96,7 @@ pub struct BoosterDevices {
     pub leds: UserLeds,
     pub buttons: UserButtons,
     pub main_bus: MainBus,
-    pub ethernet: EthernetManager,
+    pub network_stack: Ethernet,
     pub watchdog: hal::watchdog::IndependentWatchdog,
     pub usb_device: UsbDevice<'static, UsbBus>,
     pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
