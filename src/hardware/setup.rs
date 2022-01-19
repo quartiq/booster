@@ -381,8 +381,7 @@ pub fn setup(
         let usb_bus =
             cortex_m::singleton!(: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None)
                 .unwrap();
-        let serial_number =
-            cortex_m::singleton!(: Option<String<64>> = None).unwrap();
+        let serial_number = cortex_m::singleton!(: Option<String<64>> = None).unwrap();
 
         let usb = hal::otg_fs::USB {
             usb_global: device.OTG_FS_GLOBAL,

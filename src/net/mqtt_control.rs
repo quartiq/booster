@@ -378,10 +378,7 @@ fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> Stri
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_property_read(
-    message: &[u8],
-    channels: &mut BoosterChannels,
-) -> String<256> {
+fn handle_channel_property_read(message: &[u8], channels: &mut BoosterChannels) -> String<256> {
     let request = match serde_json_core::from_slice::<PropertyReadRequest>(message) {
         Ok((data, _)) => data,
         Err(_) => return Response::error_msg("Failed to decode read request"),
@@ -401,10 +398,7 @@ fn handle_channel_property_read(
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_property_write(
-    message: &[u8],
-    channels: &mut BoosterChannels,
-) -> String<256> {
+fn handle_channel_property_write(message: &[u8], channels: &mut BoosterChannels) -> String<256> {
     let request = match serde_json_core::from_slice::<PropertyWriteRequest>(message) {
         Ok((data, _)) => data,
         Err(_) => return Response::error_msg("Failed to decode write request"),
