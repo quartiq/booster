@@ -307,7 +307,6 @@ const APP: () = {
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::IdleTask));
 
             // Handle the MQTT control interface.
-            // TODO: Handle this ownership inversion issue.
             let main_bus = &mut c.resources.main_bus;
             c.resources
                 .net_devices

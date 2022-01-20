@@ -1305,7 +1305,6 @@ dependencies = [
 [[package]]
 name = "w5500"
 version = "0.3.0"
-source = "git+https://github.com/quartiq/w5500?branch=feature/tcp-nal#86c3987404b7ea45b491a0a25488020d02ee0be3"
 dependencies = [
  "bit_field",
  "byteorder",

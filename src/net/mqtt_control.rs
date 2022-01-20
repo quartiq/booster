@@ -8,7 +8,7 @@ use crate::{
     delay::AsmDelay,
     hardware::{
         booster_channels::BoosterChannels,
-        clock::EpochClock,
+        clock::SystemTimer,
         rf_channel::{Property as ChannelProperty, PropertyId as ChannelPropertyId},
     },
     Channel, Error, MainBus,
@@ -242,7 +242,7 @@ impl ControlState {
                 broker,
                 &super::get_client_id(id, "ctrl"),
                 stack,
-                EpochClock::new(),
+                SystemTimer::default(),
             )
             .unwrap(),
             subscribed: false,

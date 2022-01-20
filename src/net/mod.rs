@@ -1,4 +1,4 @@
-use crate::hardware::{clock::EpochClock, Channel, NetworkStack};
+use crate::hardware::{clock::SystemTimer, Channel, NetworkStack};
 use core::fmt::Write;
 use heapless::String;
 use serde::Serialize;
@@ -12,7 +12,7 @@ use mqtt_control::ControlState;
 
 use shared::NetworkManager;
 type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
-type MqttClient = minimq::Minimq<NetworkStackProxy, EpochClock, 128, 1>;
+type MqttClient = minimq::Minimq<NetworkStackProxy, SystemTimer, 128, 1>;
 
 pub struct NetworkDevices {
     pub controller: mqtt_control::ControlState,
@@ -39,6 +39,8 @@ impl NetworkDevices {
     }
 
     pub fn process(&mut self) -> bool {
+        self.telemetry.process();
+
         #[cfg(feature = "phy_enc424j600")]
         return self
             .stack
@@ -69,7 +71,7 @@ impl TelemetryClient {
                 broker,
                 &get_client_id(identifier, "tlm"),
                 stack,
-                EpochClock::new(),
+                SystemTimer::default(),
             )
             .unwrap(),
             prefix: prefix,
@@ -93,6 +95,14 @@ impl TelemetryClient {
                 &[],
             )
             .ok();
+    }
+
+    // Update the telemetry client.
+    //
+    // # Note
+    // This must be called periodically to advance the MQTT state machine.
+    fn process(&mut self) {
+        self.mqtt.poll(|_client, _topic, _message, _properties| {}).ok();
     }
 }
 

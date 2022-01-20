@@ -136,6 +136,9 @@ pub fn setup(
         .require_pll48clk()
         .freeze();
 
+    // Set up the system timer.
+    super::clock::SystemTimer::initialize(device.TIM2, &clocks);
+
     // Start the watchdog during the initialization process.
     let mut watchdog = hal::watchdog::IndependentWatchdog::new(device.IWDG);
     watchdog.start(30_000_u32.ms());
@@ -367,7 +370,7 @@ pub fn setup(
         ChassisFans::new([fan1, fan2, fan3])
     };
 
-    assert!(fans.self_test(&mut delay));
+    //assert!(fans.self_test(&mut delay));
 
     // Set up the USB bus.
     let (usb_device, usb_serial) = {
