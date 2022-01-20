@@ -1,3 +1,9 @@
+//! Booster network management definitions
+//!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
 use crate::hardware::NetworkStack;
 
 use crate::delay::AsmDelay;
@@ -7,10 +13,15 @@ mod shared;
 mod telemetry;
 
 use mqtt_control::ControlState;
-
 use shared::NetworkManager;
+
 type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
 
+/// Container structure for holding all network devices.
+///
+/// # Note
+/// All devices accessing the shared stack must be contained within a single structure to prevent
+/// potential pre-emption when using the `shared` network stack.
 pub struct NetworkDevices {
     pub controller: mqtt_control::ControlState,
     pub telemetry: telemetry::TelemetryClient,
@@ -21,6 +32,13 @@ pub struct NetworkDevices {
 }
 
 impl NetworkDevices {
+    /// Construct all of Booster's Network devices.
+    ///
+    /// # Args
+    /// * `broker` - The broker IP address for MQTT.
+    /// * `stack` - The network stack to use for communications.
+    /// * `identifier` - The unique identifier of this device.
+    /// * `delay` - A delay mechanism.
     pub fn new(
         broker: minimq::embedded_nal::IpAddr,
         stack: NetworkStack,
@@ -38,6 +56,11 @@ impl NetworkDevices {
         }
     }
 
+    /// Process the network stack.
+    ///
+    /// # Note
+    /// This function must be called periodically to handle ingress/egress of packets and update
+    /// state management.
     pub fn process(&mut self) -> bool {
         self.telemetry.process();
 

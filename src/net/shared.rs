@@ -1,3 +1,13 @@
+//! Booster shared network stack management
+//!
+//! # Note
+//! Portions of this file are taken from the
+//! [`smoltcp-nal`](https://github.com/quartiq/smoltcp-nal/blob/main/src/shared.rs)
+//!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
 use minimq::embedded_nal;
 use shared_bus::{AtomicCheckMutex, BusMutex};
 
