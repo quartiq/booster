@@ -370,7 +370,7 @@ pub fn setup(
         ChassisFans::new([fan1, fan2, fan3])
     };
 
-    //assert!(fans.self_test(&mut delay));
+    assert!(fans.self_test(&mut delay));
 
     // Set up the USB bus.
     let (usb_device, usb_serial) = {

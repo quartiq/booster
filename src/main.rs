@@ -221,7 +221,7 @@ const APP: () = {
                 c.resources
                     .net_devices
                     .telemetry
-                    .report_telemetry(channel, &measurements);
+                    .report_telemetry(channel, measurements);
             }
         }
 

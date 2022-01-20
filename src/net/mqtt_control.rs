@@ -14,6 +14,8 @@ use crate::{
     Channel, Error, MainBus,
 };
 
+use super::NetworkStackProxy;
+
 use core::fmt::Write;
 use embedded_hal::blocking::delay::DelayUs;
 use heapless::String;
@@ -223,7 +225,7 @@ impl Response {
 
 /// Represents a means of handling MQTT-based control interface.
 pub struct ControlState {
-    mqtt: super::MqttClient,
+    mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 128, 1>,
     subscribed: bool,
     id: String<32>,
     delay: AsmDelay,
@@ -237,14 +239,11 @@ impl ControlState {
         id: &'a str,
         delay: AsmDelay,
     ) -> Self {
+        let mut client_id: String<64> = String::new();
+        write!(&mut client_id, "{}-ctrl", id).unwrap();
+
         Self {
-            mqtt: minimq::Minimq::new(
-                broker,
-                &super::get_client_id(id, "ctrl"),
-                stack,
-                SystemTimer::default(),
-            )
-            .unwrap(),
+            mqtt: minimq::Minimq::new(broker, &client_id, stack, SystemTimer::default()).unwrap(),
             subscribed: false,
             id: String::from(id),
             delay,
