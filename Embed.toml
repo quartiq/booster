@@ -1,0 +1,6 @@
+[default.general]
+chip = "STM32F407ZGTx"
+connect_under_reset = true
+
+[debug.gdb]
+enabled = true

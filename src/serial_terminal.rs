@@ -6,11 +6,11 @@
 //! Proprietary and confidential.
 use super::{hardware::platform, hardware::UsbBus, BoosterSettings};
 use bbqueue::BBBuffer;
-use heapless::{consts, String, Vec};
+use heapless::{String, Vec};
 use logos::Logos;
 use usbd_serial::UsbError;
 
-use core::fmt::Write;
+use core::{fmt::Write, str::FromStr};
 use minimq::embedded_nal::Ipv4Addr;
 
 mod build_info {
@@ -83,11 +83,11 @@ pub enum Request {
     Read(Property),
     ServiceInfo,
     WriteIpAddress(Property, Ipv4Addr),
-    WriteIdentifier(String<consts::U32>),
+    WriteIdentifier(String<32>),
 }
 
-fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<consts::U128> {
-    let mut msg = String::<consts::U128>::new();
+fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<128> {
+    let mut msg = String::<128>::new();
     match prop {
         Property::Identifier => write!(&mut msg, "{}\n", settings.id()).unwrap(),
         Property::Mac => write!(&mut msg, "{}\n", settings.mac()).unwrap(),
@@ -100,16 +100,16 @@ fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<con
 }
 
 /// A static-scope BBqueue for handling serial output buffering.
-static OUTPUT_BUFFER: BBBuffer<bbqueue::consts::U1024> = BBBuffer(bbqueue::ConstBBBuffer::new());
+static OUTPUT_BUFFER: BBBuffer<1024> = BBBuffer::new();
 
 /// A serial terminal for allowing the user to interact with Booster over USB.
 pub struct SerialTerminal {
     settings: BoosterSettings,
     usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
     usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
-    input_buffer: Vec<u8, consts::U128>,
-    output_buffer_producer: bbqueue::Producer<'static, bbqueue::consts::U1024>,
-    output_buffer_consumer: bbqueue::Consumer<'static, bbqueue::consts::U1024>,
+    input_buffer: Vec<u8, 128>,
+    output_buffer_producer: bbqueue::Producer<'static, 1024>,
+    output_buffer_consumer: bbqueue::Consumer<'static, 1024>,
 }
 
 impl SerialTerminal {
@@ -161,7 +161,7 @@ impl SerialTerminal {
                 }
 
                 Request::ServiceInfo => {
-                    let mut msg: String<consts::U256> = String::new();
+                    let mut msg: String<256> = String::new();
                     write!(
                         &mut msg,
                         "{:<20}: {} [{}]\n",
@@ -472,12 +472,12 @@ characters.
                     Token::IpAddress(addr) => Request::WriteIpAddress(property, addr),
                     Token::DeviceIdentifier if property == Property::Identifier => {
                         if lex.slice().len() < 23 {
-                            let vec =
-                                Vec::<u8, consts::U32>::from_slice(lex.slice().as_bytes()).unwrap();
-
                             // The regex on this capture allow us to assume it is valid utf8, since
                             // we know it is alphanumeric.
-                            let id = String::<consts::U32>::from_utf8(vec).unwrap();
+                            let id: String<32> = String::from_str(
+                                core::str::from_utf8(lex.slice().as_bytes()).unwrap(),
+                            )
+                            .unwrap();
 
                             Request::WriteIdentifier(id)
                         } else {

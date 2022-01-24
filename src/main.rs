@@ -17,35 +17,29 @@ compile_error!("Cannot enable multiple ethernet PHY devices.");
 
 use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal as hal;
+use miniconf::Miniconf;
 
 #[macro_use]
 extern crate log;
 
 use panic_persist as _;
 
-use core::fmt::Write;
-
-use heapless::String;
-use minimq::QoS;
-use miniconf::Miniconf;
-
 mod delay;
 mod hardware;
 mod linear_transformation;
 mod logger;
-mod mqtt_control;
+mod net;
 mod serial_terminal;
 mod settings;
 mod watchdog;
 
-use delay::AsmDelay;
 use logger::BufferedLog;
 use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
 
 use hardware::{
     rf_channel::ChannelState,
-    setup::{EthernetManager, MainBus},
+    setup::MainBus,
     user_interface::{ButtonEvent, Color, UserButtons, UserLeds},
     Channel, CPU_FREQ,
 };
@@ -68,9 +62,9 @@ pub enum Error {
     Fault,
 }
 
-#[derive(Miniconf)]
-struct Settings {
-    channel: [ChannelSettings; 8],
+#[derive(Default, Miniconf)]
+pub struct Settings {
+    pub channel: [ChannelSettings; 8],
 }
 
 static LOGGER: BufferedLog = BufferedLog::new();
@@ -82,10 +76,8 @@ const APP: () = {
         buttons: UserButtons,
         leds: UserLeds,
         usb_terminal: SerialTerminal,
-        eth_mgr: EthernetManager,
+        net_devices: net::NetworkDevices,
         watchdog: WatchdogManager,
-        identifier: String<heapless::consts::U32>,
-        delay: AsmDelay,
     }
 
     #[init(schedule = [telemetry, channel_monitor, button, usb, fans])]
@@ -94,8 +86,6 @@ const APP: () = {
         let booster = hardware::setup::setup(c.core, c.device);
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
-
-        let identifier: String<heapless::consts::U32> = String::from(booster.settings.id());
 
         // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
@@ -108,15 +98,18 @@ const APP: () = {
             main_bus: booster.main_bus,
             buttons: booster.buttons,
             leds: booster.leds,
-            net_devices: net::NetworkDevices::new(booster.ethernet),
+            net_devices: net::NetworkDevices::new(
+                minimq::embedded_nal::IpAddr::V4(booster.settings.broker()),
+                booster.network_stack,
+                booster.settings.id(),
+                booster.delay,
+            ),
             usb_terminal: SerialTerminal::new(
                 booster.usb_device,
                 booster.usb_serial,
                 booster.settings,
             ),
             watchdog: watchdog_manager,
-            identifier,
-            delay: booster.delay,
         }
     }
 
@@ -216,10 +209,8 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, eth_mgr, watchdog, identifier])]
+    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, net_devices, watchdog])]
     fn telemetry(mut c: telemetry::Context) {
-        let id = &c.resources.identifier;
-
         // Check in with the watchdog.
         c.resources
             .watchdog
@@ -234,7 +225,7 @@ const APP: () = {
             });
 
             // Broadcast the measured data over the telemetry interface.
-            if let Ok(measurements) = measurements {
+            if let Ok(ref measurements) = measurements {
                 c.resources.net_devices.telemetry.report_telemetry(channel, measurements);
             }
         }
@@ -292,6 +283,11 @@ const APP: () = {
             .unwrap();
     }
 
+    #[task(priority = 1, resources=[main_bus])]
+    fn update_settings(_: update_settings::Context) {
+        // TODO: Apply settings.
+    }
+
     #[task(priority = 2, schedule=[usb], resources=[usb_terminal, watchdog])]
     fn usb(mut c: usb::Context) {
         // Check in with the watchdog.
@@ -312,13 +308,8 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[main_bus, eth_mgr, watchdog, identifier, delay])]
+    #[idle(resources=[main_bus, net_devices, watchdog], spawn=[update_settings])]
     fn idle(mut c: idle::Context) -> ! {
-        let mut manager = c
-            .resources
-            .identifier
-            .lock(|id| mqtt_control::ControlState::new(&id));
-
         loop {
             // Check in with the watchdog.
             c.resources
@@ -327,13 +318,19 @@ const APP: () = {
 
             // Handle the Miniconf settings interface.
             match c.resources.net_devices.lock(|net| net.settings.update()) {
-                Ok(true) => c.spawn.update_settings.spawn(),
+                Ok(true) => c.spawn.update_settings().unwrap(),
                 Ok(false) => cortex_m::asm::wfi(),
                 other => log::warn!("Miniconf update failure: {:?}", other)
             }
 
-            // Handle requests/responses.
-            c.rmanager.update(&mut c.resources);
+            // Handle the MQTT control interface.
+            let main_bus = &mut c.resources.main_bus;
+            c.resources
+                .net_devices
+                .lock(|net| net.controller.update(main_bus));
+
+            // Handle the network stack processing if needed.
+            c.resources.net_devices.lock(|net| net.process());
         }
     }
 
