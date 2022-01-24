@@ -6,7 +6,7 @@
 //! Proprietary and confidential.
 #![no_std]
 #![no_main]
-#![cfg_attr(feature = "unstable", feature(llvm_asm))]
+
 #[cfg(not(any(feature = "phy_enc424j600", feature = "phy_w5500")))]
 compile_error!(
     "A least one PHY device must be enabled. Use a feature gate to

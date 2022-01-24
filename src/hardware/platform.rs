@@ -156,15 +156,11 @@ pub fn reset_to_dfu_bootloader() {
     // instruction begins at an offset of 0x0004.
     let system_memory_address: u32 = 0x1FFF_0000;
     unsafe {
-        asm!(
-            "MOV r3, $0\n
-             LDR sp, [r3, #0]\n
+        core::arch::asm!(
+            "LDR sp, [r3, #0]\n
              LDR r3, [r3, #4]\n
-             BX r3\n"
-             :
-             : "r"(system_memory_address)
-             : "r3","r4"
-             :
+             BX r3\n",
+             in("r3") system_memory_address,
         );
     }
 }
