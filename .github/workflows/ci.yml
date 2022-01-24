@@ -46,6 +46,7 @@ jobs:
   compile:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         toolchain:
           - stable
