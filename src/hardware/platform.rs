@@ -151,20 +151,16 @@ pub fn reset_to_dfu_bootloader() {
 
     // The STM32F4xx does not provide a means to modify the BOOT pins during
     // run-time. Instead, we manually load the bootloader stack pointer and start
-    // address from system memory and begin execution. The datasheet indices that
+    // address from system memory and begin execution. The datasheet indicates that
     // the initial stack pointer is stored at an offset of 0x0000 and the first
     // instruction begins at an offset of 0x0004.
     let system_memory_address: u32 = 0x1FFF_0000;
     unsafe {
-        llvm_asm!(
-            "MOV r3, $0\n
-             LDR sp, [r3, #0]\n
+        core::arch::asm!(
+            "LDR sp, [r3, #0]\n
              LDR r3, [r3, #4]\n
-             BX r3\n"
-             :
-             : "r"(system_memory_address)
-             : "r3","r4"
-             :
+             BX r3\n",
+             in("r3") system_memory_address,
         );
     }
 }
