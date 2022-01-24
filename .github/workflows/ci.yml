@@ -46,6 +46,7 @@ jobs:
   compile:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         toolchain:
           - stable
@@ -106,6 +107,7 @@ jobs:
   compile-unstable:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         variant: [phy_w5500, phy_enc424j600]
     steps:
