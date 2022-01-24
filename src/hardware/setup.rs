@@ -11,11 +11,8 @@ use super::{
     platform,
     rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
-    NetworkStack, UsbBus, CPU_FREQ, I2C,
+    NetworkStackDrivers, UsbBus, CPU_FREQ, I2C,
 };
-
-#[cfg(feature = "phy_enc424j600")]
-use super::{enc424j600_api, Enc424j600};
 
 use crate::{delay::AsmDelay, new_atomic_check_manager, settings::BoosterSettings};
 
@@ -91,7 +88,7 @@ pub struct BoosterDevices {
     pub leds: UserLeds,
     pub buttons: UserButtons,
     pub main_bus: MainBus,
-    pub network_stack: NetworkStack,
+    pub network_stack: NetworkStackDrivers,
     pub watchdog: hal::watchdog::IndependentWatchdog,
     pub usb_device: UsbDevice<'static, UsbBus>,
     pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
@@ -350,11 +347,7 @@ pub fn setup(
         }
 
         #[cfg(feature = "phy_enc424j600")]
-        {
-            let enc424j600 = Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
-            let interface = enc424j600_api::setup(enc424j600, &settings, &mut delay);
-            smoltcp_nal::NetworkStack::new(interface, super::clock::EpochClock::new())
-        }
+        super::enc424j600_api::setup(spi, cs, &settings, &mut delay)
     };
 
     let mut fans = {

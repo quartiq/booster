@@ -4,18 +4,31 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use crate::hardware::NetworkStack;
+use crate::hardware::{clock::SystemTimer, NetworkStack, NetworkStackDrivers};
+
+#[cfg(feature = "phy_enc424j600")]
+use crate::hardware::enc424j600_api::{PhyManager, SmoltcpDevice};
 
 use crate::delay::AsmDelay;
 
-mod mqtt_control;
+#[cfg(feature = "phy_w5500")]
 mod shared;
+
+mod mqtt_control;
 mod telemetry;
 
 use mqtt_control::ControlState;
-use shared::NetworkManager;
 
+#[cfg(feature = "phy_w5500")]
+type NetworkManager = shared::NetworkManager<NetworkStack>;
+#[cfg(feature = "phy_w5500")]
 type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
+
+#[cfg(feature = "phy_enc424j600")]
+type NetworkManager = smoltcp_nal::shared::NetworkManager<'static, SmoltcpDevice, SystemTimer>;
+
+#[cfg(feature = "phy_enc424j600")]
+type NetworkStackProxy = smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
 
 /// Container structure for holding all network devices.
 ///
@@ -26,9 +39,10 @@ pub struct NetworkDevices {
     pub controller: mqtt_control::ControlState,
     pub telemetry: telemetry::TelemetryClient,
 
-    // The stack reference is only used if the ENC424J600 PHY is used.
-    #[allow(dead_code)]
+    #[cfg(feature = "phy_enc424j600")]
     stack: NetworkStackProxy,
+    #[cfg(feature = "phy_enc424j600")]
+    phy: PhyManager,
 }
 
 impl NetworkDevices {
@@ -36,23 +50,32 @@ impl NetworkDevices {
     ///
     /// # Args
     /// * `broker` - The broker IP address for MQTT.
-    /// * `stack` - The network stack to use for communications.
+    /// * `devices` - All network devices used for managing the network stack.
     /// * `identifier` - The unique identifier of this device.
     /// * `delay` - A delay mechanism.
     pub fn new(
         broker: minimq::embedded_nal::IpAddr,
-        stack: NetworkStack,
+        drivers: NetworkStackDrivers,
         identifier: &str,
         delay: AsmDelay,
     ) -> Self {
-        let shared =
-            cortex_m::singleton!(: NetworkManager<NetworkStack> = NetworkManager::new(stack))
-                .unwrap();
+        #[cfg(feature = "phy_enc424j600")]
+        let (phy, stack) = drivers;
+
+        #[cfg(feature = "phy_w5500")]
+        let stack = drivers;
+
+        let shared = cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack)).unwrap();
 
         Self {
             telemetry: telemetry::TelemetryClient::new(broker, shared.acquire_stack(), identifier),
             controller: ControlState::new(broker, shared.acquire_stack(), identifier, delay),
+
+            #[cfg(feature = "phy_enc424j600")]
             stack: shared.acquire_stack(),
+
+            #[cfg(feature = "phy_enc424j600")]
+            phy,
         }
     }
 
@@ -65,12 +88,15 @@ impl NetworkDevices {
         self.telemetry.process();
 
         #[cfg(feature = "phy_enc424j600")]
-        return self
-            .stack
-            .lock(|stack| stack.poll())
-            .map_err(|_| Ok(true))
-            .unwrap();
+        self.phy.process();
 
+        #[cfg(feature = "phy_enc424j600")]
+        match self.stack.lock(|stack| stack.poll()) {
+            Err(_) => true,
+            Ok(update) => update,
+        }
+
+        #[cfg(feature = "phy_w5500")]
         false
     }
 }

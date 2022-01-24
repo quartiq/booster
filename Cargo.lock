@@ -1086,6 +1086,7 @@ dependencies = [
  "embedded-time",
  "heapless 0.7.9",
  "nanorand",
+ "shared-bus",
  "smoltcp 0.8.0",
 ]
 

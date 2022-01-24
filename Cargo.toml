@@ -28,7 +28,7 @@ usb-device = "0.2.8"
 postcard = "0.5.1"
 crc-any = { version = "2.3.5", default-features = false }
 panic-persist = { git = "https://github.com/jamesmunns/panic-persist", branch = "master", features = ["custom-panic-handler"] }
-smoltcp-nal = { version = "0.2.0", optional = true }
+smoltcp-nal = { version = "0.2.0", optional = true, features = ["shared-stack"] }
 embedded-time = { version = "0.12.0", optional = true }
 minimq = "0.5"
 

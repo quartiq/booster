@@ -21,7 +21,7 @@ pub mod user_interface;
 pub const CPU_FREQ: u32 = 168_000_000;
 
 #[cfg(feature = "phy_enc424j600")]
-mod enc424j600_api;
+pub mod enc424j600_api;
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 pub type I2C = hal::i2c::I2c<
@@ -49,21 +49,20 @@ pub type SPI = hal::spi::Spi<
     ),
 >;
 
+pub type CS = hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>;
+
 #[cfg(feature = "phy_enc424j600")]
-pub type NetworkStack = smoltcp_nal::NetworkStack<
-    'static,
-    'static,
-    enc424j600::smoltcp_phy::SmoltcpDevice<
-        enc424j600::Enc424j600<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
-    >,
-    enc424j600_api::EpochClock<CPU_FREQ>,
->;
+pub type NetworkStack =
+    smoltcp_nal::NetworkStack<'static, enc424j600_api::SmoltcpDevice, clock::SystemTimer>;
 
 #[cfg(feature = "phy_w5500")]
-pub type NetworkStack = w5500::Device<
-    w5500::bus::FourWire<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
-    w5500::Manual,
->;
+pub type NetworkStack = w5500::Device<w5500::bus::FourWire<SPI, CS>, w5500::Manual>;
+
+#[cfg(feature = "phy_w5500")]
+pub type NetworkStackDrivers = NetworkStack;
+
+#[cfg(feature = "phy_enc424j600")]
+pub type NetworkStackDrivers = (enc424j600_api::PhyManager, NetworkStack);
 
 pub type I2cBusManager = mutex::AtomicCheckManager<I2C>;
 pub type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
