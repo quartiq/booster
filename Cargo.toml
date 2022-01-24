@@ -23,29 +23,22 @@ serde-json-core = "0.4"
 logos = { version = "0.11.4", default-features = false, features = ["export_derive"] }
 bbqueue = "0.5"
 usbd-serial = "0.1.0"
-shared-bus = { version = "0.2.0-alpha.1", features = ["cortex-m"] }
+shared-bus = { version = "0.2", features = ["cortex-m"] }
 usb-device = "0.2.8"
 postcard = "0.5.1"
 crc-any = { version = "2.3.5", default-features = false }
 panic-persist = { git = "https://github.com/jamesmunns/panic-persist", branch = "master", features = ["custom-panic-handler"] }
-smoltcp-nal = { version = "0.1.0", optional = true }
+smoltcp-nal = { version = "0.2.0", optional = true }
 embedded-time = { version = "0.12.0", optional = true }
+minimq = "0.5"
+w5500 = { version = "0.4", optional = true }
 
 [build-dependencies]
 built = { version = "0.5", features = ["git2", "chrono"], default-features = false }
 
-[dependencies.minimq]
-git = "https://github.com/quartiq/minimq"
-rev = "d2ec3e8351fa403ea96defd98c0b4410cbaa18a4"
-
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/stm32-rs/stm32f4xx-hal"
 features = ["stm32f407", "rt", "usb_fs"]
-
-[dependencies.w5500]
-git = "https://github.com/quartiq/w5500"
-branch = "feature/tcp-nal"
-optional = true
 
 [dependencies.enc424j600]
 git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"

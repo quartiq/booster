@@ -11,11 +11,11 @@ use super::{
     platform,
     rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
-    Ethernet, MqttClient, UsbBus, CPU_FREQ, I2C,
+    NetworkStack, UsbBus, CPU_FREQ, I2C,
 };
 
 #[cfg(feature = "phy_enc424j600")]
-use super::{enc424j600_api, Enc424j600, NalClock};
+use super::{enc424j600_api, Enc424j600};
 
 use crate::{delay::AsmDelay, new_atomic_check_manager, settings::BoosterSettings};
 
@@ -80,13 +80,6 @@ macro_rules! channel_pins {
     }};
 }
 
-/// Container method for all Ethernet-related structs.
-pub struct EthernetManager {
-    pub mqtt_client: MqttClient,
-    #[cfg(feature = "phy_enc424j600")]
-    pub nal_clock: NalClock,
-}
-
 /// Container method for all devices on the main I2C bus.
 pub struct MainBus {
     pub channels: BoosterChannels,
@@ -98,7 +91,7 @@ pub struct BoosterDevices {
     pub leds: UserLeds,
     pub buttons: UserButtons,
     pub main_bus: MainBus,
-    pub ethernet: EthernetManager,
+    pub network_stack: NetworkStack,
     pub watchdog: hal::watchdog::IndependentWatchdog,
     pub usb_device: UsbDevice<'static, UsbBus>,
     pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
@@ -142,6 +135,9 @@ pub fn setup(
         .pclk1(42.mhz())
         .require_pll48clk()
         .freeze();
+
+    // Set up the system timer.
+    super::clock::SystemTimer::initialize(device.TIM2, &clocks);
 
     // Start the watchdog during the initialization process.
     let mut watchdog = hal::watchdog::IndependentWatchdog::new(device.IWDG);
@@ -306,79 +302,58 @@ pub fn setup(
         BoosterSettings::new(eui)
     };
 
-    let eth_mgr = {
-        let mqtt_client = {
-            let interface = {
-                let spi = {
-                    let sck = gpioa.pa5.into_alternate_af5();
-                    let miso = gpioa.pa6.into_alternate_af5();
-                    let mosi = gpioa.pa7.into_alternate_af5();
+    let network_stack = {
+        let spi = {
+            let sck = gpioa.pa5.into_alternate_af5();
+            let miso = gpioa.pa6.into_alternate_af5();
+            let mosi = gpioa.pa7.into_alternate_af5();
 
-                    let mode = hal::spi::Mode {
-                        polarity: hal::spi::Polarity::IdleLow,
-                        phase: hal::spi::Phase::CaptureOnFirstTransition,
-                    };
-
-                    hal::spi::Spi::spi1(
-                        device.SPI1,
-                        (sck, miso, mosi),
-                        mode,
-                        #[cfg(feature = "phy_w5500")]
-                        1.mhz().into(),
-                        #[cfg(feature = "phy_enc424j600")]
-                        14.mhz().into(),
-                        clocks,
-                    )
-                };
-
-                let cs = {
-                    let mut pin = gpioa.pa4.into_push_pull_output();
-                    pin.set_high().unwrap();
-                    pin
-                };
-
-                #[cfg(feature = "phy_w5500")]
-                {
-                    let mut w5500 = w5500::W5500::new(
-                        spi,
-                        cs,
-                        w5500::OnWakeOnLan::Ignore,
-                        w5500::OnPingRequest::Respond,
-                        w5500::ConnectionType::Ethernet,
-                        w5500::ArpResponses::Cache,
-                    )
-                    .unwrap();
-
-                    w5500.set_mac(settings.mac()).unwrap();
-
-                    // Set default netmask and gateway.
-                    w5500.set_gateway(settings.gateway()).unwrap();
-                    w5500.set_subnet(settings.subnet()).unwrap();
-                    w5500.set_ip(settings.ip()).unwrap();
-
-                    w5500::Interface::new(w5500)
-                }
-
-                #[cfg(feature = "phy_enc424j600")]
-                {
-                    let enc424j600 = Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
-                    let interface = enc424j600_api::setup(enc424j600, &settings, &mut delay);
-                    interface
-                }
+            let mode = hal::spi::Mode {
+                polarity: hal::spi::Polarity::IdleLow,
+                phase: hal::spi::Phase::CaptureOnFirstTransition,
             };
 
-            minimq::MqttClient::<minimq::consts::U1024, Ethernet>::new(
-                minimq::embedded_nal::IpAddr::V4(settings.broker()),
-                settings.id(),
-                interface,
+            hal::spi::Spi::spi1(
+                device.SPI1,
+                (sck, miso, mosi),
+                mode,
+                #[cfg(feature = "phy_w5500")]
+                1.mhz().into(),
+                #[cfg(feature = "phy_enc424j600")]
+                14.mhz().into(),
+                clocks,
             )
-            .unwrap()
         };
 
-        EthernetManager {
-            mqtt_client,
-            #[cfg(feature = "phy_enc424j600")]
-            nal_clock: NalClock::new(),
+        let cs = {
+            let mut pin = gpioa.pa4.into_push_pull_output();
+            pin.set_high().unwrap();
+            pin
+        };
+
+        #[cfg(feature = "phy_w5500")]
+        {
+            w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
+                .initialize_advanced(
+                    settings.mac(),
+                    settings.ip(),
+                    settings.gateway(),
+                    settings.subnet(),
+                    w5500::Mode {
+                        on_wake_on_lan: w5500::OnWakeOnLan::Ignore,
+                        on_ping_request: w5500::OnPingRequest::Respond,
+                        connection_type: w5500::ConnectionType::Ethernet,
+                        arp_responses: w5500::ArpResponses::Cache,
+                    },
+                )
+                .unwrap()
+        }
+
+        #[cfg(feature = "phy_enc424j600")]
+        {
+            let enc424j600 = Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
+            let interface = enc424j600_api::setup(enc424j600, &settings, &mut delay);
+            smoltcp_nal::NetworkStack::new(interface, super::clock::EpochClock::new())
         }
     };
 
@@ -464,7 +439,7 @@ pub fn setup(
         // Note: These devices are within a containing structure because they exist on the same
         // shared I2C bus.
         main_bus: MainBus { channels, fans },
-        ethernet: eth_mgr,
+        network_stack,
         settings,
         usb_device,
         usb_serial,

@@ -4,14 +4,18 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::{
+use crate::{
+    delay::AsmDelay,
     hardware::{
         booster_channels::BoosterChannels,
+        clock::SystemTimer,
         rf_channel::{Property as ChannelProperty, PropertyId as ChannelPropertyId},
     },
-    idle::Resources,
-    Channel, Error,
+    Channel, Error, MainBus,
 };
+
+use super::NetworkStackProxy;
+
 use core::fmt::Write;
 use embedded_hal::blocking::delay::DelayUs;
 use heapless::String;
@@ -221,16 +225,28 @@ impl Response {
 
 /// Represents a means of handling MQTT-based control interface.
 pub struct ControlState {
+    mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 128, 1>,
     subscribed: bool,
     id: String<32>,
+    delay: AsmDelay,
 }
 
 impl ControlState {
     /// Construct the MQTT control state manager.
-    pub fn new<'a>(id: &'a str) -> Self {
+    pub fn new<'a>(
+        broker: minimq::embedded_nal::IpAddr,
+        stack: super::NetworkStackProxy,
+        id: &'a str,
+        delay: AsmDelay,
+    ) -> Self {
+        let mut client_id: String<64> = String::new();
+        write!(&mut client_id, "{}-ctrl", id).unwrap();
+
         Self {
+            mqtt: minimq::Minimq::new(broker, &client_id, stack, SystemTimer::default()).unwrap(),
             subscribed: false,
             id: String::from(id),
+            delay,
         }
     }
 
@@ -244,106 +260,88 @@ impl ControlState {
     ///
     /// # Args
     /// * `resources` - The `idle` resources containing the client and RF channels.
-    pub fn update(&mut self, resources: &mut Resources) {
-        use rtic::Mutex as _;
-        resources.eth_mgr.lock(|eth_mgr| {
-            // Update the NAL stack
-            #[cfg(feature = "phy_enc424j600")]
-            {
-                let now = eth_mgr.nal_clock.now().unwrap();
-                // Note: smoltcp-nal 0.1.0 ONLY returns boolean, and does NOT
-                // raise errors from smoltcp.
-                // TODO: Bump smoltcp-nal
-                eth_mgr.mqtt_client.network_stack.poll(now);
-            }
-
-            // Subscribe to any control topics necessary.
-            if !self.subscribed {
-                if eth_mgr.mqtt_client.is_connected().unwrap() {
-                    for topic in [
-                        "channel/state",
-                        "channel/bias",
-                        "channel/read",
-                        "channel/write",
-                    ]
-                    .iter()
-                    {
-                        eth_mgr
-                            .mqtt_client
-                            .subscribe(&self.generate_topic_string(topic), &[])
-                            .unwrap();
-                    }
-                    self.subscribed = true;
+    pub fn update(&mut self, main_bus: &mut impl rtic::Mutex<T = MainBus>) {
+        // Subscribe to any control topics necessary.
+        if !self.subscribed {
+            if self.mqtt.client.is_connected() {
+                for topic in [
+                    "channel/state",
+                    "channel/bias",
+                    "channel/read",
+                    "channel/write",
+                ]
+                .iter()
+                {
+                    self.mqtt
+                        .client
+                        .subscribe(&self.generate_topic_string(topic), &[])
+                        .unwrap();
                 }
+                self.subscribed = true;
             }
-        });
+        }
 
-        let main_bus = &mut resources.main_bus;
-        let delay = &mut resources.delay;
+        let response_topic = self.generate_topic_string("log");
+        let delay = &mut self.delay;
+        let my_id = &self.id;
 
-        resources.eth_mgr.lock(|eth_mgr| {
-            match eth_mgr
-                .mqtt_client
-                .poll(|client, topic, message, properties| {
-                    let (id, route) = topic.split_at(topic.find('/').unwrap());
-                    let route = &route[1..];
+        match self.mqtt.poll(|client, topic, message, properties| {
+            let (id, route) = topic.split_at(topic.find('/').unwrap());
+            let route = &route[1..];
 
-                    if id != self.id {
-                        warn!("Ignoring topic for identifier: {}", id);
-                        return;
-                    }
-
-                    let response = main_bus.lock(|main_bus| match route {
-                        "channel/state" => handle_channel_update(message, &mut main_bus.channels),
-                        "channel/bias" => {
-                            handle_channel_bias(message, &mut main_bus.channels, *delay)
-                        }
-                        "channel/read" => {
-                            handle_channel_property_read(message, &mut main_bus.channels)
-                        }
-                        "channel/write" => {
-                            handle_channel_property_write(message, &mut main_bus.channels)
-                        }
-                        _ => Response::error_msg("Unexpected topic"),
-                    });
-
-                    if let Property::ResponseTopic(topic) = properties
-                        .iter()
-                        .find(|&prop| {
-                            if let Property::ResponseTopic(_) = *prop {
-                                true
-                            } else {
-                                false
-                            }
-                        })
-                        .or(Some(&Property::ResponseTopic(
-                            &self.generate_topic_string("log"),
-                        )))
-                        .unwrap()
-                    {
-                        client
-                            .publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[])
-                            .unwrap();
-                    }
-                }) {
-                Ok(_) => {}
-
-                // Whenever the MQTT broker stops maintaining the session,
-                // this MQTT client will reset the session,
-                // and we will lose our pending subscriptions.
-                // We will need to re-establish them once we reconnect.
-                Err(minimq::Error::SessionReset) => self.subscribed = false,
-
-                // Note: There's a race condition where the W5500 may disconnect the socket
-                // immediately before Minimq tries to use it. In these cases, a NotReady error is
-                // returned to indicate the socket is no longer connected. On the next processing
-                // cycle of Minimq, the device should detect and handle the broker disconnection.
-                #[cfg(feature = "phy_w5500")]
-                Err(minimq::Error::Network(w5500::Error::NotReady)) => {}
-
-                Err(e) => error!("Unexpected error: {:?}", e),
+            if id != my_id {
+                warn!("Ignoring topic for identifier: {}", id);
+                return;
             }
-        });
+
+            let response = main_bus.lock(|main_bus| match route {
+                "channel/state" => handle_channel_update(message, &mut main_bus.channels),
+                "channel/bias" => handle_channel_bias(message, &mut main_bus.channels, delay),
+                "channel/read" => handle_channel_property_read(message, &mut main_bus.channels),
+                "channel/write" => handle_channel_property_write(message, &mut main_bus.channels),
+                _ => Response::error_msg("Unexpected topic"),
+            });
+
+            if let Property::ResponseTopic(topic) = properties
+                .iter()
+                .find(|&prop| {
+                    if let Property::ResponseTopic(_) = *prop {
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .or(Some(&Property::ResponseTopic(&response_topic)))
+                .unwrap()
+            {
+                client
+                    .publish(
+                        topic,
+                        &response.into_bytes(),
+                        QoS::AtMostOnce,
+                        minimq::Retain::NotRetained,
+                        &[],
+                    )
+                    .unwrap();
+            }
+        }) {
+            Ok(_) => {}
+
+            // Whenever the MQTT broker stops maintaining the session,
+            // this MQTT client will reset the session,
+            // and we will lose our pending subscriptions.
+            // We will need to re-establish them once we reconnect.
+            Err(minimq::Error::SessionReset) => self.subscribed = false,
+
+            // Note: There's a race condition where the W5500 may disconnect the socket
+            // immediately before Minimq tries to use it. In these cases, a NotReady error is
+            // returned to indicate the socket is no longer connected. On the next processing
+            // cycle of Minimq, the device should detect and handle the broker disconnection.
+            #[cfg(feature = "phy_w5500")]
+            Err(minimq::Error::Network(w5500::tcp::TcpSocketError::NotReady)) => {}
+
+            Err(e) => error!("Unexpected error: {:?}", e),
+        }
     }
 }
 

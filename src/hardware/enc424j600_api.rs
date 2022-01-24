@@ -1,8 +1,6 @@
 use super::{Enc424j600, Ethernet};
 use crate::BoosterSettings;
-use cortex_m::peripheral::DWT;
 use embedded_hal::blocking::delay::DelayUs;
-use embedded_time::{clock, duration::*, Instant};
 use smoltcp_nal::smoltcp;
 
 /// Containers for smoltcp-related network configurations
@@ -95,57 +93,4 @@ pub fn setup(
     };
 
     Ethernet::new(eth_iface, sockets)
-}
-
-/// Simple struct for implementing embedded_time::Clock
-pub struct EpochClock<const CPUFREQ: u32> {
-    /// Epoch time in milliseconds to store a greater value
-    epoch_time_ms: Milliseconds<u32>,
-    /// Epoch time in ticks to store a temporary value
-    epoch_time_ticks: Instant<Self>,
-}
-
-impl<const CPUFREQ: u32> EpochClock<CPUFREQ> {
-    pub fn new() -> Self {
-        assert!(CPUFREQ == crate::CPU_FREQ);
-
-        Self {
-            epoch_time_ms: Milliseconds::<u32>::new(0),
-            epoch_time_ticks: Instant::<Self>::new(0),
-        }
-    }
-
-    /// Update the valid epoch time in milliseconds, and returns the value.
-    ///
-    /// Safe to call after RTIC #[init]. Returns Err() if DWT CYCCNT returns a
-    /// smaller value than the last recorded time.
-    pub fn now(&mut self) -> Result<u32, ()> {
-        use clock::Clock;
-        use core::convert::TryInto;
-
-        let now = self.try_now().unwrap();
-        let elapsed: Milliseconds<u32> = now
-            .checked_duration_since(&self.epoch_time_ticks)
-            .unwrap()
-            .try_into()
-            .unwrap();
-        self.epoch_time_ticks = now;
-        self.epoch_time_ms = self.epoch_time_ms + elapsed;
-        Ok(self.epoch_time_ms.integer())
-    }
-}
-
-/// Implement a simple embedded_time::clock::Clock at the given CPU clock frequency
-/// based on DWT CYCCNT.
-///
-/// This leverages "const generics" introduced in Rust 1.51.
-impl<const CPUFREQ: u32> clock::Clock for EpochClock<CPUFREQ> {
-    type T = u32;
-
-    const SCALING_FACTOR: Fraction = Fraction::new(1, CPUFREQ);
-
-    /// Returns directly from DWT CYCCNT. Not guaranteed to be valid.
-    fn try_now(&self) -> Result<Instant<Self>, clock::Error> {
-        Ok(Instant::new(DWT::get_cycle_count()))
-    }
 }
