@@ -31,6 +31,7 @@ panic-persist = { git = "https://github.com/jamesmunns/panic-persist", branch = 
 smoltcp-nal = { version = "0.2.0", optional = true }
 embedded-time = { version = "0.12.0", optional = true }
 minimq = "0.5"
+w5500 = { version = "0.4", optional = true }
 
 [build-dependencies]
 built = { version = "0.5", features = ["git2", "chrono"], default-features = false }
@@ -38,11 +39,6 @@ built = { version = "0.5", features = ["git2", "chrono"], default-features = fal
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/stm32-rs/stm32f4xx-hal"
 features = ["stm32f407", "rt", "usb_fs"]
-
-[dependencies.w5500]
-git = "https://github.com/quartiq/w5500"
-branch = "feature/tcp-nal"
-optional = true
 
 [dependencies.enc424j600]
 git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"

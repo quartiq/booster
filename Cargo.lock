@@ -1111,7 +1111,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11460b4de3a84f072e2cf6e76306c64d27f405a0e83bace0a726f555ddf4bf33"
 dependencies = [
  "bare-metal 0.2.5",
- "cortex-m 0.5.11",
+ "cortex-m 0.6.7",
  "cortex-m-rt",
  "vcell",
 ]
@@ -1123,7 +1123,7 @@ source = "git+https://github.com/stm32-rs/stm32f4xx-hal#c8b11b200ac3c5f9be802f8f
 dependencies = [
  "bare-metal 0.2.5",
  "cast",
- "cortex-m 0.5.11",
+ "cortex-m 0.6.7",
  "cortex-m-rt",
  "embedded-dma",
  "embedded-hal",
@@ -1304,8 +1304,9 @@ dependencies = [
 
 [[package]]
 name = "w5500"
-version = "0.3.0"
-source = "git+https://github.com/quartiq/w5500?branch=feature/tcp-nal#2e02ca3d459f4f97ec3e539b3ebe084cfb6dadcf"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6872a9784fd7c84387b0fde6716b5987a9f2d4d62fac03324f7ef8a532f3cf68"
 dependencies = [
  "bit_field",
  "byteorder",
