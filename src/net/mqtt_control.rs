@@ -6,10 +6,7 @@
 //! Proprietary and confidential.
 use crate::{
     delay::AsmDelay,
-    hardware::{
-        booster_channels::BoosterChannels,
-        clock::SystemTimer,
-    },
+    hardware::{booster_channels::BoosterChannels, clock::SystemTimer},
     Channel, Error, MainBus,
 };
 
@@ -24,7 +21,7 @@ use minimq::{Property, QoS};
 #[derive(serde::Deserialize)]
 enum ChannelAction {
     Save,
-    ReadBiasCurrent
+    ReadBiasCurrent,
 }
 
 /// Specifies a generic request for a specific channel.
@@ -255,7 +252,8 @@ fn handle_channel_update(
                 // Wait for 11 ms > 10.04 ms total cycle time to ensure an up-to-date
                 // current measurement.
                 delay.delay_us(11000);
-                response = ChannelBiasResponse::okay(ch.get_bias_voltage(), ch.get_p28v_current()).into();
+                response =
+                    ChannelBiasResponse::okay(ch.get_bias_voltage(), ch.get_p28v_current()).into();
                 Ok(&response)
             }
         })

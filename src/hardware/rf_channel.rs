@@ -12,7 +12,10 @@ use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
 
 use super::{platform, I2cBusManager, I2cProxy};
-use crate::{linear_transformation::LinearTransformation, settings::BoosterChannelSettings, Error};
+use crate::{
+    settings::{channel_settings::ChannelSettings, BoosterChannelSettings},
+    Error,
+};
 use embedded_hal::blocking::delay::DelayUs;
 use stm32f4xx_hal::{
     self as hal,
@@ -22,23 +25,6 @@ use stm32f4xx_hal::{
 };
 
 use rtic::cyccnt::{Duration, Instant};
-
-#[derive(serde::Deserialize, serde::Serialize)]
-/// Used to identify a specific channel property.
-pub enum PropertyId {
-    OutputInterlockThreshold,
-    OutputPowerTransform,
-    InputPowerTransform,
-    ReflectedPowerTransform,
-}
-
-/// Represents an operation property of an RF channel.
-pub enum Property {
-    OutputInterlockThreshold(f32),
-    OutputPowerTransform(LinearTransformation),
-    InputPowerTransform(LinearTransformation),
-    ReflectedPowerTransform(LinearTransformation),
-}
 
 /// A structure representing power supply measurements of a channel.
 pub struct SupplyMeasurements {
@@ -506,11 +492,7 @@ impl RfChannel {
                     state_machine: StateMachine::new(ChannelState::Disabled),
                 };
 
-                channel
-                    .set_output_interlock_threshold(
-                        channel.settings.settings().output_interlock_threshold,
-                    )
-                    .unwrap();
+                channel.apply_output_interlock_threshold().unwrap();
 
                 // The reflected power interlock threshold is always configured to 30 dBm (1W
                 // reflected power) to protect Booster hardware.
@@ -544,7 +526,10 @@ impl RfChannel {
     /// * `power` - The dBm interlock threshold to configure for reflected power.
     fn set_reflected_interlock_threshold(&mut self, power: f32) -> Result<(), Error> {
         match self.i2c_devices.interlock_thresholds_dac.set_voltage(
-            self.settings.settings().reflected_power_transform.invert(power),
+            self.settings
+                .settings()
+                .reflected_power_transform
+                .invert(power),
             ad5627::Dac::A,
         ) {
             Err(ad5627::Error::Range) => Err(Error::Bounds),
@@ -553,22 +538,19 @@ impl RfChannel {
         }
     }
 
-    /// Set the output interlock threshold for the channel.
-    ///
-    /// # Args
-    /// * `power` - The dBm interlock threshold to configure for the output power.
-    pub fn set_output_interlock_threshold(&mut self, power: f32) -> Result<(), Error> {
+    fn apply_output_interlock_threshold(&mut self) -> Result<(), Error> {
         let settings = self.settings.settings_mut();
 
         match self.i2c_devices.interlock_thresholds_dac.set_voltage(
-            settings.output_power_transform.invert(power),
+            settings
+                .output_power_transform
+                .invert(settings.output_interlock_threshold),
             ad5627::Dac::B,
         ) {
             Err(ad5627::Error::Range) => Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => Err(Error::Interface),
             Ok(voltage) => {
-                settings.output_interlock_threshold =
-                    settings.output_power_transform.map(voltage);
+                settings.output_interlock_threshold = settings.output_power_transform.map(voltage);
                 Ok(())
             }
         }
@@ -743,14 +725,11 @@ impl RfChannel {
             return Err(Error::Invalid);
         }
 
-        self.i2c_devices
-            .bias_dac
-            .set_voltage(-1.0 * settings.bias_voltage)
-            .expect("Failed to configure RF bias voltage");
+        settings.enabled = true;
+
+        self.apply_bias().unwrap();
 
         self.pins.signal_on.set_high().unwrap();
-
-        settings.enabled = true;
 
         self.state_machine
             .transition(ChannelState::Enabled)
@@ -790,6 +769,31 @@ impl RfChannel {
         }
     }
 
+    pub fn apply_settings(&mut self, new_settings: &ChannelSettings) -> Result<(), Error> {
+        // TODO: Do not apply settings if they haven't changed.
+
+        // Copy transforms first
+        *self.settings.settings_mut() = new_settings.clone();
+
+        // Next, set output interlock threshold. This must be done after updating transforms
+        // because the output interlock threshold uses the transform to calculate threshold levels.
+        self.apply_output_interlock_threshold()?;
+        self.apply_bias()?;
+
+        // Finally, update channel enable state.
+        if !new_settings.enabled {
+            // It's always valid to disable the channel even if it wasn't previously on.
+            self.start_disable();
+        } else {
+            // If the channel is in fault conditions, do not attempt to enable it.
+            if !matches!(self.get_state(), ChannelState::Blocked(_)) {
+                self.start_powerup(true)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Get the temperature of the channel in celsius.
     pub fn get_temperature(&mut self) -> f32 {
         self.i2c_devices
@@ -798,19 +802,17 @@ impl RfChannel {
             .unwrap()
     }
 
-    /// Set the bias of the channel.
-    ///
-    /// # Args
-    /// * `bias_voltage` - The desired bias voltage on the RF amplification transitor.
-    pub fn set_bias(&mut self, bias_voltage: f32) -> Result<(), Error> {
+    fn apply_bias(&mut self) -> Result<(), Error> {
         // The bias voltage is the inverse of the DAC output voltage.
-        let bias_voltage = -1.0 * bias_voltage;
+        let settings = self.settings.settings_mut();
+
+        let bias_voltage = -1.0 * settings.bias_voltage;
 
         match self.i2c_devices.bias_dac.set_voltage(bias_voltage) {
             Err(dac7571::Error::Bounds) => return Err(Error::Bounds),
             Err(_) => panic!("Failed to set DAC bias voltage"),
             Ok(voltage) => {
-                self.settings.settings_mut().bias_voltage = -voltage;
+                settings.bias_voltage = -voltage;
             }
         };
 
@@ -907,7 +909,10 @@ impl RfChannel {
             .convert(adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
-        self.settings.settings().reflected_power_transform.map(voltage)
+        self.settings
+            .settings()
+            .reflected_power_transform
+            .map(voltage)
     }
 
     /// Get the current output power measurement.
@@ -968,53 +973,5 @@ impl RfChannel {
     /// Get the current state of the channel.
     pub fn get_state(&self) -> ChannelState {
         self.state_machine.state()
-    }
-
-    /// Set a property for the channel.
-    ///
-    /// # Args
-    /// * `property` - The property to configure on the channel.
-    pub fn set_property(&mut self, property: Property) -> Result<(), Error> {
-        let settings = self.settings.settings_mut();
-        match property {
-            Property::OutputInterlockThreshold(output) => {
-                self.set_output_interlock_threshold(output)?;
-            }
-            Property::OutputPowerTransform(transform) => {
-                settings.output_power_transform = transform;
-            }
-            Property::InputPowerTransform(transform) => {
-                settings.input_power_transform = transform;
-            }
-            Property::ReflectedPowerTransform(transform) => {
-                settings.reflected_power_transform = transform;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Get the current value of a channel property.
-    ///
-    /// # Args
-    /// * `property` - The identifier indicating which property to read.
-    ///
-    /// # Returns
-    /// The current channel property.
-    pub fn get_property(&self, property: PropertyId) -> Property {
-        match property {
-            PropertyId::OutputInterlockThreshold => {
-                Property::OutputInterlockThreshold(self.settings.settings().output_interlock_threshold)
-            }
-            PropertyId::OutputPowerTransform => {
-                Property::OutputPowerTransform(self.settings.settings().output_power_transform.clone())
-            }
-            PropertyId::InputPowerTransform => {
-                Property::InputPowerTransform(self.settings.settings().input_power_transform.clone())
-            }
-            PropertyId::ReflectedPowerTransform => Property::ReflectedPowerTransform(
-                self.settings.settings().reflected_power_transform.clone(),
-            ),
-        }
     }
 }

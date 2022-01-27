@@ -19,8 +19,8 @@ compile_error!("Cannot enable multiple ethernet PHY devices.");
 compile_error!("ENC424J600 is not currently implemented");
 
 use enum_iterator::IntoEnumIterator;
-use stm32f4xx_hal as hal;
 use miniconf::Miniconf;
+use stm32f4xx_hal as hal;
 
 #[macro_use]
 extern crate log;
@@ -229,7 +229,10 @@ const APP: () = {
 
             // Broadcast the measured data over the telemetry interface.
             if let Ok(ref measurements) = measurements {
-                c.resources.net_devices.telemetry.report_telemetry(channel, measurements);
+                c.resources
+                    .net_devices
+                    .telemetry
+                    .report_telemetry(channel, measurements);
             }
         }
 
@@ -286,9 +289,22 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, resources=[main_bus])]
-    fn update_settings(_: update_settings::Context) {
-        // TODO: Apply settings.
+    #[task(priority = 1, resources=[net_devices, main_bus])]
+    fn update_settings(mut c: update_settings::Context) {
+        let all_settings = c.resources.net_devices.settings.settings();
+
+        for chan in Channel::into_enum_iter() {
+            let settings = &all_settings.channel[chan as usize];
+            c.resources.main_bus.lock(|main_bus| {
+                match main_bus
+                    .channels
+                    .map(chan, |channel, _| channel.apply_settings(settings))
+                {
+                    Ok(_) | Err(Error::NotPresent) => {}
+                    Err(e) => panic!("Settings update failed on {:?}: {:?}", chan, e),
+                }
+            });
+        }
     }
 
     #[task(priority = 2, schedule=[usb], resources=[usb_terminal, watchdog])]
@@ -323,7 +339,7 @@ const APP: () = {
             match c.resources.net_devices.lock(|net| net.settings.update()) {
                 Ok(true) => c.spawn.update_settings().unwrap(),
                 Ok(false) => cortex_m::asm::wfi(),
-                other => log::warn!("Miniconf update failure: {:?}", other)
+                other => log::warn!("Miniconf update failure: {:?}", other),
             }
 
             // Handle the MQTT control interface.

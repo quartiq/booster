@@ -6,8 +6,8 @@
 //! Proprietary and confidential.
 use crate::hardware::{clock::SystemTimer, NetworkStack};
 
-use heapless::String;
 use core::fmt::Write;
+use heapless::String;
 
 use crate::delay::AsmDelay;
 
@@ -62,7 +62,14 @@ impl NetworkDevices {
         Self {
             telemetry: telemetry::TelemetryClient::new(broker, shared.acquire_stack(), identifier),
             controller: ControlState::new(broker, shared.acquire_stack(), identifier, delay),
-            settings: miniconf::MqttClient::new(shared.acquire_stack(), &miniconf_client, &miniconf_prefix, broker, SystemTimer::default()).unwrap(),
+            settings: miniconf::MqttClient::new(
+                shared.acquire_stack(),
+                &miniconf_client,
+                &miniconf_prefix,
+                broker,
+                SystemTimer::default(),
+            )
+            .unwrap(),
             stack: shared.acquire_stack(),
         }
     }
