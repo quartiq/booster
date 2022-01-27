@@ -32,7 +32,7 @@ impl TelemetryClient {
         write!(&mut prefix, "dt/sinara/booster/{}/telemetry", identifier).unwrap();
 
         let mut client_id: String<64> = String::new();
-        write!(&mut client_id, "{}-tlm", identifier).unwrap();
+        write!(&mut client_id, "booster-{}-tlm", identifier).unwrap();
 
         Self {
             mqtt: minimq::Minimq::new(broker, &client_id, stack, SystemTimer::default()).unwrap(),

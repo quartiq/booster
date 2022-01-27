@@ -97,7 +97,12 @@ const APP: () = {
                 .map(chan, |channel, _| Ok(channel.settings()))
             {
                 Ok(channel_settings) => settings.channel[chan as usize] = channel_settings,
-                _ => {}
+                Err(Error::NotPresent) => {
+                    settings.channel[chan as usize].enabled = false;
+                    settings.channel[chan as usize].output_disable = true;
+                    settings.channel[chan as usize].bias_voltage = 0.0;
+                }
+                Err(other) => panic!("Failed to extract channel {:?} settings: {:?}", chan, other),
             }
         }
 

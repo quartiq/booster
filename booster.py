@@ -81,10 +81,10 @@ class BoosterApi:
     @classmethod
     async def create(cls, booster_id, broker):
         """ Create a connection to MQTT for communication with booster. """
-        settings_interface = Miniconf.create(f'dt/sinara/{booster_id}', broker)
+        settings_interface = await Miniconf.create(f'dt/sinara/booster/{booster_id}', broker)
         client = MqttClient(client_id='')
         await client.connect(broker)
-        client.subscribe(f"{booster_id}/control")
+        client.subscribe(f"dt/sinara/booster/{booster_id}/control/response")
         return cls(client, booster_id, settings_interface)
 
 
@@ -113,7 +113,7 @@ class BoosterApi:
             qos: The quality-of-service of the message.
             properties: Any properties associated with the message.
         """
-        if topic != f'{self.booster_id}/control':
+        if topic != f'dt/sinara/booster/{self.booster_id}/control/response':
             raise Exception(f'Unknown topic: {topic}')
 
         # Indicate a response was received.
@@ -121,20 +121,21 @@ class BoosterApi:
         self.command_complete.set()
 
 
-    async def command(self, topic, message):
+    async def perform_action(self, action: Action, channel: str):
         """ Send a command to a booster control topic.
 
         Args:
-            topic: The topic to send the command to.
-            message: The message to send to the provided topic.
+            action: The action to take
+            channel: The channel on which to perform the action.
 
         Returns:
-            The received response to the command.
+            The received response to the action.
         """
         self.command_complete.clear()
+        message = generate_request(channel=CHANNEL[channel], action=action.value)
         self.client.publish(
-            f'{self.booster_id}/{topic}', payload=message, qos=0, retain=False,
-            response_topic=f'{self.booster_id}/control')
+            f'dt/sinara/booster/{self.booster_id}/control', payload=message, qos=0, retain=False,
+            response_topic=f'dt/sinara/booster/{self.booster_id}/control/response')
         await self.command_complete.wait()
 
         # Check the response code.
@@ -142,16 +143,6 @@ class BoosterApi:
         response = self.response
         self.response = None
         return response
-
-
-    async def save_channel(self, channel):
-        """ Save a booster channel state.
-
-        Args:
-            channel: The channel index to save.
-        """
-        request = generate_request(channel=CHANNEL[channel], action=action.value)
-        await self.command('channel/control', request)
 
 
     async def tune_bias(self, channel, current):
@@ -166,15 +157,15 @@ class BoosterApi:
             the measured RF amplifier drain current.
         """
         # Power up the channel. Wait for the channel to fully power-up before continuing.
-        await self._update_channel_state(channel, Action.Powerup)
+        await self.settings_interface.command(f'channel/{channel}/output_disable', True, retain=False)
+        await self.settings_interface.command(f'channel/{channel}/enabled', True, retain=False)
         await asyncio.sleep(0.4)
 
         async def set_bias(voltage):
-            await self.settings_interface.command('channel/{channel}/bias_voltage',
-                                                  json.loads(voltage), retain=False)
-            request = generate_request(channel=CHANNEL[channel],
-                                       action=Action.ReadBiasCurrent)
-            response = await self.command("channel/control", request)
+            await self.settings_interface.command(f'channel/{channel}/bias_voltage',
+                                                  voltage, retain=False)
+            response = await self.perform_action(Action.ReadBiasCurrent, channel)
+            response = json.loads(response['msg'])
             vgs, ids = response['vgs'], response['ids']
             print(f'Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
             return vgs, ids
@@ -214,22 +205,6 @@ class BoosterApi:
         return vgs, ids
 
 
-async def channel_configuration(args):
-    """ Configure an RF channel. """
-
-    # Establish a communication interface with Booster.
-    interface = await BoosterApi.create(args.booster_id, args.broker)
-
-    for command in args.commands:
-        command, cmd_args = parse_command(command)
-        if command == 'save':
-            await interface.save_channel(args.channel)
-            print(f'Channel {args.channel} configuration saved')
-        elif command == 'tune':
-            vgs, ids = await interface.tune_bias(args.channel, cmd_args[0])
-            print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
-
-
 def main():
     """ Main program entry point. """
     parser = argparse.ArgumentParser(
@@ -252,6 +227,21 @@ def main():
         command_help += f'{line:<30} | {info["help"]}\n'
 
     parser.add_argument('commands', nargs='+', help=command_help)
+
+    async def channel_configuration(args):
+        """ Configure an RF channel. """
+
+        # Establish a communication interface with Booster.
+        interface = await BoosterApi.create(args.booster_id, args.broker)
+
+        for command in args.commands:
+            command, cmd_args = parse_command(command)
+            if command == 'save':
+                await interface.perform_action(Action.Save, args.channel)
+                print(f'Channel {args.channel} configuration saved')
+            elif command == 'tune':
+                vgs, ids = await interface.tune_bias(args.channel, cmd_args[0])
+                print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(channel_configuration(parser.parse_args()))

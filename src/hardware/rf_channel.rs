@@ -597,7 +597,9 @@ impl RfChannel {
                     if self.settings().enabled && !self.settings().output_disable {
                         self.enable_output()?;
                     } else {
-                        self.state_machine.transition(ChannelState::Powered)?;
+                        self.state_machine
+                            .transition(ChannelState::Powered)
+                            .unwrap();
                     }
                 }
             }
@@ -679,13 +681,17 @@ impl RfChannel {
             // If we're already enabled and we're supposed to be, there's nothing to do.
             ChannelState::Enabled if should_enable => return Ok(()),
 
+            // If we're already powering up, there's nothing to do.
+            ChannelState::Powerup(_) => return Ok(()),
+
             _ => {}
         }
 
         // We will be starting the supply sequencer for the RF channel power rail. This will take
         // some time. We can't set the bias DAC until those supplies have stabilized.
         self.state_machine
-            .transition(ChannelState::Powerup(Instant::now()))?;
+            .transition(ChannelState::Powerup(Instant::now()))
+            .unwrap();
 
         // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
         self.i2c_devices
@@ -707,9 +713,7 @@ impl RfChannel {
     /// This can only be completed once the channel has been fully powered.
     fn enable_output(&mut self) -> Result<(), Error> {
         // It is only valid to enable the output if the channel is powered.
-        if self.pins.enable_power.is_low().unwrap() {
-            return Err(Error::InvalidState);
-        }
+        assert!(self.pins.enable_power.is_high().unwrap());
 
         let settings = self.settings.settings_mut();
 
@@ -786,7 +790,7 @@ impl RfChannel {
         } else {
             // If the channel is in fault conditions, do not attempt to enable it.
             if !matches!(self.get_state(), ChannelState::Blocked(_)) {
-                self.start_powerup()?;
+                self.start_powerup().unwrap();
             }
         }
 

@@ -49,7 +49,7 @@ optional = true
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf"
-branch = "feature/non-default-settings"
+rev = "9347677"
 
 [patch.crates-io.usb-device]
 git = "https://github.com/ryan-summers/usb-device"

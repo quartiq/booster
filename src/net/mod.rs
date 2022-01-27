@@ -55,7 +55,7 @@ impl NetworkDevices {
                 .unwrap();
 
         let mut miniconf_client: String<128> = String::new();
-        write!(&mut miniconf_client, "{}-settings", identifier).unwrap();
+        write!(&mut miniconf_client, "booster-{}-settings", identifier).unwrap();
 
         let mut miniconf_prefix: String<128> = String::new();
         write!(&mut miniconf_prefix, "dt/sinara/booster/{}", identifier).unwrap();
