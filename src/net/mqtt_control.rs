@@ -146,10 +146,7 @@ impl ControlState {
         if !self.subscribed {
             if self.mqtt.client.is_connected() {
                 for topic in [
-                    "channel/state",
-                    "channel/bias",
-                    "channel/read",
-                    "channel/write",
+                    "channel/control",
                 ]
                 .iter()
                 {
@@ -176,7 +173,7 @@ impl ControlState {
             }
 
             let response = main_bus.lock(|main_bus| match route {
-                "channel/state" => handle_channel_update(message, &mut main_bus.channels, delay),
+                "channel/control" => handle_channel_update(message, &mut main_bus.channels, delay),
                 _ => Response::error_msg("Unexpected topic"),
             });
 
