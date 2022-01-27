@@ -12,6 +12,8 @@ import time
 
 from gmqtt  import Client as MqttClient
 
+from miniconf import Miniconf
+
 # A list of channel enumeration names. The index in the list corresponds with the channel name.
 CHANNEL = [
     "Zero",
@@ -24,19 +26,10 @@ CHANNEL = [
     "Seven",
 ]
 
-class PropertyId(enum.Enum):
-    """ Represents a property ID for Booster RF channels. """
-    OutputInterlockThreshold = 'OutputInterlockThreshold'
-    OutputPowerTransform = 'OutputPowerTransform'
-    InputPowerTransform = 'InputPowerTransform'
-    ReflectedPowerTransform = 'ReflectedPowerTransform'
-
 
 class Action(enum.Enum):
     """ Represents an action that can be taken on channel state. """
-    Enable = 'Enable'
-    Disable = 'Disable'
-    Powerup = 'Powerup'
+    ReadBiasCurrent = 'ReadBiasCurrent'
     Save = 'Save'
 
 
@@ -52,52 +45,14 @@ def generate_request(**kwargs):
 # A dictionary of all the available commands, their number of arguments, argument type, and help
 # information about the command.
 CMDS = {
-    'enable': {
-        'nargs': 0,
-        'help': 'Enable the channel',
-    },
-    'disable': {
-        'nargs': 0,
-        'help': 'Disable the channel',
-    },
     'save': {
         'nargs': 0,
         'help': 'Save channel configuration',
-    },
-    'bias': {
-        'nargs': 1,
-        'type': float,
-        'help': 'Specify the channel bias voltage',
     },
     'tune': {
         'nargs': 1,
         'type': float,
         'help': 'Tune the channel RF drain current to the specified amps',
-    },
-    'output_interlock_threshold': {
-        'nargs': 1,
-        'type': float,
-        'help': 'Specify the output interlock threshold in dBm',
-    },
-    'input_power_transform': {
-        'nargs': 2,
-        'type': float,
-        'help': 'Specify the input power transform as <slope>,<offset> (`power_dBm = slope*input_Volt + offset`)',
-    },
-    'output_power_transform': {
-        'nargs': 2,
-        'type': float,
-        'help': 'Specify the output power transform as <slope>,<offset> (`power_dBm = slope*input_Volt + offset`)',
-    },
-    'reflected_power_transform': {
-        'nargs': 2,
-        'type': float,
-        'help': 'Specify the reflfected power transform as <slope>,<offset> (`power_dBm = slope*input_Volt + offset`)',
-    },
-    'read': {
-        'nargs': 1,
-        'help': 'Read a property from booster. Options: ' + ', '.join([x.value for x in PropertyId]),
-        'type': PropertyId,
     },
 }
 
@@ -126,13 +81,14 @@ class BoosterApi:
     @classmethod
     async def create(cls, booster_id, broker):
         """ Create a connection to MQTT for communication with booster. """
+        settings_interface = Miniconf.create(f'dt/sinara/{booster_id}', broker)
         client = MqttClient(client_id='')
         await client.connect(broker)
         client.subscribe(f"{booster_id}/control")
-        return cls(client, booster_id)
+        return cls(client, booster_id, settings_interface)
 
 
-    def __init__(self, client, booster_id):
+    def __init__(self, client, booster_id, settings_interface):
         """ Consructor.
 
         Args:
@@ -144,6 +100,7 @@ class BoosterApi:
         self.command_complete = asyncio.Event()
         self.client.on_message = self._handle_response
         self.response = None
+        self.settings_interface = settings_interface
 
 
     def _handle_response(self, client, topic, payload, *_args, **_kwargs):
@@ -187,95 +144,15 @@ class BoosterApi:
         return response
 
 
-    async def enable_channel(self, channel):
-        """ Enable a booster channel.
-
-        Args:
-            channel: The channel index to enable.
-        """
-        await self._update_channel_state(channel, Action.Enable)
-
-
-    async def disable_channel(self, channel):
-        """ Disable a booster channel.
-
-        Args:
-            channel: The channel index to disble.
-        """
-        await self._update_channel_state(channel, Action.Disable)
-
-
     async def save_channel(self, channel):
         """ Save a booster channel state.
 
         Args:
             channel: The channel index to save.
         """
-        await self._update_channel_state(channel, Action.Save)
-
-
-    async def _update_channel_state(self, channel, action):
-        """ Update the state of a booster RF channel.
-
-        Args:
-            channel: The channel to update
-            action: The action to take on the channel.
-        """
         request = generate_request(channel=CHANNEL[channel], action=action.value)
-        await self.command('channel/state', request)
+        await self.command('channel/control', request)
 
-
-    async def read_property(self, channel, prop):
-        """ Read a property from the provided channel.
-
-        Args:
-            channel: The channel to write a property on.
-            prop_id: The ID of the property to read.
-
-        Returns:
-            A dict representing the read property.
-        """
-        request = generate_request(prop=prop.value, channel=CHANNEL[channel])
-
-        response = await self.command("channel/read", request)
-        return json.loads(response['data'])
-
-
-    async def write_property(self, channel, prop_id, value):
-        """ Write a property on the provided channel.
-
-        Args:
-            channel: The channel to write a property on.
-            prop_id: The ID of the property to write.
-            value: The value to write to the property.
-        """
-        request = generate_request(prop=prop_id.value, channel=CHANNEL[channel],
-                                   data=json.dumps(value))
-
-        await self.command("channel/write", request)
-
-
-    async def set_bias(self, channel, voltage):
-        """ Set a booster RF bias voltage.
-
-        Args:
-            channel: The channel index to configure.
-            voltage: The bias voltage.
-
-        Returns:
-            (Vgs, Ids) where Vgs is the bias voltage and Ids is the RF amplifier drain
-            current.
-        """
-
-        # Power up the channel. Wait for the channel to fully power-up before continuing.
-        await self._update_channel_state(channel, Action.Powerup)
-        await asyncio.sleep(0.4)
-
-        request = generate_request(channel=CHANNEL[channel],
-                                   voltage=voltage)
-        response = await self.command("channel/bias", request)
-
-        return (response['vgs'], response['ids'])
 
     async def tune_bias(self, channel, current):
         """ Set a booster RF bias current.
@@ -293,9 +170,11 @@ class BoosterApi:
         await asyncio.sleep(0.4)
 
         async def set_bias(voltage):
+            await self.settings_interface.command('channel/{channel}/bias_voltage',
+                                                  json.loads(voltage), retain=False)
             request = generate_request(channel=CHANNEL[channel],
-                                       voltage=voltage)
-            response = await self.command("channel/bias", request)
+                                       action=Action.ReadBiasCurrent)
+            response = await self.command("channel/control", request)
             vgs, ids = response['vgs'], response['ids']
             print(f'Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
             return vgs, ids
@@ -343,52 +222,12 @@ async def channel_configuration(args):
 
     for command in args.commands:
         command, cmd_args = parse_command(command)
-        if command == 'enable':
-            # The channel internally must power up over time.
-            await interface.enable_channel(args.channel)
-            time.sleep(1)
-            print(f'Channel {args.channel} enabled')
-
-        elif command == 'disable':
-            await interface.disable_channel(args.channel)
-            print(f'Channel {args.channel} disabled')
-
-        elif command == 'save':
+        if command == 'save':
             await interface.save_channel(args.channel)
             print(f'Channel {args.channel} configuration saved')
-
         elif command == 'tune':
             vgs, ids = await interface.tune_bias(args.channel, cmd_args[0])
             print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
-
-        elif command == 'bias':
-            vgs, ids = await interface.set_bias(args.channel, cmd_args[0])
-            print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
-
-        elif command == 'output_interlock_threshold':
-            await interface.write_property(args.channel,
-                                           PropertyId.OutputInterlockThreshold,
-                                           cmd_args[0])
-            print(f'Channel {args.channel}: Output power threshold set')
-
-        elif command == 'read':
-            value = await interface.read_property(args.channel, cmd_args[0])
-            print(f'{cmd_args[0]} = {value}')
-
-        elif command.endswith('transform'):
-            transform = {
-                'slope': cmd_args[0],
-                'offset': cmd_args[1],
-            }
-            property_id = {
-                'output_power_transform': PropertyId.OutputPowerTransform,
-                'input_power_transform': PropertyId.InputPowerTransform,
-                'reflected_power_transform': PropertyId.ReflectedPowerTransform,
-            }
-
-            await interface.write_property(args.channel, property_id[command], transform)
-
-    await interface.client.disconnect()
 
 
 def main():

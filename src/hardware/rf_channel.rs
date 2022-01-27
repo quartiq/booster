@@ -58,9 +58,8 @@ pub enum ChannelState {
     /// The channel output is disabled.
     Disabled,
 
-    /// The channel is in the enabling process. The two parameters are the instant that power-up
-    /// began and whether or not the output should be enabled once power-up is complete.
-    Powerup(Instant, bool),
+    /// The channel is in the enabling process. The parameter is the instant that power-up began.
+    Powerup(Instant),
 
     /// The channel is powered up, but outputs are not enabled.
     Powered,
@@ -93,7 +92,7 @@ impl serde::Serialize for ChannelState {
             ChannelState::Disabled => {
                 serializer.serialize_unit_variant("ChannelState", 1, "Disabled")
             }
-            ChannelState::Powerup(_, _) => {
+            ChannelState::Powerup(_) => {
                 serializer.serialize_unit_variant("ChannelState", 2, "Powerup")
             }
             ChannelState::Powered => {
@@ -154,14 +153,14 @@ impl StateMachine {
             // It is only valid to transition from disabled into the power-up state.
             ChannelState::Disabled => match new_state {
                 ChannelState::Disabled
-                | ChannelState::Powerup(_, _)
+                | ChannelState::Powerup(_)
                 | ChannelState::WillPowerupEnable => new_state,
                 _ => return Err(Error::InvalidState),
             },
 
             // During power up, it is only possible to transition to powered, enabled, or
             // power-down.
-            ChannelState::Powerup(_, _) => match new_state {
+            ChannelState::Powerup(_) => match new_state {
                 ChannelState::Enabled | ChannelState::Powered | ChannelState::Powerdown(_) => {
                     new_state
                 }
@@ -181,6 +180,7 @@ impl StateMachine {
                 ChannelState::Enabled
                 | ChannelState::Powered
                 | ChannelState::Tripped(_)
+                | ChannelState::Powerup(_)
                 | ChannelState::Powerdown(_) => new_state,
                 _ => return Err(Error::InvalidState),
             },
@@ -194,7 +194,7 @@ impl StateMachine {
             // When in the WillPowerUpEnable state, it is only valid to enter the `PowerUp` state
             // with the enable flag asserted.
             ChannelState::WillPowerupEnable => match new_state {
-                ChannelState::Powerup(_, true) => new_state,
+                ChannelState::Powerup(_) => new_state,
                 _ => return Err(Error::InvalidState),
             },
 
@@ -588,13 +588,13 @@ impl RfChannel {
         }
 
         match self.state_machine.state() {
-            ChannelState::Powerup(start_time, should_enable) => {
+            ChannelState::Powerup(start_time) => {
                 // The LM3880 requires 180ms to power up all supplies on the channel. We add an
                 // additional 20ms margin.
 
                 // TODO: Replace constant definition of CPU frequency here.
                 if start_time.elapsed() > Duration::from_cycles(200 * (168_000_000 / 1000)) {
-                    if should_enable {
+                    if self.settings().enabled && !self.settings().output_disable {
                         self.enable_output()?;
                     } else {
                         self.state_machine.transition(ChannelState::Powered)?;
@@ -630,7 +630,7 @@ impl RfChannel {
             }
 
             // Begin the power-up and enabling process immediately.
-            ChannelState::WillPowerupEnable => self.start_powerup(true).unwrap(),
+            ChannelState::WillPowerupEnable => self.start_powerup().unwrap(),
 
             // There's no active transitions in the following states.
             ChannelState::Disabled
@@ -662,11 +662,9 @@ impl RfChannel {
     }
 
     /// Start the power-up process for channel.
-    ///
-    /// # Args
-    /// * `should_enable` - Specified true if the channel output should be enabled when power-up
-    ///   completes.
-    pub fn start_powerup(&mut self, should_enable: bool) -> Result<(), Error> {
+    pub fn start_powerup(&mut self) -> Result<(), Error> {
+        let should_enable = self.settings().enabled && !self.settings().output_disable;
+
         // If we are just tripped or are already powered, we can re-enable the channel by cycling
         // the ON_OFFn input.
         match self.state_machine.state() {
@@ -678,15 +676,16 @@ impl RfChannel {
                 }
             }
 
-            // If the channel is already enabled, there's nothing to do.
-            ChannelState::Enabled => return Ok(()),
+            // If we're already enabled and we're supposed to be, there's nothing to do.
+            ChannelState::Enabled if should_enable => return Ok(()),
+
             _ => {}
         }
 
         // We will be starting the supply sequencer for the RF channel power rail. This will take
         // some time. We can't set the bias DAC until those supplies have stabilized.
         self.state_machine
-            .transition(ChannelState::Powerup(Instant::now(), should_enable))?;
+            .transition(ChannelState::Powerup(Instant::now()))?;
 
         // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
         self.i2c_devices
@@ -787,7 +786,7 @@ impl RfChannel {
         } else {
             // If the channel is in fault conditions, do not attempt to enable it.
             if !matches!(self.get_state(), ChannelState::Blocked(_)) {
-                self.start_powerup(true)?;
+                self.start_powerup()?;
             }
         }
 
@@ -973,5 +972,9 @@ impl RfChannel {
     /// Get the current state of the channel.
     pub fn get_state(&self) -> ChannelState {
         self.state_machine.state()
+    }
+
+    pub fn settings(&self) -> ChannelSettings {
+        self.settings.settings().clone()
     }
 }

@@ -47,6 +47,10 @@ rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
 features = [ "smoltcp-phy", "cortex-m-cpu" ]
 optional = true
 
+[patch.crates-io.miniconf]
+git = "https://github.com/quartiq/miniconf"
+branch = "feature/non-default-settings"
+
 [patch.crates-io.usb-device]
 git = "https://github.com/ryan-summers/usb-device"
 rev = "abdf004"

@@ -370,8 +370,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bf0746ffedecccb7abefca46c550a49c50ee40fa5fd2555cfa115a1a109324a"
+source = "git+https://github.com/quartiq/miniconf?branch=feature/non-default-settings#affdbf7bc2bf76fb0279bb3c7b818d99e7c5e0f8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -721,8 +720,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bebe771bb9b1d6ab2735374465002f6e15db45c8d863b8b1873881e98d6da22"
+source = "git+https://github.com/quartiq/miniconf?branch=feature/non-default-settings#affdbf7bc2bf76fb0279bb3c7b818d99e7c5e0f8"
 dependencies = [
  "derive_miniconf",
  "heapless 0.7.9",

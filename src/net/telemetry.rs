@@ -29,7 +29,7 @@ impl TelemetryClient {
         identifier: &str,
     ) -> Self {
         let mut prefix: String<128> = String::new();
-        write!(&mut prefix, "dt/sinara/{}/telemetry", identifier).unwrap();
+        write!(&mut prefix, "dt/sinara/booster/{}/telemetry", identifier).unwrap();
 
         let mut client_id: String<64> = String::new();
         write!(&mut client_id, "{}-tlm", identifier).unwrap();

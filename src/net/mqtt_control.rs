@@ -145,11 +145,7 @@ impl ControlState {
         // Subscribe to any control topics necessary.
         if !self.subscribed {
             if self.mqtt.client.is_connected() {
-                for topic in [
-                    "channel/control",
-                ]
-                .iter()
-                {
+                for topic in ["channel/control"].iter() {
                     self.mqtt
                         .client
                         .subscribe(&self.generate_topic_string(topic), &[])
