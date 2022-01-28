@@ -142,10 +142,12 @@ const APP: () = {
 
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
-            match c.resources.main_bus.channels.map(channel, |ch, _| {
-                ch.update()?;
-                Ok(ch.get_power_status())
-            }) {
+            let PowerStatus {
+                powered,
+                rf_enabled,
+                blocked,
+            } = match c.resources.main_bus.channels.channel_mut(channel) {
+                Ok(channel) => channel.update(),
                 Err(Error::NotPresent) => {
                     // Clear all LEDs for this channel.
                     c.resources.leds.set_led(Color::Red, channel, false);
@@ -154,19 +156,14 @@ const APP: () = {
                     continue;
                 }
                 Err(error) => panic!("Invalid channel error: {:?}", error),
-                Ok(PowerStatus {
-                    powered,
-                    rf_enabled,
-                    blocked,
-                }) => {
-                    // Echo the measured values to the LEDs on the user interface for this channel.
-                    c.resources.leds.set_led(Color::Green, channel, powered);
-                    c.resources
-                        .leds
-                        .set_led(Color::Yellow, channel, !rf_enabled);
-                    c.resources.leds.set_led(Color::Red, channel, blocked);
-                }
             };
+
+            // Echo the measured values to the LEDs on the user interface for this channel.
+            c.resources.leds.set_led(Color::Green, channel, powered);
+            c.resources
+                .leds
+                .set_led(Color::Yellow, channel, !rf_enabled);
+            c.resources.leds.set_led(Color::Red, channel, blocked);
         }
 
         // Propagate the updated LED values to the user interface.
@@ -253,15 +250,11 @@ const APP: () = {
                 ButtonEvent::InterlockReset => {
                     for chan in Channel::into_enum_iter() {
                         c.resources.main_bus.lock(|main_bus| {
-                            match main_bus.channels.map(chan, |ch, _| ch.start_powerup()) {
-                                Ok(_) | Err(Error::NotPresent) => {}
-
+                            if let Ok(ref mut channel) = main_bus.channels.channel_mut(chan) {
                                 // It is possible to attempt to re-enable the channel before it was
                                 // fully disabled. Ignore this transient error - the user may need
                                 // to press twice.
-                                Err(Error::InvalidState) => {}
-
-                                Err(e) => panic!("Reset failed on {:?}: {:?}", chan, e),
+                                channel.interlock_reset().ok();
                             }
                         })
                     }
@@ -270,9 +263,8 @@ const APP: () = {
                 ButtonEvent::Standby => {
                     for chan in Channel::into_enum_iter() {
                         c.resources.main_bus.lock(|main_bus| {
-                            match main_bus.channels.map(chan, |ch, _| Ok(ch.start_disable())) {
-                                Ok(_) | Err(Error::NotPresent) => {}
-                                Err(e) => panic!("Standby failed on {:?}: {:?}", chan, e),
+                            if let Ok(ref mut channel) = main_bus.channels.channel_mut(chan) {
+                                channel.standby()
                             }
                         })
                     }
@@ -293,12 +285,9 @@ const APP: () = {
         for chan in Channel::into_enum_iter() {
             let settings = &all_settings.channel[chan as usize];
             c.resources.main_bus.lock(|main_bus| {
-                match main_bus
-                    .channels
-                    .map(chan, |channel, _| channel.apply_settings(settings))
-                {
-                    Ok(_) | Err(Error::NotPresent) => {}
-                    Err(e) => panic!("Settings update failed on {:?}: {:?}", chan, e),
+                if let Ok(ref mut channel) = main_bus.channels.channel_mut(chan) {
+                    // TODO: We need to add an action to the channel when settings apply.
+                    channel.0.context_mut().apply_settings(settings).unwrap();
                 }
             });
         }
