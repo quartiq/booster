@@ -880,4 +880,8 @@ impl RfChannel {
     pub fn settings(&self) -> ChannelSettings {
         self.settings.settings().clone()
     }
+
+    pub fn settings(&self) -> ChannelSettings {
+        self.settings.settings().clone()
+    }
 }
