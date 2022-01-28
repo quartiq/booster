@@ -18,14 +18,14 @@ use heapless::String;
 use minimq::{Property, QoS};
 
 /// Specifies an action to take on a channel.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 enum ChannelAction {
     Save,
     ReadBiasCurrent,
 }
 
 /// Specifies a generic request for a specific channel.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 struct ChannelRequest {
     pub channel: Channel,
     pub action: ChannelAction,
@@ -106,9 +106,10 @@ impl Response {
 
 /// Represents a means of handling MQTT-based control interface.
 pub struct ControlState {
-    mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 128, 1>,
+    mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 256, 1>,
     subscribed: bool,
-    id: String<32>,
+    control_topic: String<64>,
+    default_response_topic: String<64>,
     delay: AsmDelay,
 }
 
@@ -121,20 +122,21 @@ impl ControlState {
         delay: AsmDelay,
     ) -> Self {
         let mut client_id: String<64> = String::new();
-        write!(&mut client_id, "{}-ctrl", id).unwrap();
+        write!(&mut client_id, "booster-{}-ctrl", id).unwrap();
+
+        let mut control_topic: String<64> = String::new();
+        write!(&mut control_topic, "dt/sinara/booster/{}/control", id).unwrap();
+
+        let mut default_response_topic: String<64> = String::new();
+        write!(&mut default_response_topic, "dt/sinara/booster/{}/log", id).unwrap();
 
         Self {
             mqtt: minimq::Minimq::new(broker, &client_id, stack, SystemTimer::default()).unwrap(),
             subscribed: false,
-            id: String::from(id),
+            control_topic,
+            default_response_topic,
             delay,
         }
-    }
-
-    fn generate_topic_string<'a>(&self, topic_postfix: &'a str) -> String<64> {
-        let mut topic_string: String<64> = String::new();
-        write!(&mut topic_string, "{}/{}", self.id, topic_postfix).unwrap();
-        topic_string
     }
 
     /// Handle the MQTT-based control interface.
@@ -145,37 +147,25 @@ impl ControlState {
         // Subscribe to any control topics necessary.
         if !self.subscribed {
             if self.mqtt.client.is_connected() {
-                for topic in [
-                    "channel/control",
-                ]
-                .iter()
-                {
-                    self.mqtt
-                        .client
-                        .subscribe(&self.generate_topic_string(topic), &[])
-                        .unwrap();
-                }
+                self.mqtt
+                    .client
+                    .subscribe(&self.control_topic, &[])
+                    .unwrap();
                 self.subscribed = true;
             }
         }
 
-        let response_topic = self.generate_topic_string("log");
+        let response_topic = &self.default_response_topic;
         let delay = &mut self.delay;
-        let my_id = &self.id;
+        let expected_topic = &self.control_topic;
 
         match self.mqtt.poll(|client, topic, message, properties| {
-            let (id, route) = topic.split_at(topic.find('/').unwrap());
-            let route = &route[1..];
-
-            if id != my_id {
-                warn!("Ignoring topic for identifier: {}", id);
-                return;
-            }
-
-            let response = main_bus.lock(|main_bus| match route {
-                "channel/control" => handle_channel_update(message, &mut main_bus.channels, delay),
-                _ => Response::error_msg("Unexpected topic"),
-            });
+            let response = if topic == expected_topic {
+                main_bus
+                    .lock(|main_bus| handle_channel_update(message, &mut main_bus.channels, delay))
+            } else {
+                Response::error_msg("Unexpected topic")
+            };
 
             if let Property::ResponseTopic(topic) = properties
                 .iter()

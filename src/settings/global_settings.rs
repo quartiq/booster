@@ -32,7 +32,7 @@ fn array_to_addr(addr: &[u8; 4]) -> Ipv4Addr {
 }
 
 fn identifier_is_valid<'a>(id: &'a str) -> bool {
-    id.len() <= 23 && id.chars().all(|x| x.is_alphanumeric())
+    id.len() <= 23 && id.chars().all(|x| x.is_alphanumeric() || x == '-')
 }
 
 /// Represents booster mainboard-specific configuration values.
@@ -56,7 +56,7 @@ impl BoosterMainBoardData {
         let mut name: String<23> = String::new();
         write!(
             &mut name,
-            "booster{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
             eui48[0], eui48[1], eui48[2], eui48[3], eui48[4], eui48[5]
         )
         .unwrap();

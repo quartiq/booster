@@ -16,7 +16,7 @@ use core::fmt::Write;
 /// intended to be consumed asynchronously. In the case of booster, this log data is consumed in the
 /// USB task.
 pub struct BufferedLog {
-    logs: heapless::mpmc::Q16<heapless::String<128>>,
+    logs: heapless::mpmc::Q16<heapless::String<256>>,
 }
 
 impl BufferedLog {
@@ -48,7 +48,7 @@ impl log::Log for BufferedLog {
         let source_line = record.line().unwrap_or(u32::MAX);
 
         // Print the record into the buffer.
-        let mut string: String<128> = String::new();
+        let mut string: String<256> = String::new();
         match write!(
             &mut string,
             "[{}] {}:{} - {}\n",

@@ -19,7 +19,7 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
 };
 
 /// Represents booster channel-specific configuration values.
-#[derive(Miniconf, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Miniconf, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ChannelSettings {
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,
@@ -27,6 +27,10 @@ pub struct ChannelSettings {
     pub input_power_transform: LinearTransformation,
     pub output_power_transform: LinearTransformation,
     pub reflected_power_transform: LinearTransformation,
+
+    // Note: This field is not persisted to external memory.
+    #[serde(skip)]
+    pub output_disable: bool,
 }
 
 impl Default for ChannelSettings {
@@ -36,6 +40,7 @@ impl Default for ChannelSettings {
             output_interlock_threshold: 0.0,
             bias_voltage: -3.2,
             enabled: false,
+            output_disable: false,
 
             // When operating at 100MHz, the power detectors specify the following output
             // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients

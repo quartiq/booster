@@ -32,8 +32,11 @@ impl SystemTimer {
     pub fn initialize(regs: stm32f4xx_hal::stm32::TIM2, clocks: &stm32f4xx_hal::rcc::Clocks) {
         // Reset and enable the timer in the RCC.
         let rcc = unsafe { &*stm32f4xx_hal::stm32::RCC::ptr() };
-        rcc.apb1rstr.modify(|_, w| w.tim2rst().set_bit());
         rcc.apb1enr.modify(|_, w| w.tim2en().set_bit());
+
+        rcc.apb1rstr.modify(|_, w| w.tim2rst().set_bit());
+        rcc.apb1rstr.modify(|_, w| w.tim2rst().clear_bit());
+        cortex_m::asm::dsb();
 
         // Stop the counter and reset it.
         regs.cr1.modify(|_, w| w.cen().clear_bit());
@@ -49,7 +52,7 @@ impl SystemTimer {
         // Configure the timer for a frequency of 10KHz, max count.
         let prescaler: u16 = (frequency / 10_000 - 1).try_into().unwrap();
         regs.psc.write(|w| w.psc().bits(prescaler));
-        regs.arr.reset();
+        regs.arr.write(|w| w.arr().bits(0xFFFF_FFFF));
 
         // Trigger an update.
         regs.egr.write(|w| w.ug().set_bit());

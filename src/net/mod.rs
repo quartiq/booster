@@ -28,7 +28,7 @@ type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
 pub struct NetworkDevices {
     pub controller: mqtt_control::ControlState,
     pub telemetry: telemetry::TelemetryClient,
-    pub settings: miniconf::MqttClient<crate::Settings, NetworkStackProxy, SystemTimer, 128>,
+    pub settings: miniconf::MqttClient<crate::Settings, NetworkStackProxy, SystemTimer, 256>,
 
     // The stack reference is only used if the ENC424J600 PHY is used.
     #[allow(dead_code)]
@@ -48,16 +48,17 @@ impl NetworkDevices {
         stack: NetworkStack,
         identifier: &str,
         delay: AsmDelay,
+        settings: crate::Settings,
     ) -> Self {
         let shared =
             cortex_m::singleton!(: NetworkManager<NetworkStack> = NetworkManager::new(stack))
                 .unwrap();
 
         let mut miniconf_client: String<128> = String::new();
-        write!(&mut miniconf_client, "{}-settings", identifier).unwrap();
+        write!(&mut miniconf_client, "booster-{}-settings", identifier).unwrap();
 
         let mut miniconf_prefix: String<128> = String::new();
-        write!(&mut miniconf_prefix, "sinara/booster/{}", identifier).unwrap();
+        write!(&mut miniconf_prefix, "dt/sinara/booster/{}", identifier).unwrap();
 
         Self {
             telemetry: telemetry::TelemetryClient::new(broker, shared.acquire_stack(), identifier),
@@ -68,6 +69,7 @@ impl NetworkDevices {
                 &miniconf_prefix,
                 broker,
                 SystemTimer::default(),
+                settings,
             )
             .unwrap(),
             stack: shared.acquire_stack(),

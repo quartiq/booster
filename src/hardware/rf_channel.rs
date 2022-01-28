@@ -488,10 +488,7 @@ impl RfChannel {
         ) {
             Err(ad5627::Error::Range) => Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => Err(Error::Interface),
-            Ok(voltage) => {
-                settings.output_interlock_threshold = settings.output_power_transform.map(voltage);
-                Ok(())
-            }
+            Ok(_) => Ok(()),
         }
     }
 
@@ -554,7 +551,7 @@ impl RfChannel {
 
             sm::States::Powered => {
                 // If we finished powerup and the channel should be enabled, enable it now.
-                if self.settings.settings().enabled {
+                if self.settings.settings().enabled && !self.settings.settings().output_disable {
                     self.enable_output().unwrap();
                 }
             }
@@ -589,9 +586,9 @@ impl RfChannel {
 
     /// Start the power-up process for channel.
     pub fn start_powerup(&mut self) -> Result<(), Error> {
-        // If we are just tripped or are already powered, we can re-enable the channel by cycling
+        // TODO: If we are just tripped or are already powered, we can re-enable the channel by cycling
         // the ON_OFFn input.
-        self.state_machine.process_event(sm::Events::Enable)?;
+        self.state_machine.process_event(sm::Events::PowerChannel)?;
 
         // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
         self.i2c_devices
@@ -613,9 +610,7 @@ impl RfChannel {
     /// This can only be completed once the channel has been fully powered.
     fn enable_output(&mut self) -> Result<(), Error> {
         // It is only valid to enable the output if the channel is powered.
-        if self.pins.enable_power.is_low().unwrap() {
-            return Err(Error::InvalidState);
-        }
+        assert!(self.pins.enable_power.is_high().unwrap());
 
         let settings = self.settings.settings_mut();
 
@@ -630,8 +625,6 @@ impl RfChannel {
             return Err(Error::Invalid);
         }
 
-        settings.enabled = true;
-
         self.apply_bias().unwrap();
 
         self.pins.signal_on.set_high().unwrap();
@@ -645,8 +638,6 @@ impl RfChannel {
     /// Disable the channel and power it off.
     pub fn start_disable(&mut self) {
         let channel_was_powered = self.pins.enable_power.is_high().unwrap();
-
-        self.settings.settings_mut().enabled = false;
 
         // The RF channel may be unconditionally disabled at any point to aid in preventing damage.
         // The effect of this is that we must assume worst-case power-down timing, which increases
@@ -663,16 +654,42 @@ impl RfChannel {
         self.state_machine.process_event(sm::Events::TurnOff).unwrap();
     }
 
+    /// Apply channel settings to the RF channel.
+    ///
+    /// # Note
+    /// This is always implemented in a "least-effort" manner. If settings haven't changed, they
+    /// won't be applied.
+    ///
+    /// # Args
+    /// * `new_settings` - The new settings to apply to the channel.
     pub fn apply_settings(&mut self, new_settings: &ChannelSettings) -> Result<(), Error> {
-        // TODO: Do not apply settings if they haven't changed.
+        // If the settings haven't changed, we can short circuit now.
+        if self.settings.settings() == new_settings {
+            return Ok(());
+        }
 
-        // Copy transforms first
+        let settings = self.settings.settings_mut();
+
+        let bias_changed = new_settings.bias_voltage != settings.bias_voltage;
+        let interlock_updated = settings
+            .output_power_transform
+            .map(settings.output_interlock_threshold)
+            != new_settings
+                .output_power_transform
+                .map(new_settings.output_interlock_threshold);
+
+        // Copy transforms before applying the interlock threshold, since the interlock DAC level
+        // is calculated from the output interlock transform.
         *self.settings.settings_mut() = new_settings.clone();
 
-        // Next, set output interlock threshold. This must be done after updating transforms
-        // because the output interlock threshold uses the transform to calculate threshold levels.
-        self.apply_output_interlock_threshold()?;
-        self.apply_bias()?;
+        // Only update the interlock and bias DACs if they've actually changed.
+        if interlock_updated {
+            self.apply_output_interlock_threshold()?;
+        }
+
+        if bias_changed {
+            self.apply_bias()?;
+        }
 
         // Finally, update channel enable state.
         if !new_settings.enabled {
@@ -681,7 +698,7 @@ impl RfChannel {
         } else {
             // If the channel is in fault conditions, do not attempt to enable it.
             if !matches!(self.get_state(), ChannelState::Blocked(_)) {
-                self.start_powerup()?;
+                self.start_powerup().unwrap();
             }
         }
 
@@ -698,16 +715,12 @@ impl RfChannel {
 
     fn apply_bias(&mut self) -> Result<(), Error> {
         // The bias voltage is the inverse of the DAC output voltage.
-        let settings = self.settings.settings_mut();
-
-        let bias_voltage = -1.0 * settings.bias_voltage;
+        let bias_voltage = -1.0 * self.settings().bias_voltage;
 
         match self.i2c_devices.bias_dac.set_voltage(bias_voltage) {
             Err(dac7571::Error::Bounds) => return Err(Error::Bounds),
             Err(_) => panic!("Failed to set DAC bias voltage"),
-            Ok(voltage) => {
-                settings.bias_voltage = -voltage;
-            }
+            Ok(_) => {}
         };
 
         Ok(())
@@ -862,5 +875,9 @@ impl RfChannel {
         };
 
         status
+    }
+
+    pub fn settings(&self) -> ChannelSettings {
+        self.settings.settings().clone()
     }
 }
