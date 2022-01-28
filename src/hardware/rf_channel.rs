@@ -549,10 +549,7 @@ impl RfChannel {
         ) {
             Err(ad5627::Error::Range) => Err(Error::Bounds),
             Err(ad5627::Error::I2c(_)) => Err(Error::Interface),
-            Ok(voltage) => {
-                settings.output_interlock_threshold = settings.output_power_transform.map(voltage);
-                Ok(())
-            }
+            Ok(_) => Ok(()),
         }
     }
 
@@ -773,15 +770,26 @@ impl RfChannel {
     }
 
     pub fn apply_settings(&mut self, new_settings: &ChannelSettings) -> Result<(), Error> {
-        // TODO: Do not apply settings if they haven't changed.
+        let settings = self.settings.settings_mut();
+        let bias_changed = new_settings.bias_voltage != settings.bias_voltage;
+        let interlock_updated = settings
+            .output_power_transform
+            .map(settings.output_interlock_threshold)
+            != new_settings
+                .output_power_transform
+                .map(new_settings.output_interlock_threshold);
 
         // Copy transforms first
         *self.settings.settings_mut() = new_settings.clone();
 
-        // Next, set output interlock threshold. This must be done after updating transforms
-        // because the output interlock threshold uses the transform to calculate threshold levels.
-        self.apply_output_interlock_threshold()?;
-        self.apply_bias()?;
+        // Only update the interlock and bias DACs if they've actually changed.
+        if interlock_updated {
+            self.apply_output_interlock_threshold()?;
+        }
+
+        if bias_changed {
+            self.apply_bias()?;
+        }
 
         // Finally, update channel enable state.
         if !new_settings.enabled {
@@ -807,16 +815,12 @@ impl RfChannel {
 
     fn apply_bias(&mut self) -> Result<(), Error> {
         // The bias voltage is the inverse of the DAC output voltage.
-        let settings = self.settings.settings_mut();
-
-        let bias_voltage = -1.0 * settings.bias_voltage;
+        let bias_voltage = -1.0 * self.settings().bias_voltage;
 
         match self.i2c_devices.bias_dac.set_voltage(bias_voltage) {
             Err(dac7571::Error::Bounds) => return Err(Error::Bounds),
             Err(_) => panic!("Failed to set DAC bias voltage"),
-            Ok(voltage) => {
-                settings.bias_voltage = -voltage;
-            }
+            Ok(_) => {}
         };
 
         Ok(())
