@@ -48,6 +48,7 @@ pub enum Interlock {
     Reflected,
 }
 
+/// A succinct representation of RF channel state for front panel status indication.
 pub struct PowerStatus {
     pub powered: bool,
     pub rf_enabled: bool,
