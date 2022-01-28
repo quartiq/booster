@@ -13,9 +13,7 @@ use crate::delay::AsmDelay;
 
 mod mqtt_control;
 mod shared;
-mod telemetry;
 
-use mqtt_control::ControlState;
 use shared::NetworkManager;
 
 type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
@@ -26,8 +24,7 @@ type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
 /// All devices accessing the shared stack must be contained within a single structure to prevent
 /// potential pre-emption when using the `shared` network stack.
 pub struct NetworkDevices {
-    pub controller: mqtt_control::ControlState,
-    pub telemetry: telemetry::TelemetryClient,
+    pub control: mqtt_control::ControlClient,
     pub settings: miniconf::MqttClient<crate::Settings, NetworkStackProxy, SystemTimer, 256>,
 
     // The stack reference is only used if the ENC424J600 PHY is used.
@@ -61,8 +58,12 @@ impl NetworkDevices {
         write!(&mut miniconf_prefix, "dt/sinara/booster/{}", identifier).unwrap();
 
         Self {
-            telemetry: telemetry::TelemetryClient::new(broker, shared.acquire_stack(), identifier),
-            controller: ControlState::new(broker, shared.acquire_stack(), identifier, delay),
+            control: mqtt_control::ControlClient::new(
+                broker,
+                shared.acquire_stack(),
+                identifier,
+                delay,
+            ),
             settings: miniconf::MqttClient::new(
                 shared.acquire_stack(),
                 &miniconf_client,
@@ -82,8 +83,6 @@ impl NetworkDevices {
     /// This function must be called periodically to handle ingress/egress of packets and update
     /// state management.
     pub fn process(&mut self) -> bool {
-        self.telemetry.process();
-
         #[cfg(feature = "phy_enc424j600")]
         return self
             .stack
