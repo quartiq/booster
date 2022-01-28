@@ -250,7 +250,7 @@ const APP: () = {
             if let Ok(ref measurements) = measurements {
                 c.resources
                     .net_devices
-                    .telemetry
+                    .control
                     .report_telemetry(channel, measurements);
             }
         }
@@ -365,7 +365,7 @@ const APP: () = {
             let main_bus = &mut c.resources.main_bus;
             c.resources
                 .net_devices
-                .lock(|net| net.controller.update(main_bus));
+                .lock(|net| net.control.update(main_bus));
 
             // Handle the network stack processing if needed.
             c.resources.net_devices.lock(|net| net.process());
