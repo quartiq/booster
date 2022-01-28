@@ -59,7 +59,7 @@ enum Token {
     #[regex(r"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", |lex| lex.slice().parse())]
     IpAddress(Ipv4Addr),
 
-    #[regex(r"[a-zA-Z0-9]+")]
+    #[regex(r"[a-zA-Z0-9-]+")]
     DeviceIdentifier,
 
     #[token("service")]

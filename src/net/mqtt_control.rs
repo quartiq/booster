@@ -6,11 +6,7 @@
 //! Proprietary and confidential.
 use crate::{
     delay::AsmDelay,
-    hardware::{
-        booster_channels::BoosterChannels,
-        clock::SystemTimer,
-        rf_channel::{Property as ChannelProperty, PropertyId as ChannelPropertyId},
-    },
+    hardware::{booster_channels::BoosterChannels, clock::SystemTimer},
     Channel, Error, MainBus,
 };
 
@@ -21,133 +17,18 @@ use embedded_hal::blocking::delay::DelayUs;
 use heapless::String;
 use minimq::{Property, QoS};
 
-use crate::linear_transformation::LinearTransformation;
-
-#[derive(serde::Deserialize)]
-struct PropertyReadRequest {
-    pub channel: Channel,
-    pub prop: ChannelPropertyId,
-}
-
-#[derive(serde::Serialize)]
-struct PropertyReadResponse {
-    code: u32,
-    data: String<64>,
-}
-
-impl PropertyReadResponse {
-    /// Indicate that a property read response was successful.
-    ///
-    /// # Args
-    /// * `vgs` - The resulting gate voltage of the RF amplifier.
-    /// * `ids` - The resulting drain current of the RF amplifier.
-    pub fn okay(prop: ChannelProperty) -> String<256> {
-        // Serialize the property.
-        let data: String<64> = match prop {
-            ChannelProperty::OutputInterlockThreshold(threshold) => {
-                serde_json_core::to_string(&threshold).unwrap()
-            }
-            ChannelProperty::InputPowerTransform(transform) => {
-                serde_json_core::to_string(&transform).unwrap()
-            }
-            ChannelProperty::OutputPowerTransform(transform) => {
-                serde_json_core::to_string(&transform).unwrap()
-            }
-            ChannelProperty::ReflectedPowerTransform(transform) => {
-                serde_json_core::to_string(&transform).unwrap()
-            }
-        };
-
-        let response = Self {
-            code: 200,
-            data: String::from(data.as_str()),
-        };
-
-        serde_json_core::to_string(&response).unwrap()
-    }
-}
-
-#[derive(serde::Deserialize)]
-struct PropertyWriteRequest {
-    pub channel: Channel,
-    prop: ChannelPropertyId,
-    data: String<64>,
-}
-
-impl PropertyWriteRequest {
-    /// Get the property from the serialized field.
-    ///
-    /// # Returns
-    /// The property if it could be deserialized. Otherwise, an error is returned.
-    pub fn property(&self) -> Result<ChannelProperty, Error> {
-        // Convert escaped quotes back to normal quotes.
-        let mut escaped: bool = false;
-        let mut data: String<256> = String::new();
-        for character in self.data.as_str().chars() {
-            if character == '\\' {
-                if !escaped {
-                    escaped = true;
-                    continue;
-                }
-            }
-            escaped = false;
-            data.push(character).unwrap();
-        }
-
-        let prop = match self.prop {
-            ChannelPropertyId::OutputInterlockThreshold => {
-                // Due to a bug in serde-json-core, trailing data must be present for a float to be
-                // properly parsed. For more information, refer to:
-                // https://github.com/rust-embedded-community/serde-json-core/issues/47
-                data.push(' ').unwrap();
-                ChannelProperty::OutputInterlockThreshold(
-                    serde_json_core::from_str::<f32>(&data)
-                        .map_err(|_| Error::Invalid)?
-                        .0,
-                )
-            }
-            ChannelPropertyId::OutputPowerTransform => ChannelProperty::OutputPowerTransform(
-                serde_json_core::from_str::<LinearTransformation>(&data)
-                    .map_err(|_| Error::Invalid)?
-                    .0,
-            ),
-            ChannelPropertyId::InputPowerTransform => ChannelProperty::InputPowerTransform(
-                serde_json_core::from_str::<LinearTransformation>(&data)
-                    .map_err(|_| Error::Invalid)?
-                    .0,
-            ),
-            ChannelPropertyId::ReflectedPowerTransform => ChannelProperty::ReflectedPowerTransform(
-                serde_json_core::from_str::<LinearTransformation>(&data)
-                    .map_err(|_| Error::Invalid)?
-                    .0,
-            ),
-        };
-
-        Ok(prop)
-    }
-}
-
 /// Specifies an action to take on a channel.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 enum ChannelAction {
-    Enable,
-    Disable,
-    Powerup,
     Save,
+    ReadBiasCurrent,
 }
 
 /// Specifies a generic request for a specific channel.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 struct ChannelRequest {
     pub channel: Channel,
     pub action: ChannelAction,
-}
-
-/// Specifies the desired channel RF bias voltage.
-#[derive(serde::Deserialize)]
-struct ChannelBiasRequest {
-    pub channel: Channel,
-    pub voltage: f32,
 }
 
 /// Indicates the result of a channel bias setting request.
@@ -225,9 +106,10 @@ impl Response {
 
 /// Represents a means of handling MQTT-based control interface.
 pub struct ControlState {
-    mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 128, 1>,
+    mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 256, 1>,
     subscribed: bool,
-    id: String<32>,
+    control_topic: String<64>,
+    default_response_topic: String<64>,
     delay: AsmDelay,
 }
 
@@ -240,20 +122,21 @@ impl ControlState {
         delay: AsmDelay,
     ) -> Self {
         let mut client_id: String<64> = String::new();
-        write!(&mut client_id, "{}-ctrl", id).unwrap();
+        write!(&mut client_id, "booster-{}-ctrl", id).unwrap();
+
+        let mut control_topic: String<64> = String::new();
+        write!(&mut control_topic, "dt/sinara/booster/{}/control", id).unwrap();
+
+        let mut default_response_topic: String<64> = String::new();
+        write!(&mut default_response_topic, "dt/sinara/booster/{}/log", id).unwrap();
 
         Self {
             mqtt: minimq::Minimq::new(broker, &client_id, stack, SystemTimer::default()).unwrap(),
             subscribed: false,
-            id: String::from(id),
+            control_topic,
+            default_response_topic,
             delay,
         }
-    }
-
-    fn generate_topic_string<'a>(&self, topic_postfix: &'a str) -> String<64> {
-        let mut topic_string: String<64> = String::new();
-        write!(&mut topic_string, "{}/{}", self.id, topic_postfix).unwrap();
-        topic_string
     }
 
     /// Handle the MQTT-based control interface.
@@ -264,43 +147,25 @@ impl ControlState {
         // Subscribe to any control topics necessary.
         if !self.subscribed {
             if self.mqtt.client.is_connected() {
-                for topic in [
-                    "channel/state",
-                    "channel/bias",
-                    "channel/read",
-                    "channel/write",
-                ]
-                .iter()
-                {
-                    self.mqtt
-                        .client
-                        .subscribe(&self.generate_topic_string(topic), &[])
-                        .unwrap();
-                }
+                self.mqtt
+                    .client
+                    .subscribe(&self.control_topic, &[])
+                    .unwrap();
                 self.subscribed = true;
             }
         }
 
-        let response_topic = self.generate_topic_string("log");
+        let response_topic = &self.default_response_topic;
         let delay = &mut self.delay;
-        let my_id = &self.id;
+        let expected_topic = &self.control_topic;
 
         match self.mqtt.poll(|client, topic, message, properties| {
-            let (id, route) = topic.split_at(topic.find('/').unwrap());
-            let route = &route[1..];
-
-            if id != my_id {
-                warn!("Ignoring topic for identifier: {}", id);
-                return;
-            }
-
-            let response = main_bus.lock(|main_bus| match route {
-                "channel/state" => handle_channel_update(message, &mut main_bus.channels),
-                "channel/bias" => handle_channel_bias(message, &mut main_bus.channels, delay),
-                "channel/read" => handle_channel_property_read(message, &mut main_bus.channels),
-                "channel/write" => handle_channel_property_write(message, &mut main_bus.channels),
-                _ => Response::error_msg("Unexpected topic"),
-            });
+            let response = if topic == expected_topic {
+                main_bus
+                    .lock(|main_bus| handle_channel_update(message, &mut main_bus.channels, delay))
+            } else {
+                Response::error_msg("Unexpected topic")
+            };
 
             if let Property::ResponseTopic(topic) = properties
                 .iter()
@@ -353,106 +218,31 @@ impl ControlState {
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> String<256> {
+fn handle_channel_update(
+    message: &[u8],
+    channels: &mut BoosterChannels,
+    delay: &mut impl DelayUs<u16>,
+) -> String<256> {
+    let mut response: String<256> = String::new();
+
     let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
         Ok((data, _)) => data,
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
     channels
         .map(request.channel, |ch, _| match request.action {
-            ChannelAction::Powerup => {
-                ch.start_powerup(false)?;
-                Ok("Channel powered")
-            }
-            ChannelAction::Enable => {
-                ch.start_powerup(true)?;
-                Ok("Channel enabled")
-            }
-            ChannelAction::Disable => {
-                ch.start_disable();
-                Ok("Channel disabled")
-            }
             ChannelAction::Save => {
                 ch.save_configuration();
                 Ok("Channel saved")
             }
+            ChannelAction::ReadBiasCurrent => {
+                // Wait for 11 ms > 10.04 ms total cycle time to ensure an up-to-date
+                // current measurement.
+                delay.delay_us(11000);
+                response =
+                    ChannelBiasResponse::okay(ch.get_bias_voltage(), ch.get_p28v_current()).into();
+                Ok(&response)
+            }
         })
         .map_or_else(Response::error, Response::okay)
-}
-
-/// Handle a request to read a property of an RF channel.
-///
-/// # Args
-/// * `message` - The serialized message request.
-/// * `channels` - The booster RF channels to read.
-///
-/// # Returns
-/// A String response indicating the result of the request.
-fn handle_channel_property_read(message: &[u8], channels: &mut BoosterChannels) -> String<256> {
-    let request = match serde_json_core::from_slice::<PropertyReadRequest>(message) {
-        Ok((data, _)) => data,
-        Err(_) => return Response::error_msg("Failed to decode read request"),
-    };
-
-    match channels.map(request.channel, |ch, _| Ok(ch.get_property(request.prop))) {
-        Ok(prop) => PropertyReadResponse::okay(prop),
-        Err(error) => Response::error(error),
-    }
-}
-
-/// Handle a request to write a property of an RF channel.
-///
-/// # Args
-/// * `message` - The serialized message request.
-/// * `channels` - The booster RF channels to write.
-///
-/// # Returns
-/// A String response indicating the result of the request.
-fn handle_channel_property_write(message: &[u8], channels: &mut BoosterChannels) -> String<256> {
-    let request = match serde_json_core::from_slice::<PropertyWriteRequest>(message) {
-        Ok((data, _)) => data,
-        Err(_) => return Response::error_msg("Failed to decode write request"),
-    };
-
-    let property = match request.property() {
-        Ok(property) => property,
-        Err(_) => return Response::error_msg("Failed to decode property"),
-    };
-
-    match channels.map(request.channel, |ch, _| ch.set_property(property)) {
-        Ok(_) => Response::okay("Property update successful"),
-        Err(error) => Response::error(error),
-    }
-}
-
-/// Handle a request to set the bias of a channel.
-///
-/// # Args
-/// * `message` - The serialized message request.
-/// * `channels` - The booster RF channels to configure.
-/// * `delay` - A means of delaying during tuning.
-///
-/// # Returns
-/// A String response indicating the result of the request.
-fn handle_channel_bias(
-    message: &[u8],
-    channels: &mut BoosterChannels,
-    delay: &mut impl DelayUs<u16>,
-) -> String<256> {
-    let request = match serde_json_core::from_slice::<ChannelBiasRequest>(message) {
-        Ok((data, _)) => data,
-        Err(_) => return Response::error_msg("Failed to decode data"),
-    };
-
-    match channels.map(request.channel, |ch, _| {
-        ch.set_bias(request.voltage)?;
-
-        // Wait for 11 ms > 10.04 ms total cycle time to ensure an up-to-date
-        // current measurement.
-        delay.delay_us(11000);
-        Ok((ch.get_bias_voltage(), ch.get_p28v_current()))
-    }) {
-        Ok((vgs, ids)) => ChannelBiasResponse::okay(vgs, ids),
-        Err(error) => Response::error(error),
-    }
 }

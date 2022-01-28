@@ -4,7 +4,10 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use crate::hardware::NetworkStack;
+use crate::hardware::{clock::SystemTimer, NetworkStack};
+
+use core::fmt::Write;
+use heapless::String;
 
 use crate::delay::AsmDelay;
 
@@ -25,6 +28,7 @@ type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
 pub struct NetworkDevices {
     pub controller: mqtt_control::ControlState,
     pub telemetry: telemetry::TelemetryClient,
+    pub settings: miniconf::MqttClient<crate::Settings, NetworkStackProxy, SystemTimer, 256>,
 
     // The stack reference is only used if the ENC424J600 PHY is used.
     #[allow(dead_code)]
@@ -44,14 +48,30 @@ impl NetworkDevices {
         stack: NetworkStack,
         identifier: &str,
         delay: AsmDelay,
+        settings: crate::Settings,
     ) -> Self {
         let shared =
             cortex_m::singleton!(: NetworkManager<NetworkStack> = NetworkManager::new(stack))
                 .unwrap();
 
+        let mut miniconf_client: String<128> = String::new();
+        write!(&mut miniconf_client, "booster-{}-settings", identifier).unwrap();
+
+        let mut miniconf_prefix: String<128> = String::new();
+        write!(&mut miniconf_prefix, "dt/sinara/booster/{}", identifier).unwrap();
+
         Self {
             telemetry: telemetry::TelemetryClient::new(broker, shared.acquire_stack(), identifier),
             controller: ControlState::new(broker, shared.acquire_stack(), identifier, delay),
+            settings: miniconf::MqttClient::new(
+                shared.acquire_stack(),
+                &miniconf_client,
+                &miniconf_prefix,
+                broker,
+                SystemTimer::default(),
+                settings,
+            )
+            .unwrap(),
             stack: shared.acquire_stack(),
         }
     }

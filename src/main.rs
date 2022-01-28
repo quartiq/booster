@@ -19,6 +19,7 @@ compile_error!("Cannot enable multiple ethernet PHY devices.");
 compile_error!("ENC424J600 is not currently implemented");
 
 use enum_iterator::IntoEnumIterator;
+use miniconf::Miniconf;
 use stm32f4xx_hal as hal;
 
 #[macro_use]
@@ -46,6 +47,8 @@ use hardware::{
     Channel, CPU_FREQ,
 };
 
+use settings::channel_settings::ChannelSettings;
+
 use watchdog::{WatchdogClient, WatchdogManager};
 
 use rtic::cyccnt::Duration;
@@ -60,6 +63,11 @@ pub enum Error {
     Foldback,
     Bounds,
     Fault,
+}
+
+#[derive(Default, Miniconf)]
+pub struct Settings {
+    pub channel: [ChannelSettings; 8],
 }
 
 static LOGGER: BufferedLog = BufferedLog::new();
@@ -78,7 +86,25 @@ const APP: () = {
     #[init(schedule = [telemetry, channel_monitor, button, usb, fans])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure booster hardware.
-        let booster = hardware::setup::setup(c.core, c.device);
+        let mut booster = hardware::setup::setup(c.core, c.device);
+
+        let mut settings = Settings::default();
+
+        for chan in Channel::into_enum_iter() {
+            match booster
+                .main_bus
+                .channels
+                .map(chan, |channel, _| Ok(channel.settings()))
+            {
+                Ok(channel_settings) => settings.channel[chan as usize] = channel_settings,
+                Err(Error::NotPresent) => {
+                    settings.channel[chan as usize].enabled = false;
+                    settings.channel[chan as usize].output_disable = true;
+                    settings.channel[chan as usize].bias_voltage = 0.0;
+                }
+                Err(other) => panic!("Failed to extract channel {:?} settings: {:?}", chan, other),
+            }
+        }
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
 
@@ -98,6 +124,7 @@ const APP: () = {
                 booster.network_stack,
                 booster.settings.id(),
                 booster.delay,
+                settings,
             ),
             usb_terminal: SerialTerminal::new(
                 booster.usb_device,
@@ -131,7 +158,7 @@ const APP: () = {
             };
 
             let powered = match state {
-                ChannelState::Powerup(_, _)
+                ChannelState::Powerup(_)
                 | ChannelState::Powered
                 | ChannelState::Powerdown(_)
                 | ChannelState::Enabled
@@ -247,7 +274,7 @@ const APP: () = {
                 ButtonEvent::InterlockReset => {
                     for chan in Channel::into_enum_iter() {
                         c.resources.main_bus.lock(|main_bus| {
-                            match main_bus.channels.map(chan, |ch, _| ch.start_powerup(true)) {
+                            match main_bus.channels.map(chan, |ch, _| ch.start_powerup()) {
                                 Ok(_) | Err(Error::NotPresent) => {}
 
                                 // It is possible to attempt to re-enable the channel before it was
@@ -281,6 +308,24 @@ const APP: () = {
             .unwrap();
     }
 
+    #[task(priority = 1, resources=[net_devices, main_bus])]
+    fn update_settings(mut c: update_settings::Context) {
+        let all_settings = c.resources.net_devices.settings.settings();
+
+        for chan in Channel::into_enum_iter() {
+            let settings = &all_settings.channel[chan as usize];
+            c.resources.main_bus.lock(|main_bus| {
+                match main_bus
+                    .channels
+                    .map(chan, |channel, _| channel.apply_settings(settings))
+                {
+                    Ok(_) | Err(Error::NotPresent) => {}
+                    Err(e) => panic!("Settings update failed on {:?}: {:?}", chan, e),
+                }
+            });
+        }
+    }
+
     #[task(priority = 2, schedule=[usb], resources=[usb_terminal, watchdog])]
     fn usb(mut c: usb::Context) {
         // Check in with the watchdog.
@@ -301,13 +346,20 @@ const APP: () = {
             .unwrap();
     }
 
-    #[idle(resources=[main_bus, net_devices, watchdog])]
+    #[idle(resources=[main_bus, net_devices, watchdog], spawn=[update_settings])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
             // Check in with the watchdog.
             c.resources
                 .watchdog
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::IdleTask));
+
+            // Handle the Miniconf settings interface.
+            match c.resources.net_devices.lock(|net| net.settings.update()) {
+                Ok(true) => c.spawn.update_settings().unwrap(),
+                Ok(false) => {}
+                other => log::warn!("Miniconf update failure: {:?}", other),
+            }
 
             // Handle the MQTT control interface.
             let main_bus = &mut c.resources.main_bus;
@@ -317,9 +369,6 @@ const APP: () = {
 
             // Handle the network stack processing if needed.
             c.resources.net_devices.lock(|net| net.process());
-
-            // TODO: Properly sleep here until there's something to process.
-            cortex_m::asm::nop();
         }
     }
 

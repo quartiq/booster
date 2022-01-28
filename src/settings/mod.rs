@@ -5,8 +5,8 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
-mod channel_settings;
-mod global_settings;
+pub mod channel_settings;
+pub mod global_settings;
 mod sinara;
 
 use sinara::{BoardId as SinaraBoardId, SinaraConfiguration};

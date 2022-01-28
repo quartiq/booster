@@ -8,9 +8,10 @@
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 use crate::{hardware::I2cProxy, linear_transformation::LinearTransformation, Error};
 use microchip_24aa02e48::Microchip24AA02E48;
+use miniconf::Miniconf;
 
 /// The expected semver of the BoosterChannelSettings. This version must be updated whenever the
-/// `BoosterChannelData` layout is updated.
+/// `VersionedChannelData` layout is updated.
 const EXPECTED_VERSION: SemVersion = SemVersion {
     major: 1,
     minor: 0,
@@ -18,25 +19,28 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
 };
 
 /// Represents booster channel-specific configuration values.
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct BoosterChannelData {
-    version: SemVersion,
+#[derive(Miniconf, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+pub struct ChannelSettings {
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,
     pub enabled: bool,
     pub input_power_transform: LinearTransformation,
     pub output_power_transform: LinearTransformation,
     pub reflected_power_transform: LinearTransformation,
+
+    // Note: This field is not persisted to external memory.
+    #[serde(skip)]
+    pub output_disable: bool,
 }
 
-impl BoosterChannelData {
+impl Default for ChannelSettings {
     /// Generate default booster channel data.
-    pub fn default() -> Self {
+    fn default() -> Self {
         Self {
-            version: EXPECTED_VERSION,
             output_interlock_threshold: 0.0,
             bias_voltage: -3.2,
             enabled: false,
+            output_disable: false,
 
             // When operating at 100MHz, the power detectors specify the following output
             // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
@@ -56,7 +60,25 @@ impl BoosterChannelData {
             input_power_transform: LinearTransformation::new(1.0 / 1.5 / 0.035, -35.6 + 8.9),
         }
     }
+}
 
+/// Represents versioned channel-specific configuration values.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct VersionedChannelData {
+    version: SemVersion,
+    settings: ChannelSettings,
+}
+
+impl Default for VersionedChannelData {
+    fn default() -> Self {
+        Self {
+            version: EXPECTED_VERSION,
+            settings: ChannelSettings::default(),
+        }
+    }
+}
+
+impl VersionedChannelData {
     /// Construct booster configuration data from serialized `board_data` from a
     /// SinaraConfiguration.
     ///
@@ -66,19 +88,19 @@ impl BoosterChannelData {
     /// # Returns
     /// The configuration if deserialization was successful. Otherwise, returns an error.
     pub fn deserialize(data: &[u8; 64]) -> Result<Self, Error> {
-        let config: BoosterChannelData = postcard::from_bytes(data).or(Err(Error::Invalid))?;
+        let data: VersionedChannelData = postcard::from_bytes(data).or(Err(Error::Invalid))?;
 
         // Validate configuration parameters.
-        if config.bias_voltage < -3.3 || config.bias_voltage > 0.0 {
+        if data.settings.bias_voltage < -3.3 || data.settings.bias_voltage > 0.0 {
             return Err(Error::Invalid);
         }
 
         // Validate the version of the settings.
-        if !EXPECTED_VERSION.is_compatible(&config.version) {
+        if !EXPECTED_VERSION.is_compatible(&data.version) {
             return Err(Error::Invalid);
         }
 
-        Ok(config)
+        Ok(data)
     }
 
     /// Serialize the booster config into a sinara configuration for storage into EEPROM.
@@ -95,7 +117,7 @@ impl BoosterChannelData {
 /// Represents the booster RF channel settings.
 pub struct BoosterChannelSettings {
     eeprom: Microchip24AA02E48<I2cProxy>,
-    pub data: BoosterChannelData,
+    data: VersionedChannelData,
 }
 
 impl BoosterChannelSettings {
@@ -109,17 +131,17 @@ impl BoosterChannelSettings {
     pub fn new(eeprom: Microchip24AA02E48<I2cProxy>) -> Self {
         let mut settings = Self {
             eeprom,
-            data: BoosterChannelData::default(),
+            data: VersionedChannelData::default(),
         };
 
         match settings.load_config() {
             Ok(config) => {
                 // If we loaded sinara configuration, deserialize the board data.
-                match BoosterChannelData::deserialize(&config.board_data) {
+                match VersionedChannelData::deserialize(&config.board_data) {
                     Ok(data) => settings.data = data,
 
                     Err(_) => {
-                        settings.data = BoosterChannelData::default();
+                        settings.data = VersionedChannelData::default();
                         settings.save();
                     }
                 }
@@ -127,7 +149,7 @@ impl BoosterChannelSettings {
 
             // If we failed to load configuration, use a default config.
             Err(_) => {
-                settings.data = BoosterChannelData::default();
+                settings.data = VersionedChannelData::default();
                 settings.save();
             }
         };
@@ -145,6 +167,15 @@ impl BoosterChannelSettings {
         self.data.serialize_into(&mut config);
         config.update_crc32();
         self.save_config(&config);
+    }
+
+    /// Mutably borrow the channel settings.
+    pub fn settings_mut(&mut self) -> &mut ChannelSettings {
+        &mut self.data.settings
+    }
+
+    pub fn settings(&self) -> &ChannelSettings {
+        &self.data.settings
     }
 
     /// Load device settings from EEPROM.
