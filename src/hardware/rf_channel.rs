@@ -91,6 +91,8 @@ mod sm {
 
             Powerdown(Instant<SystemTimer>) + PowerdownElapsed = Off,
             Powerdown(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault_instant = Blocked(ChannelFault),
+
+            Blocked(ChannelFault) + Fault(ChannelFault) / handle_repeated_fault = Blocked(ChannelFault),
         }
     }
 
@@ -183,6 +185,14 @@ mod sm {
 
         fn handle_fault_interlock(&mut self, _: &Interlock, fault: &ChannelFault) -> ChannelFault {
             *fault
+        }
+
+        fn handle_repeated_fault(
+            &mut self,
+            original_fault: &ChannelFault,
+            _new_fault: &ChannelFault,
+        ) -> ChannelFault {
+            *original_fault
         }
 
         fn handle_trip(&mut self, interlock: &Interlock) -> Interlock {
