@@ -10,7 +10,7 @@ use dac7571::Dac7571;
 use max6642::Max6642;
 use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
-use minimq::embedded_time::{duration::Extensions, Clock, Instant};
+use minimq::embedded_time::{Clock, Instant};
 
 use super::{clock::SystemTimer, platform, I2cBusManager, I2cProxy};
 use crate::{
@@ -298,12 +298,7 @@ pub struct RfChannel {
     pub i2c_devices: Devices,
     pub pins: ChannelPins,
     settings: BoosterChannelSettings,
-
-    powerdown_timeout: Option<Instant<SystemTimer>>,
-    powerup_timeout: Option<Instant<SystemTimer>>,
     clock: SystemTimer,
-    latched_fault: Option<ChannelFault>,
-    tripped_interlock: Option<Interlock>,
 }
 
 impl RfChannel {
@@ -332,10 +327,6 @@ impl RfChannel {
                     pins: control_pins,
                     settings: BoosterChannelSettings::new(eeprom),
                     clock: SystemTimer::default(),
-                    powerdown_timeout: None,
-                    powerup_timeout: None,
-                    latched_fault: None,
-                    tripped_interlock: None,
                 };
 
                 channel.apply_output_interlock_threshold().unwrap();
@@ -629,6 +620,8 @@ impl RfChannel {
 
 mod sm {
     use super::{ChannelFault, Interlock};
+    use crate::hardware::clock::SystemTimer;
+    use minimq::embedded_time::Instant;
     use smlang::statemachine;
 
     impl Copy for States {}
@@ -641,49 +634,71 @@ mod sm {
     impl serde::Serialize for States {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             match *self {
-                States::Blocked => serializer.serialize_unit_variant("State", 0, "Blocked"),
+                States::Blocked(ChannelFault::OverTemperature) => {
+                    serializer.serialize_unit_variant("State", 0, "Blocked(OverTemperature)")
+                }
+                States::Blocked(ChannelFault::UnderTemperature) => {
+                    serializer.serialize_unit_variant("State", 0, "Blocked(UnderTemperature)")
+                }
+                States::Blocked(ChannelFault::SupplyAlert) => {
+                    serializer.serialize_unit_variant("State", 0, "Blocked(SupplyAlert)")
+                }
                 States::Off => serializer.serialize_unit_variant("State", 1, "Off"),
-                States::Powerup => serializer.serialize_unit_variant("State", 2, "Powerup"),
+                States::Powerup(_) => serializer.serialize_unit_variant("State", 2, "Powerup"),
                 States::Powered => serializer.serialize_unit_variant("State", 3, "Powered"),
                 States::Enabled => serializer.serialize_unit_variant("State", 4, "Enabled"),
-                States::Powerdown => serializer.serialize_unit_variant("State", 6, "Powerdown"),
-                States::Tripped => serializer.serialize_unit_variant("State", 5, "Tripped"),
+                States::Powerdown(_) => serializer.serialize_unit_variant("State", 6, "Powerdown"),
+                States::Tripped(Interlock::Output) => {
+                    serializer.serialize_unit_variant("State", 5, "Tripped(Output)")
+                }
+                States::Tripped(Interlock::Input) => {
+                    serializer.serialize_unit_variant("State", 5, "Tripped(Input)")
+                }
+                States::Tripped(Interlock::Reflected) => {
+                    serializer.serialize_unit_variant("State", 5, "Tripped(Reflected)")
+                }
             }
         }
     }
 
     statemachine! {
         transitions: {
-            *Off + InterlockReset / start_powerup = Powerup,
+            *Off + InterlockReset / start_powerup = Powerup(Instant<SystemTimer>),
             Off + Disable = Off,
+            Off + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
 
-            Powerup + Update [check_powerup_timeout] = Powered,
-            Powerup + Disable / start_disable = Powerdown,
+            Powerup(Instant<SystemTimer>) + Update [check_timeout] = Powered,
+            Powerup(Instant<SystemTimer>) + Disable / start_disable_instant = Powerdown(Instant<SystemTimer>),
+            Powerup(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault_instant = Blocked(ChannelFault),
 
             Powered + Update [guard_enable] / enable_output = Enabled,
-            Powered + Disable / start_disable = Powerdown,
+            Powered + Disable / start_disable = Powerdown(Instant<SystemTimer>),
+            Powered + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
 
-            Enabled + InterlockReset / start_powerup = Powerup,
-            Enabled + Trip(Interlock) / handle_trip = Tripped,
-            Enabled + Disable / start_disable = Powerdown,
+            Enabled + InterlockReset / start_powerup = Powerup(Instant<SystemTimer>),
+            Enabled + Trip(Interlock) / handle_trip = Tripped(Interlock),
+            Enabled + Disable / start_disable = Powerdown(Instant<SystemTimer>),
+            Enabled + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
 
-            Tripped + InterlockReset / start_powerup = Powerup,
-            Tripped + Disable / start_disable = Powerdown,
+            Tripped(Interlock) + InterlockReset / start_powerup_interlock = Powerup(Instant<SystemTimer>),
+            Tripped(Interlock) + Disable / start_disable_interlock = Powerdown(Instant<SystemTimer>),
+            Tripped(Interlock) + Fault(ChannelFault) / handle_fault_interlock = Blocked(ChannelFault),
 
-            Powerdown + Update [check_powerdown_timeout] = Off,
+            Powerdown(Instant<SystemTimer>) + Update [check_timeout] = Off,
+            Powerdown(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault_instant = Blocked(ChannelFault),
 
-            _ + Fault(ChannelFault) / handle_fault = Blocked,
+            Blocked(ChannelFault) + Fault(ChannelFault) / handle_recurrent_fault = Blocked(ChannelFault),
         }
     }
 }
 
 impl sm::StateMachineContext for RfChannel {
-    fn handle_trip(&mut self, interlock: &Interlock) {
-        self.tripped_interlock.replace(*interlock);
+    fn handle_trip(&mut self, interlock: &Interlock) -> Interlock {
         self.pins.signal_on.set_low().unwrap();
+        *interlock
     }
 
-    fn start_powerup(&mut self) {
+    fn start_powerup(&mut self) -> Instant<SystemTimer> {
         // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
         self.i2c_devices
             .bias_dac
@@ -696,11 +711,11 @@ impl sm::StateMachineContext for RfChannel {
         // Start the LM3880 power supply sequencer.
         self.pins.enable_power.set_high().unwrap();
 
-        // Clear any previously tripped interlocks.
-        self.tripped_interlock.take();
+        self.clock.try_now().unwrap()
+    }
 
-        self.powerup_timeout
-            .replace(self.clock.try_now().unwrap() + 200_u32.milliseconds());
+    fn start_powerup_interlock(&mut self, _: &Interlock) -> Instant<SystemTimer> {
+        self.start_powerup()
     }
 
     fn guard_enable(&mut self) -> Result<(), ()> {
@@ -739,7 +754,7 @@ impl sm::StateMachineContext for RfChannel {
         self.pins.signal_on.set_high().unwrap();
     }
 
-    fn start_disable(&mut self) {
+    fn start_disable(&mut self) -> Instant<SystemTimer> {
         self.pins.signal_on.set_low().unwrap();
 
         // Set the bias DAC output into pinch-off.
@@ -750,33 +765,48 @@ impl sm::StateMachineContext for RfChannel {
 
         self.pins.enable_power.set_low().unwrap();
 
-        // Clear any previously tripped interlocks.
-        self.tripped_interlock.take();
-
-        // Start the powerdown timeout.
-        self.powerdown_timeout
-            .replace(self.clock.try_now().unwrap() + 500_u32.milliseconds());
+        self.clock.try_now().unwrap()
     }
 
-    fn check_powerup_timeout(&mut self) -> Result<(), ()> {
-        if self.clock.try_now().unwrap() > *self.powerup_timeout.as_ref().unwrap() {
-            Ok(())
-        } else {
-            Err(())
-        }
-    }
-
-    fn check_powerdown_timeout(&mut self) -> Result<(), ()> {
-        if self.clock.try_now().unwrap() > *self.powerdown_timeout.as_ref().unwrap() {
-            Ok(())
-        } else {
-            Err(())
-        }
-    }
-
-    fn handle_fault(&mut self, fault: &ChannelFault) {
-        self.latched_fault.replace(*fault);
+    fn start_disable_instant(&mut self, _: &Instant<SystemTimer>) -> Instant<SystemTimer> {
         self.start_disable()
+    }
+
+    fn start_disable_interlock(&mut self, _: &Interlock) -> Instant<SystemTimer> {
+        self.start_disable()
+    }
+
+    fn check_timeout(&mut self, deadline: &Instant<SystemTimer>) -> Result<(), ()> {
+        if self.clock.try_now().unwrap() > *deadline {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    fn handle_fault(&mut self, fault: &ChannelFault) -> ChannelFault {
+        self.start_disable();
+        *fault
+    }
+
+    fn handle_fault_instant(
+        &mut self,
+        _: &Instant<SystemTimer>,
+        fault: &ChannelFault,
+    ) -> ChannelFault {
+        self.handle_fault(fault)
+    }
+
+    fn handle_fault_interlock(&mut self, _: &Interlock, fault: &ChannelFault) -> ChannelFault {
+        self.handle_fault(fault)
+    }
+
+    fn handle_recurrent_fault(
+        &mut self,
+        old_fault: &ChannelFault,
+        _: &ChannelFault,
+    ) -> ChannelFault {
+        self.handle_fault(old_fault)
     }
 }
 
@@ -805,7 +835,7 @@ impl RfChannelWrapper {
         PowerStatus {
             powered: self.0.context_mut().pins.enable_power.is_high().unwrap(),
             rf_enabled: self.0.context_mut().pins.signal_on.is_high().unwrap(),
-            blocked: matches!(self.0.state(), &sm::States::Blocked),
+            blocked: matches!(self.0.state(), &sm::States::Blocked(_)),
         }
     }
 
