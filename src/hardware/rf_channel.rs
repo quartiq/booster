@@ -50,8 +50,13 @@ pub enum Interlock {
 
 /// A succinct representation of RF channel state for front panel status indication.
 pub struct PowerStatus {
+    /// The RF channel is powered on.
     pub powered: bool,
+
+    /// The RF output switch is enabled.
     pub rf_enabled: bool,
+
+    /// The channel is in a force-disabled state due to a latched error.
     pub blocked: bool,
 }
 
@@ -693,11 +698,16 @@ mod sm {
 }
 
 impl sm::StateMachineContext for RfChannel {
+    /// Handle the occurrence of a tripped interlock.
     fn handle_trip(&mut self, interlock: &Interlock) -> Interlock {
         self.pins.signal_on.set_low().unwrap();
         *interlock
     }
 
+    /// Begin the process of powering up the channel.
+    ///
+    /// # Returns
+    /// The time at which the powerup process can be deemed complete.
     fn start_powerup(&mut self) -> Instant<SystemTimer> {
         // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
         self.i2c_devices
@@ -711,6 +721,8 @@ impl sm::StateMachineContext for RfChannel {
         // Start the LM3880 power supply sequencer.
         self.pins.enable_power.set_high().unwrap();
 
+        // The LM3880 requires 180ms to power up all supplies on the channel. We add an additional
+        // 20ms margin.
         self.clock.try_now().unwrap() + 200_u32.milliseconds()
     }
 
@@ -718,6 +730,10 @@ impl sm::StateMachineContext for RfChannel {
         self.start_powerup()
     }
 
+    /// Check to see if it's currently acceptable to enable the RF output switch.
+    ///
+    /// # Returns
+    /// An error if it's not currently acceptable to enable. Otherwise, Ok.
     fn guard_enable(&mut self) -> Result<(), ()> {
         let settings = self.settings.settings();
 
@@ -740,6 +756,11 @@ impl sm::StateMachineContext for RfChannel {
             return Err(());
         }
 
+        // Enable power should always be high before we're enabling the RF switch.
+        if self.pins.enable_power.is_low().unwrap() {
+            return Err(());
+        }
+
         Ok(())
     }
 
@@ -754,6 +775,10 @@ impl sm::StateMachineContext for RfChannel {
         self.pins.signal_on.set_high().unwrap();
     }
 
+    /// Begin the process of powering down the channel.
+    ///
+    /// # Returns
+    /// The time at which the powerdown process can be deemed complete.
     fn start_disable(&mut self) -> Instant<SystemTimer> {
         self.pins.signal_on.set_low().unwrap();
 
@@ -765,6 +790,10 @@ impl sm::StateMachineContext for RfChannel {
 
         self.pins.enable_power.set_low().unwrap();
 
+        // Note that we use 500ms here due to the worst-case power-sequencing operation of the
+        // LM3880 that occurs when a channel is disabled immediately after enable. In this case,
+        // the LM3880 will require 180ms to power up the channel, 120ms to stabilize, and then
+        // 180ms to power down the channel.
         self.clock.try_now().unwrap() + 500_u32.milliseconds()
     }
 
@@ -776,6 +805,10 @@ impl sm::StateMachineContext for RfChannel {
         self.start_disable()
     }
 
+    /// Check if a deadline has been met.
+    ///
+    /// # Returns
+    /// Ok if the deadline (timeout) has occurred. Error otherwise.
     fn check_timeout(&mut self, deadline: &Instant<SystemTimer>) -> Result<(), ()> {
         if self.clock.try_now().unwrap() > *deadline {
             Ok(())
@@ -784,6 +817,7 @@ impl sm::StateMachineContext for RfChannel {
         }
     }
 
+    /// Handle the occurrence of a channel fault.
     fn handle_fault(&mut self, fault: &ChannelFault) -> ChannelFault {
         self.start_disable();
         *fault
@@ -810,13 +844,19 @@ impl sm::StateMachineContext for RfChannel {
     }
 }
 
+/// A wrapper around the RF channel state machine.
 pub struct RfChannelWrapper(pub sm::StateMachine<RfChannel>);
 
 impl RfChannelWrapper {
+    /// Construct a new channel state manager.
     pub fn new(channel: RfChannel) -> Self {
         Self(sm::StateMachine::new(channel))
     }
 
+    /// Periodically called to update the channel state machine.
+    ///
+    /// # Returns
+    /// The current channel [PowerStatus]
     pub fn update(&mut self) -> PowerStatus {
         // Check for channel faults.
         if let Some(fault) = self.0.context_mut().check_faults() {
@@ -839,15 +879,18 @@ impl RfChannelWrapper {
         }
     }
 
+    /// Handle the user pressing the "Interlock Reset" button.
     pub fn interlock_reset(&mut self) -> Result<(), sm::Error> {
         self.0.process_event(sm::Events::InterlockReset)?;
         Ok(())
     }
 
+    /// Handle the user pressing the "Standby" button.
     pub fn standby(&mut self) {
         self.0.process_event(sm::Events::Disable).ok();
     }
 
+    /// Handle an update to channel settings.
     pub fn handle_settings(&mut self, settings: &ChannelSettings) -> Result<(), Error> {
         self.0.context_mut().apply_settings(settings)?;
 
