@@ -769,8 +769,22 @@ impl RfChannel {
         }
     }
 
+    /// Apply channel settings to the RF channel.
+    ///
+    /// # Note
+    /// This is always implemented in a "least-effort" manner. If settings haven't changed, they
+    /// won't be applied.
+    ///
+    /// # Args
+    /// * `new_settings` - The new settings to apply to the channel.
     pub fn apply_settings(&mut self, new_settings: &ChannelSettings) -> Result<(), Error> {
+        // If the settings haven't changed, we can short circuit now.
+        if self.settings.settings() == new_settings {
+            return Ok(());
+        }
+
         let settings = self.settings.settings_mut();
+
         let bias_changed = new_settings.bias_voltage != settings.bias_voltage;
         let interlock_updated = settings
             .output_power_transform
@@ -779,7 +793,8 @@ impl RfChannel {
                 .output_power_transform
                 .map(new_settings.output_interlock_threshold);
 
-        // Copy transforms first
+        // Copy transforms before applying the interlock threshold, since the interlock DAC level
+        // is calculated from the output interlock transform.
         *self.settings.settings_mut() = new_settings.clone();
 
         // Only update the interlock and bias DACs if they've actually changed.
