@@ -10,6 +10,7 @@ use dac7571::Dac7571;
 use max6642::Max6642;
 use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
+use minimq::embedded_time::Clock;
 
 use super::{platform, I2cBusManager, I2cProxy};
 use crate::{
@@ -23,8 +24,6 @@ use stm32f4xx_hal::{
     gpio::{Analog, Floating, Input, Output, PullDown, PushPull},
     prelude::*,
 };
-
-use rtic::cyccnt::{Duration, Instant};
 
 /// A structure representing power supply measurements of a channel.
 pub struct SupplyMeasurements {
@@ -49,80 +48,78 @@ pub enum Interlock {
     Reflected,
 }
 
+pub struct PowerStatus {
+    pub powered: bool,
+    pub rf_enabled: bool,
+    pub blocked: bool,
+}
+
 mod sm {
-    use smlang::statemachine;
     use super::{ChannelFault, Interlock};
     use crate::hardware::clock::SystemTimer;
-    use minimq::embedded_time::Instant;
+    use minimq::embedded_time::{duration::Extensions, Clock, Instant};
+    use smlang::statemachine;
 
-    statemachine! {
-        transitions: {
-            *Off + PowerChannel / start_powerup_timeout = Powerup,
-
-            Powerup(Instant<SystemTimer>) + PowerupElapsed = Powered,
-            Powerup(Instant<SystemTimer>) + TurnOff / start_powerdown_timeout = Powerdown,
-            Powerup(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault = Blocked,
-
-            Powered + Enable = Enabled,
-            Powered + TurnOff / start_powerdown_timeout = Powerdown,
-            Powered + Fault(ChannelFault) / handle_fault = Blocked,
-
-            Enabled + Trip(Interlock) / hanle_trip = Tripped,
-            Enabled + TurnOff / start_powerdown_timeout = Powerdown,
-            Enabled + Fault(ChannelFault) / handle_fault = Blocked,
-
-            Tripped(Interlock) + Enable = Enabled,
-            Tripped(Interlock) + TurnOff / start_powerdown_timeout = Powerdown,
-            Tripped(Interlock) + Fault(ChannelFault) / handle_fault = Blocked,
-
-            // When the powerdown timer elapses, the channel is off.
-            Powerdown(Instant<SystemTimer>) + PowerdownElapsed = Off,
-            Powerdown(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault = Blocked,
-
-            // TODO: smlang is complaining about this one
-            //Powerdown(Instant<SystemTimer>) + PowerChannel / start_powerup_timeout = Powerup,
-
-            // TODO: Faults during a blocked state should not change the state.
-            //Blocked(ChannelFault) + Fault(ChannelFault) / handle_fault = Blocked,
+    impl Copy for States {}
+    impl Clone for States {
+        fn clone(&self) -> States {
+            *self
         }
     }
 
-    impl<T: StateMachineContext> serde::Serialize for StateMachine<T>::State {
+    statemachine! {
+        transitions: {
+            *Off + ResetEnable / start_powerup_timeout = Powerup,
+            Off + TurnOff = Off,
+
+            Powerup(Instant<SystemTimer>) + PowerupElapsed = Powered,
+            Powerup(Instant<SystemTimer>) + TurnOff / start_powerdown_timeout_instant = Powerdown(Instant<SystemTimer>),
+            Powerup(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault_instant = Blocked(ChannelFault),
+
+            Powered + Enable = Enabled,
+            Powered + TurnOff / start_powerdown_timeout = Powerdown(Instant<SystemTimer>),
+            Powered + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
+
+            Enabled + Trip(Interlock) / handle_trip = Tripped(Interlock),
+            Enabled + ResetEnable / start_powerup_timeout = Powerup(Instant<SystemTimer>),
+            Enabled + TurnOff / start_powerdown_timeout = Powerdown(Instant<SystemTimer>),
+            Enabled + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
+
+            Tripped(Interlock) + ResetEnable / start_powerup_timeout_interlock = Powerup(Instant<SystemTimer>),
+            Tripped(Interlock) + TurnOff / start_powerdown_timeout_interlock = Powerdown(Instant<SystemTimer>),
+            Tripped(Interlock) + Fault(ChannelFault) / handle_fault_interlock = Blocked(ChannelFault),
+
+            Powerdown(Instant<SystemTimer>) + PowerdownElapsed = Off,
+            Powerdown(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault_instant = Blocked(ChannelFault),
+        }
+    }
+
+    impl serde::Serialize for States {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             match *self {
-                StateMachine::State::Blocked(ChannelFault::SupplyAlert) => {
+                States::Blocked(ChannelFault::SupplyAlert) => {
                     serializer.serialize_unit_variant("State", 0, "Blocked(SupplyAlert)")
                 }
-                StateMachine::State::Blocked(ChannelFault::UnderTemperature) => {
+                States::Blocked(ChannelFault::UnderTemperature) => {
                     serializer.serialize_unit_variant("State", 0, "Blocked(UnderTempeterature)")
                 }
-                StateMachine::State::Blocked(ChannelFault::OverTemperature) => {
+                States::Blocked(ChannelFault::OverTemperature) => {
                     serializer.serialize_unit_variant("State", 0, "Blocked(OverTemperature)")
                 }
-                StateMachine::State::Off => {
-                    serializer.serialize_unit_variant("State", 1, "Off")
-                }
-                StateMachine::State::Powerup(_, _) => {
-                    serializer.serialize_unit_variant("State", 2, "Powerup")
-                }
-                StateMachine::State::Powered => {
-                    serializer.serialize_unit_variant("State", 3, "Powered")
-                }
-                StateMachine::State::Enabled => {
-                    serializer.serialize_unit_variant("State", 4, "Enabled")
-                }
-                StateMachine::State::Tripped(Interlock::Input) => {
+                States::Off => serializer.serialize_unit_variant("State", 1, "Off"),
+                States::Powerup(_) => serializer.serialize_unit_variant("State", 2, "Powerup"),
+                States::Powered => serializer.serialize_unit_variant("State", 3, "Powered"),
+                States::Enabled => serializer.serialize_unit_variant("State", 4, "Enabled"),
+                States::Tripped(Interlock::Input) => {
                     serializer.serialize_unit_variant("State", 5, "Tripped(Input)")
                 }
-                StateMachine::State::Tripped(Interlock::Output) => {
+                States::Tripped(Interlock::Output) => {
                     serializer.serialize_unit_variant("State", 5, "Tripped(Output)")
                 }
-                StateMachine::State::Tripped(Interlock::Reflected) => {
+                States::Tripped(Interlock::Reflected) => {
                     serializer.serialize_unit_variant("State", 5, "Tripped(Reflected)")
                 }
-                StateMachine::State::Powerdown(_) => {
-                    serializer.serialize_unit_variant("State", 6, "Powerdown")
-                }
+                States::Powerdown(_) => serializer.serialize_unit_variant("State", 6, "Powerdown"),
             }
         }
     }
@@ -132,15 +129,11 @@ mod sm {
         pub clock: SystemTimer,
     }
 
-    impl StateMachineContext for Context {
-        fn handle_fault(&mut self, fault: ChannelFault) -> ChanneFault {
-            fault
-        }
-
+    impl Context {
         fn start_powerup_timeout(&mut self) -> Instant<SystemTimer> {
             // The LM3880 requires 180ms to power up all supplies on the channel. We add an
             // additional 20ms margin.
-            self.clock.try_now().unwrap() + 200.millis()
+            self.clock.try_now().unwrap() + 200_u32.milliseconds()
         }
 
         fn start_powerdown_timeout(&mut self) -> Instant<SystemTimer> {
@@ -148,7 +141,52 @@ mod sm {
             // LM3880 that occurs when a channel is disabled immediately after enable. In this
             // case, the LM3880 will require 180ms to power up the channel, 120ms to stabilize, and
             // then 180ms to power down the channel.
-            self.clock.try_now().unwrap() + 500.millis()
+            self.clock.try_now().unwrap() + 500_u32.milliseconds()
+        }
+    }
+
+    impl StateMachineContext for Context {
+        fn start_powerdown_timeout(&mut self) -> Instant<SystemTimer> {
+            self.start_powerdown_timeout()
+        }
+
+        fn start_powerdown_timeout_interlock(&mut self, _: &Interlock) -> Instant<SystemTimer> {
+            self.start_powerdown_timeout()
+        }
+
+        fn start_powerdown_timeout_instant(
+            &mut self,
+            _instant: &Instant<SystemTimer>,
+        ) -> Instant<SystemTimer> {
+            self.start_powerdown_timeout()
+        }
+
+        fn start_powerup_timeout_interlock(&mut self, _: &Interlock) -> Instant<SystemTimer> {
+            self.start_powerup_timeout()
+        }
+
+        fn start_powerup_timeout(&mut self) -> Instant<SystemTimer> {
+            self.start_powerup_timeout()
+        }
+
+        fn handle_fault(&mut self, fault: &ChannelFault) -> ChannelFault {
+            *fault
+        }
+
+        fn handle_fault_instant(
+            &mut self,
+            _: &Instant<SystemTimer>,
+            fault: &ChannelFault,
+        ) -> ChannelFault {
+            *fault
+        }
+
+        fn handle_fault_interlock(&mut self, _: &Interlock, fault: &ChannelFault) -> ChannelFault {
+            *fault
+        }
+
+        fn handle_trip(&mut self, interlock: &Interlock) -> Interlock {
+            *interlock
         }
     }
 }
@@ -377,7 +415,7 @@ impl ChannelPins {
 }
 
 /// Contains channel status information in SI base units.
-#[derive(Debug, serde::Serialize)]
+#[derive(serde::Serialize)]
 pub struct ChannelStatus {
     pub reflected_overdrive: bool,
     pub output_overdrive: bool,
@@ -389,10 +427,7 @@ pub struct ChannelStatus {
     pub input_power: f32,
     pub reflected_power: f32,
     pub output_power: f32,
-    pub reflected_overdrive_threshold: f32,
-    pub output_overdrive_threshold: f32,
-    pub bias_voltage: f32,
-    pub state: sm::StateMachine<sm::Context>::States,
+    pub state: sm::States,
 }
 
 /// Represents a means of interacting with an RF output channel.
@@ -444,7 +479,7 @@ impl RfChannel {
                 if channel.settings.settings().enabled && platform::watchdog_detected() == false {
                     channel
                         .state_machine
-                        .process_event(sm::Events::PowerChannel)
+                        .process_event(sm::Events::ResetEnable)
                         .unwrap();
                 }
 
@@ -525,14 +560,18 @@ impl RfChannel {
 
         match self.state_machine.state() {
             sm::States::Powerup(complete_time) => {
-                if self.state_machine.context.clock.try_now() > complete_time {
-                    self.state_machine.process_event(sm::Events::PowerupElapsed).unwrap();
+                if self.state_machine.context().clock.try_now().unwrap() > *complete_time {
+                    self.state_machine
+                        .process_event(sm::Events::PowerupElapsed)
+                        .unwrap();
                 }
             }
 
             sm::States::Powerdown(complete_time) => {
-                if self.state_machine.context.clock.try_now() > complete_time {
-                    self.state_machine.process_event(sm::Events::PowerdownElapsed).unwrap();
+                if self.state_machine.context().clock.try_now().unwrap() > *complete_time {
+                    self.state_machine
+                        .process_event(sm::Events::PowerdownElapsed)
+                        .unwrap();
                 }
             }
 
@@ -557,9 +596,7 @@ impl RfChannel {
             }
 
             // There's no active transitions in the following states.
-            sm::States::Off
-            | sm::States::Blocked(_)
-            | sm::States::Tripped(_) => {}
+            sm::States::Off | sm::States::Blocked(_) | sm::States::Tripped(_) => {}
         }
 
         Ok(())
@@ -586,9 +623,9 @@ impl RfChannel {
 
     /// Start the power-up process for channel.
     pub fn start_powerup(&mut self) -> Result<(), Error> {
-        // TODO: If we are just tripped or are already powered, we can re-enable the channel by cycling
-        // the ON_OFFn input.
-        self.state_machine.process_event(sm::Events::PowerChannel)?;
+        self.state_machine
+            .process_event(sm::Events::ResetEnable)
+            .map_err(|_| Error::InvalidState)?;
 
         // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
         self.i2c_devices
@@ -630,14 +667,19 @@ impl RfChannel {
         self.pins.signal_on.set_high().unwrap();
 
         // We should always be able to enable in the current state.
-        self.state_machine.process_event(sm::Events::Enable).unwrap();
+        self.state_machine
+            .process_event(sm::Events::Enable)
+            .unwrap();
 
         Ok(())
     }
 
     /// Disable the channel and power it off.
     pub fn start_disable(&mut self) {
-        let channel_was_powered = self.pins.enable_power.is_high().unwrap();
+        // Note: It is always acceptable to begin turning off the channel, and we don't want to
+        // prevent hardware from shutting down. In the case where we're already powering down, we
+        // will ignore a state transition error and maintain any timeout we were previously using.
+        self.state_machine.process_event(sm::Events::TurnOff).ok();
 
         // The RF channel may be unconditionally disabled at any point to aid in preventing damage.
         // The effect of this is that we must assume worst-case power-down timing, which increases
@@ -651,7 +693,6 @@ impl RfChannel {
             .expect("Failed to disable RF bias voltage");
 
         self.pins.enable_power.set_low().unwrap();
-        self.state_machine.process_event(sm::Events::TurnOff).unwrap();
     }
 
     /// Apply channel settings to the RF channel.
@@ -697,7 +738,7 @@ impl RfChannel {
             self.start_disable();
         } else {
             // If the channel is in fault conditions, do not attempt to enable it.
-            if !matches!(self.get_state(), ChannelState::Blocked(_)) {
+            if !matches!(self.state_machine.state(), sm::States::Blocked(_)) {
                 self.start_powerup().unwrap();
             }
         }
@@ -840,14 +881,6 @@ impl RfChannel {
         self.settings.settings().output_power_transform.map(voltage)
     }
 
-    /// Get the current output power interlock threshold.
-    ///
-    /// # Returns
-    /// The current output interlock threshold in dBm.
-    pub fn get_output_interlock_threshold(&self) -> f32 {
-        self.settings.settings().output_interlock_threshold
-    }
-
     /// Get the current bias voltage programmed to the RF amplification transistor.
     pub fn get_bias_voltage(&self) -> f32 {
         self.settings.settings().bias_voltage
@@ -868,10 +901,7 @@ impl RfChannel {
             input_power: self.get_input_power(),
             output_power: self.get_output_power(adc),
             reflected_power: self.get_reflected_power(adc),
-            reflected_overdrive_threshold: platform::MAXIMUM_REFLECTED_POWER_DBM,
-            output_overdrive_threshold: self.get_output_interlock_threshold(),
-            bias_voltage: self.get_bias_voltage(),
-            state: self.state_machine.state(),
+            state: *self.state_machine.state(),
         };
 
         status
@@ -881,7 +911,11 @@ impl RfChannel {
         self.settings.settings().clone()
     }
 
-    pub fn settings(&self) -> ChannelSettings {
-        self.settings.settings().clone()
+    pub fn get_power_status(&self) -> PowerStatus {
+        PowerStatus {
+            powered: self.pins.enable_power.is_high().unwrap(),
+            rf_enabled: self.pins.signal_on.is_high().unwrap(),
+            blocked: matches!(self.state_machine.state(), &sm::States::Blocked(_)),
+        }
     }
 }
