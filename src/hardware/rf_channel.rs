@@ -725,8 +725,6 @@ impl RfChannel {
             return Err(Error::Invalid);
         }
 
-        settings.enabled = true;
-
         self.apply_bias().unwrap();
 
         self.pins.signal_on.set_high().unwrap();
@@ -741,8 +739,6 @@ impl RfChannel {
     /// Disable the channel and power it off.
     pub fn start_disable(&mut self) {
         let channel_was_powered = self.pins.enable_power.is_high().unwrap();
-
-        self.settings.settings_mut().enabled = false;
 
         // The RF channel may be unconditionally disabled at any point to aid in preventing damage.
         // The effect of this is that we must assume worst-case power-down timing, which increases
