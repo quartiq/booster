@@ -10,7 +10,7 @@ use dac7571::Dac7571;
 use max6642::Max6642;
 use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
-use minimq::embedded_time::{Clock, Instant};
+use minimq::embedded_time::{duration::Extensions, Clock, Instant};
 
 use super::{clock::SystemTimer, platform, I2cBusManager, I2cProxy};
 use crate::{
@@ -711,7 +711,7 @@ impl sm::StateMachineContext for RfChannel {
         // Start the LM3880 power supply sequencer.
         self.pins.enable_power.set_high().unwrap();
 
-        self.clock.try_now().unwrap()
+        self.clock.try_now().unwrap() + 200_u32.milliseconds()
     }
 
     fn start_powerup_interlock(&mut self, _: &Interlock) -> Instant<SystemTimer> {
@@ -765,7 +765,7 @@ impl sm::StateMachineContext for RfChannel {
 
         self.pins.enable_power.set_low().unwrap();
 
-        self.clock.try_now().unwrap()
+        self.clock.try_now().unwrap() + 500_u32.milliseconds()
     }
 
     fn start_disable_instant(&mut self, _: &Instant<SystemTimer>) -> Instant<SystemTimer> {
@@ -846,5 +846,24 @@ impl RfChannelWrapper {
 
     pub fn standby(&mut self) {
         self.0.process_event(sm::Events::Disable).ok();
+    }
+
+    pub fn handle_settings(&mut self, settings: &ChannelSettings) -> Result<(), Error> {
+        self.0.context_mut().apply_settings(settings)?;
+
+        if !settings.enabled {
+            // If settings has us disabled, it's always okay to blindly power down.
+            self.0.process_event(sm::Events::Disable).ok();
+        } else {
+            if settings.enabled != self.0.context_mut().pins.enable_power.is_high().unwrap()
+                || settings.output_disable != self.0.context_mut().pins.signal_on.is_low().unwrap()
+            {
+                // Our current power state has a mismatch with the settings. Reset ourselves into the
+                // updated state.
+                self.0.process_event(sm::Events::InterlockReset).ok();
+            }
+        }
+
+        Ok(())
     }
 }

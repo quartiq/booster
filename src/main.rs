@@ -286,8 +286,9 @@ const APP: () = {
             let settings = &all_settings.channel[chan as usize];
             c.resources.main_bus.lock(|main_bus| {
                 if let Ok(ref mut channel) = main_bus.channels.channel_mut(chan) {
-                    // TODO: We need to add an action to the channel when settings apply.
-                    channel.0.context_mut().apply_settings(settings).unwrap();
+                    if let Err(err) = channel.handle_settings(settings) {
+                        log::warn!("Settings failure on {:?}: {:?}", chan, err);
+                    }
                 }
             });
         }
