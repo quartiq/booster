@@ -107,7 +107,7 @@ impl ChassisFans {
     fn set_duty_cycles(&mut self, duty_cycle: f32) {
         // Keep retrying until the configuration succeeds or the maximum number of retry
         // attempts is exhausted.
-        let retry_set = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| -> () {
+        let retry_set = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| {
             for _ in 0..2 {
                 match fan.set_duty_cycle(subfan, duty_cycle) {
                     Err(max6639::Error::Interface(I2cError::NACK)) => {}

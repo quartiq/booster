@@ -11,12 +11,12 @@ use hal::time::U32Ext;
 
 /// Represents various clients that can check in with the watchdog.
 pub enum WatchdogClient {
-    TelemetryTask = 0,
-    IdleTask = 1,
-    UsbTask = 2,
-    ButtonTask = 3,
-    FanTask = 4,
-    MonitorTask = 5,
+    Telemetry = 0,
+    Idle = 1,
+    Usb = 2,
+    Button = 3,
+    Fan = 4,
+    Monitor = 5,
 }
 
 /// A manager for the device indepedent watchdog.

@@ -195,33 +195,24 @@ impl Devices {
         // Verify that there is no active alarm condition.
         assert!(ads7924.clear_alarm().expect("Failed to clear alarm") == 0);
 
-        if let Ok(ad5627) = Ad5627::default(manager.acquire_i2c()) {
-            if let Ok(eui48) = Microchip24AA02E48::new(manager.acquire_i2c()) {
-                // Query devices on the RF module to verify they are present.
-                let mut max6642 = Max6642::att94(manager.acquire_i2c());
-                if let Err(_) = max6642.get_remote_temperature() {
-                    return None;
-                }
+        // Query devices on the RF module to verify they are present.
+        let ad5627 = Ad5627::default(manager.acquire_i2c()).ok()?;
+        let eui48 = Microchip24AA02E48::new(manager.acquire_i2c()).ok()?;
+        let mut max6642 = Max6642::att94(manager.acquire_i2c());
+        max6642.get_remote_temperature().ok()?;
+        let mut mcp3221 = Mcp3221::default(manager.acquire_i2c());
+        mcp3221.get_voltage().ok()?;
 
-                let mut mcp3221 = Mcp3221::default(manager.acquire_i2c());
-                if let Err(_) = mcp3221.get_voltage() {
-                    return None;
-                }
-
-                return Some((
-                    Self {
-                        interlock_thresholds_dac: ad5627,
-                        input_power_adc: mcp3221,
-                        temperature_monitor: max6642,
-                        bias_dac: dac7571,
-                        power_monitor: ads7924,
-                    },
-                    eui48,
-                ));
-            }
-        }
-
-        None
+        Some((
+            Self {
+                interlock_thresholds_dac: ad5627,
+                input_power_adc: mcp3221,
+                temperature_monitor: max6642,
+                bias_dac: dac7571,
+                power_monitor: ads7924,
+            },
+            eui48,
+        ))
     }
 }
 
@@ -602,7 +593,7 @@ impl RfChannel {
     pub fn get_status(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> ChannelStatus {
         let power_measurements = self.get_supply_measurements();
 
-        let status = ChannelStatus {
+        ChannelStatus {
             reflected_overdrive: self.pins.reflected_overdrive.is_high().unwrap(),
             output_overdrive: self.pins.output_overdrive.is_high().unwrap(),
             alert: self.pins.alert.is_low().unwrap(),
@@ -613,9 +604,7 @@ impl RfChannel {
             input_power: self.get_input_power(),
             output_power: self.get_output_power(adc),
             reflected_power: self.get_reflected_power(adc),
-        };
-
-        status
+        }
     }
 
     pub fn settings(&self) -> ChannelSettings {
@@ -752,7 +741,7 @@ impl sm::StateMachineContext for RfChannel {
         }
 
         // Do not enable output if it shouldn't be disabled due to settings.
-        if settings.enabled == false || settings.output_disable {
+        if !settings.enabled || settings.output_disable {
             return Err(());
         }
 
@@ -891,14 +880,12 @@ impl sm::StateMachine<RfChannel> {
         if !settings.enabled {
             // If settings has us disabled, it's always okay to blindly power down.
             self.process_event(sm::Events::Disable).ok();
-        } else {
-            if settings.enabled != self.context_mut().pins.enable_power.is_high().unwrap()
-                || settings.output_disable != self.context_mut().pins.signal_on.is_low().unwrap()
-            {
-                // Our current power state has a mismatch with the settings. Reset ourselves into the
-                // updated state.
-                self.process_event(sm::Events::InterlockReset).ok();
-            }
+        } else if settings.enabled != self.context_mut().pins.enable_power.is_high().unwrap()
+            || settings.output_disable != self.context_mut().pins.signal_on.is_low().unwrap()
+        {
+            // Our current power state has a mismatch with the settings. Reset ourselves into the
+            // updated state.
+            self.process_event(sm::Events::InterlockReset).ok();
         }
 
         Ok(())

@@ -138,7 +138,7 @@ const APP: () = {
     #[task(priority = 3, schedule = [channel_monitor], resources=[main_bus, leds, watchdog])]
     fn channel_monitor(c: channel_monitor::Context) {
         // Check in with the watchdog.
-        c.resources.watchdog.check_in(WatchdogClient::MonitorTask);
+        c.resources.watchdog.check_in(WatchdogClient::Monitor);
 
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
@@ -180,7 +180,7 @@ const APP: () = {
         // Check in with the watchdog.
         c.resources
             .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::FanTask));
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::Fan));
 
         // Determine the maximum channel temperature.
         let mut temperatures: [f32; 8] = [0.0; 8];
@@ -213,7 +213,7 @@ const APP: () = {
         // Check in with the watchdog.
         c.resources
             .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::TelemetryTask));
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::Telemetry));
 
         // Gather telemetry for all of the channels.
         for channel in Channel::into_enum_iter() {
@@ -243,7 +243,7 @@ const APP: () = {
         // Check in with the watchdog.
         c.resources
             .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::ButtonTask));
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::Button));
 
         if let Some(event) = c.resources.buttons.update() {
             match event {
@@ -299,10 +299,10 @@ const APP: () = {
         // Check in with the watchdog.
         c.resources
             .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::UsbTask));
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::Usb));
 
         // Process any log output.
-        LOGGER.process(&mut c.resources.usb_terminal);
+        LOGGER.process(c.resources.usb_terminal);
 
         // Handle the USB serial terminal.
         c.resources.usb_terminal.process();
@@ -319,7 +319,7 @@ const APP: () = {
             // Check in with the watchdog.
             c.resources
                 .watchdog
-                .lock(|watchdog| watchdog.check_in(WatchdogClient::IdleTask));
+                .lock(|watchdog| watchdog.check_in(WatchdogClient::Idle));
 
             // Handle the Miniconf settings interface.
             match c.resources.net_devices.lock(|net| net.settings.update()) {

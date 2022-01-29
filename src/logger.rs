@@ -33,7 +33,7 @@ impl BufferedLog {
     /// * `terminal` - The serial terminal to write log data into.
     pub fn process(&self, terminal: &mut SerialTerminal) {
         while let Some(log) = self.logs.dequeue() {
-            terminal.write(&log.as_bytes());
+            terminal.write(log.as_bytes());
         }
     }
 }
@@ -49,21 +49,20 @@ impl log::Log for BufferedLog {
 
         // Print the record into the buffer.
         let mut string: String<256> = String::new();
-        match write!(
+        if writeln!(
             &mut string,
             "[{}] {}:{} - {}\n",
             record.level(),
             source_file,
             source_line,
             record.args()
-        ) {
+        )
+        .is_err()
+        {
             // If we cannot encode the log entry, note this in the output log to indicate the log
             // was dropped.
-            Err(_) => {
-                error!("Log entry overflow");
-                return;
-            }
-            _ => {}
+            error!("Log entry overflow");
+            return;
         };
 
         self.logs.enqueue(string).ok();

@@ -36,7 +36,7 @@ impl TelemetryClient {
 
         Self {
             mqtt: minimq::Minimq::new(broker, &client_id, stack, SystemTimer::default()).unwrap(),
-            prefix: prefix,
+            prefix,
         }
     }
 

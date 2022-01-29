@@ -68,7 +68,7 @@ impl Response {
     ///
     /// # Args
     /// * `msg` - An additional user-readable message.
-    pub fn okay<'a>(msg: &'a str) -> String<256> {
+    pub fn okay(msg: &str) -> String<256> {
         let response = Response {
             code: 200,
             msg: String::from(msg),
@@ -81,7 +81,7 @@ impl Response {
     ///
     /// # Args
     /// * `msg` - An additional user-readable message.
-    pub fn error_msg<'a>(msg: &'a str) -> String<256> {
+    pub fn error_msg(msg: &str) -> String<256> {
         let response = Response {
             code: 400,
             msg: String::from(msg),
@@ -115,10 +115,10 @@ pub struct ControlState {
 
 impl ControlState {
     /// Construct the MQTT control state manager.
-    pub fn new<'a>(
+    pub fn new(
         broker: minimq::embedded_nal::IpAddr,
         stack: super::NetworkStackProxy,
-        id: &'a str,
+        id: &str,
         delay: AsmDelay,
     ) -> Self {
         let mut client_id: String<64> = String::new();
@@ -145,14 +145,12 @@ impl ControlState {
     /// * `resources` - The `idle` resources containing the client and RF channels.
     pub fn update(&mut self, main_bus: &mut impl rtic::Mutex<T = MainBus>) {
         // Subscribe to any control topics necessary.
-        if !self.subscribed {
-            if self.mqtt.client.is_connected() {
-                self.mqtt
-                    .client
-                    .subscribe(&self.control_topic, &[])
-                    .unwrap();
-                self.subscribed = true;
-            }
+        if !self.subscribed && self.mqtt.client.is_connected() {
+            self.mqtt
+                .client
+                .subscribe(&self.control_topic, &[])
+                .unwrap();
+            self.subscribed = true;
         }
 
         let response_topic = &self.default_response_topic;
@@ -169,14 +167,8 @@ impl ControlState {
 
             if let Property::ResponseTopic(topic) = properties
                 .iter()
-                .find(|&prop| {
-                    if let Property::ResponseTopic(_) = *prop {
-                        true
-                    } else {
-                        false
-                    }
-                })
-                .or(Some(&Property::ResponseTopic(&response_topic)))
+                .find(|&prop| matches!(*prop, Property::ResponseTopic(_)))
+                .or(Some(&Property::ResponseTopic(response_topic)))
                 .unwrap()
             {
                 client
@@ -239,8 +231,7 @@ fn handle_channel_update(
                 // Wait for 11 ms > 10.04 ms total cycle time to ensure an up-to-date
                 // current measurement.
                 delay.delay_us(11000);
-                response =
-                    ChannelBiasResponse::okay(ch.get_bias_voltage(), ch.get_p28v_current()).into();
+                response = ChannelBiasResponse::okay(ch.get_bias_voltage(), ch.get_p28v_current());
                 Ok(&response)
             }
         })

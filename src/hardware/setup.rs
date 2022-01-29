@@ -242,7 +242,7 @@ pub fn setup(
         };
 
         // Test scanning and reading back MUX channels.
-        assert!(mux.self_test().unwrap() == true);
+        assert!(mux.self_test().unwrap());
 
         let config = hal::adc::config::AdcConfig::default().reference_voltage(2500);
 

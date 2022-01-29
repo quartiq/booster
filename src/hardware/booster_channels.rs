@@ -22,9 +22,9 @@ pub struct BoosterChannels {
     mux: Tca9548<I2cProxy>,
 }
 
-impl Into<tca9548::Bus> for Channel {
-    fn into(self) -> tca9548::Bus {
-        match self {
+impl From<Channel> for tca9548::Bus {
+    fn from(channel: Channel) -> tca9548::Bus {
+        match channel {
             Channel::Zero => tca9548::Bus::Zero,
             Channel::One => tca9548::Bus::One,
             Channel::Two => tca9548::Bus::Two,
@@ -71,7 +71,7 @@ impl BoosterChannels {
                 .take()
                 .expect("Channel pins not available");
 
-            if let Some(rf_channel) = RfChannel::new(&manager, control_pins, delay) {
+            if let Some(rf_channel) = RfChannel::new(manager, control_pins, delay) {
                 rf_channels[channel as usize].replace(RfChannelWrapper::new(rf_channel));
             } else {
                 info!("Channel {} did not enumerate", channel as usize);
@@ -80,8 +80,8 @@ impl BoosterChannels {
 
         BoosterChannels {
             channels: rf_channels,
-            mux: mux,
-            adc: adc,
+            mux,
+            adc,
         }
     }
 

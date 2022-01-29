@@ -40,7 +40,7 @@ pub type I2C2 = hal::i2c::I2c<
     ),
 >;
 
-pub type SPI = hal::spi::Spi<
+pub type Spi = hal::spi::Spi<
     hal::stm32::SPI1,
     (
         hal::gpio::gpioa::PA5<hal::gpio::Alternate<hal::gpio::AF5>>,
@@ -54,14 +54,14 @@ pub type NetworkStack = smoltcp_nal::NetworkStack<
     'static,
     'static,
     enc424j600::smoltcp_phy::SmoltcpDevice<
-        enc424j600::Enc424j600<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
+        enc424j600::Enc424j600<Spi, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
     >,
     enc424j600_api::EpochClock<CPU_FREQ>,
 >;
 
 #[cfg(feature = "phy_w5500")]
 pub type NetworkStack = w5500::Device<
-    w5500::bus::FourWire<SPI, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
+    w5500::bus::FourWire<Spi, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
     w5500::Manual,
 >;
 
