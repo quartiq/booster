@@ -402,22 +402,30 @@ impl RfChannel {
         let settings = self.settings.settings_mut();
 
         let bias_changed = new_settings.bias_voltage != settings.bias_voltage;
-        let interlock_updated = settings
+        let output_interlock_updated = settings
             .output_power_transform
             .map(settings.output_interlock_threshold)
             != new_settings
                 .output_power_transform
                 .map(new_settings.output_interlock_threshold);
+        let reflected_interlock_updated = settings
+            .reflected_power_transform
+            .map(platform::MAXIMUM_REFLECTED_POWER_DBM)
+            != new_settings
+                .reflected_power_transform
+                .map(platform::MAXIMUM_REFLECTED_POWER_DBM);
 
         // Copy transforms before applying the interlock threshold, since the interlock DAC level
         // is calculated from the output interlock transform.
         *self.settings.settings_mut() = new_settings.clone();
 
         // Only update the interlock and bias DACs if they've actually changed.
-        if interlock_updated {
+        if output_interlock_updated {
             self.apply_output_interlock_threshold()?;
         }
-
+        if reflected_interlock_updated {
+            self.set_reflected_interlock_threshold(platform::MAXIMUM_REFLECTED_POWER_DBM)?;
+        }
         if bias_changed {
             self.apply_bias()?;
         }
