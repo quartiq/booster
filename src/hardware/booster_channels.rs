@@ -56,33 +56,25 @@ impl BoosterChannels {
         mut mux: Tca9548<I2cProxy>,
         adc: hal::adc::Adc<hal::stm32::ADC3>,
         manager: &'static I2cBusManager,
-        mut pins: [Option<RfChannelPins>; 8],
+        pins: [RfChannelPins; 8],
         delay: &mut impl DelayUs<u16>,
     ) -> Self {
-        let mut rf_channels: [Option<RfChannelWrapper>; 8] =
+        let mut channels: [Option<RfChannelWrapper>; 8] =
             [None, None, None, None, None, None, None, None];
 
-        for channel in Channel::into_enum_iter() {
+        for (idx, pins) in Channel::into_enum_iter().zip(pins) {
             // Selecting an I2C bus should never fail.
-            mux.select_bus(Some(channel.into()))
+            mux.select_bus(Some(idx.into()))
                 .expect("Failed to select channel");
 
-            let control_pins = pins[channel as usize]
-                .take()
-                .expect("Channel pins not available");
-
-            if let Some(rf_channel) = RfChannel::new(manager, control_pins, delay) {
-                rf_channels[channel as usize].replace(RfChannelWrapper::new(rf_channel));
+            if let Some(channel) = RfChannel::new(manager, pins, delay) {
+                channels[idx as usize].replace(RfChannelWrapper::new(channel));
             } else {
-                info!("Channel {} did not enumerate", channel as usize);
+                info!("Channel {} did not enumerate", idx as usize);
             }
         }
 
-        BoosterChannels {
-            channels: rf_channels,
-            mux,
-            adc,
-        }
+        BoosterChannels { channels, mux, adc }
     }
 
     /// Perform an action on a channel.

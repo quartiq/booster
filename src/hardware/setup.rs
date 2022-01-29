@@ -57,7 +57,7 @@ macro_rules! channel_pins {
         let tx_power = AdcPin::$tx_power($gpioa.$tx_power.into_analog());
         let reflected_power = AdcPin::$reflected_power($gpioa.$reflected_power.into_analog());
 
-        Some(RfChannelPins::new(
+        RfChannelPins::new(
             enable_power,
             alert,
             reflected_overdrive,
@@ -65,7 +65,7 @@ macro_rules! channel_pins {
             signal_on,
             tx_power,
             reflected_power,
-        ))
+        )
     }};
 }
 
@@ -182,29 +182,16 @@ pub fn setup(
     // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
     // bus with all of the Booster peripheral devices.
     let channels = {
-        let channel_pins = {
-            let ch1_pins =
-                { channel_pins!(gpiod, gpioe, gpiog, pd0, pd8, pe8, pe0, pg8, gpioa, pa0, pa1) };
-            let ch2_pins =
-                { channel_pins!(gpiod, gpioe, gpiog, pd1, pd9, pe9, pe1, pg9, gpioa, pa2, pa3) };
-            let ch3_pins =
-                { channel_pins!(gpiod, gpioe, gpiog, pd2, pd10, pe10, pe2, pg10, gpiof, pf6, pf7) };
-            let ch4_pins =
-                { channel_pins!(gpiod, gpioe, gpiog, pd3, pd11, pe11, pe3, pg11, gpiof, pf8, pf9) };
-            let ch5_pins = {
-                channel_pins!(gpiod, gpioe, gpiog, pd4, pd12, pe12, pe4, pg12, gpiof, pf10, pf3)
-            };
-            let ch6_pins =
-                { channel_pins!(gpiod, gpioe, gpiog, pd5, pd13, pe13, pe5, pg13, gpioc, pc0, pc1) };
-            let ch7_pins =
-                { channel_pins!(gpiod, gpioe, gpiog, pd6, pd14, pe14, pe6, pg14, gpioc, pc2, pc3) };
-            let ch8_pins =
-                { channel_pins!(gpiod, gpioe, gpiog, pd7, pd15, pe15, pe7, pg15, gpiof, pf4, pf5) };
-
-            [
-                ch1_pins, ch2_pins, ch3_pins, ch4_pins, ch5_pins, ch6_pins, ch7_pins, ch8_pins,
-            ]
-        };
+        let pins = [
+            channel_pins!(gpiod, gpioe, gpiog, pd0, pd8, pe8, pe0, pg8, gpioa, pa0, pa1),
+            channel_pins!(gpiod, gpioe, gpiog, pd1, pd9, pe9, pe1, pg9, gpioa, pa2, pa3),
+            channel_pins!(gpiod, gpioe, gpiog, pd2, pd10, pe10, pe2, pg10, gpiof, pf6, pf7),
+            channel_pins!(gpiod, gpioe, gpiog, pd3, pd11, pe11, pe3, pg11, gpiof, pf8, pf9),
+            channel_pins!(gpiod, gpioe, gpiog, pd4, pd12, pe12, pe4, pg12, gpiof, pf10, pf3),
+            channel_pins!(gpiod, gpioe, gpiog, pd5, pd13, pe13, pe5, pg13, gpioc, pc0, pc1),
+            channel_pins!(gpiod, gpioe, gpiog, pd6, pd14, pe14, pe6, pg14, gpioc, pc2, pc3),
+            channel_pins!(gpiod, gpioe, gpiog, pd7, pd15, pe15, pe7, pg15, gpiof, pf4, pf5),
+        ];
 
         let mut mux = {
             tca9548::Tca9548::default(
@@ -222,7 +209,7 @@ pub fn setup(
 
         let adc = hal::adc::Adc::adc3(device.ADC3, true, config);
 
-        BoosterChannels::new(mux, adc, i2c_bus_manager, channel_pins, &mut delay)
+        BoosterChannels::new(mux, adc, i2c_bus_manager, pins, &mut delay)
     };
 
     let buttons = {
