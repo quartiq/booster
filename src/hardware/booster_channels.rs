@@ -102,7 +102,7 @@ impl BoosterChannels {
             .ok_or(Error::NotPresent)
             .and_then(|ch| {
                 mux.select_bus(Some(channel.into())).unwrap();
-                func(ch.0.context_mut(), adc)
+                func(ch.context_mut(), adc)
             })
     }
 

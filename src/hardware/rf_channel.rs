@@ -844,66 +844,60 @@ impl sm::StateMachineContext for RfChannel {
     }
 }
 
-/// A wrapper around the RF channel state machine.
-pub struct RfChannelWrapper(pub sm::StateMachine<RfChannel>);
+pub type RfChannelWrapper = sm::StateMachine<RfChannel>;
 
-impl RfChannelWrapper {
-    /// Construct a new channel state manager.
-    pub fn new(channel: RfChannel) -> Self {
-        Self(sm::StateMachine::new(channel))
-    }
-
+impl sm::StateMachine<RfChannel> {
     /// Periodically called to update the channel state machine.
     ///
     /// # Returns
     /// The current channel [PowerStatus]
     pub fn update(&mut self) -> PowerStatus {
         // Check for channel faults.
-        if let Some(fault) = self.0.context_mut().check_faults() {
-            self.0.process_event(sm::Events::Fault(fault)).unwrap();
+        if let Some(fault) = self.context_mut().check_faults() {
+            self.process_event(sm::Events::Fault(fault)).unwrap();
         }
 
         // Check for interlock trips.
-        if matches!(self.0.state(), &sm::States::Enabled) {
-            if let Some(interlock) = self.0.context_mut().get_overdrive_source() {
-                self.0.process_event(sm::Events::Trip(interlock)).unwrap();
+        if matches!(self.state(), &sm::States::Enabled) {
+            if let Some(interlock) = self.context_mut().get_overdrive_source() {
+                self.process_event(sm::Events::Trip(interlock)).unwrap();
             }
         }
 
-        self.0.process_event(sm::Events::Update).ok();
+        self.process_event(sm::Events::Update).ok();
 
         PowerStatus {
-            powered: self.0.context_mut().pins.enable_power.is_high().unwrap(),
-            rf_enabled: self.0.context_mut().pins.signal_on.is_high().unwrap(),
-            blocked: matches!(self.0.state(), &sm::States::Blocked(_)),
+            powered: self.context_mut().pins.enable_power.is_high().unwrap(),
+            rf_enabled: self.context_mut().pins.signal_on.is_high().unwrap(),
+            blocked: matches!(self.state(), &sm::States::Blocked(_)),
         }
     }
 
     /// Handle the user pressing the "Interlock Reset" button.
     pub fn interlock_reset(&mut self) -> Result<(), sm::Error> {
-        self.0.process_event(sm::Events::InterlockReset)?;
+        self.process_event(sm::Events::InterlockReset)?;
         Ok(())
     }
 
     /// Handle the user pressing the "Standby" button.
     pub fn standby(&mut self) {
-        self.0.process_event(sm::Events::Disable).ok();
+        self.process_event(sm::Events::Disable).ok();
     }
 
     /// Handle an update to channel settings.
     pub fn handle_settings(&mut self, settings: &ChannelSettings) -> Result<(), Error> {
-        self.0.context_mut().apply_settings(settings)?;
+        self.context_mut().apply_settings(settings)?;
 
         if !settings.enabled {
             // If settings has us disabled, it's always okay to blindly power down.
-            self.0.process_event(sm::Events::Disable).ok();
+            self.process_event(sm::Events::Disable).ok();
         } else {
-            if settings.enabled != self.0.context_mut().pins.enable_power.is_high().unwrap()
-                || settings.output_disable != self.0.context_mut().pins.signal_on.is_low().unwrap()
+            if settings.enabled != self.context_mut().pins.enable_power.is_high().unwrap()
+                || settings.output_disable != self.context_mut().pins.signal_on.is_low().unwrap()
             {
                 // Our current power state has a mismatch with the settings. Reset ourselves into the
                 // updated state.
-                self.0.process_event(sm::Events::InterlockReset).ok();
+                self.process_event(sm::Events::InterlockReset).ok();
             }
         }
 
