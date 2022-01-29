@@ -144,7 +144,7 @@ const APP: () = {
         for channel in Channel::into_enum_iter() {
             let PowerStatus {
                 powered,
-                rf_enabled,
+                rf_disabled,
                 blocked,
             } = match c.resources.main_bus.channels.channel_mut(channel) {
                 Ok(channel) => channel.update(),
@@ -162,7 +162,7 @@ const APP: () = {
             c.resources.leds.set_led(Color::Green, channel, powered);
             c.resources
                 .leds
-                .set_led(Color::Yellow, channel, !rf_enabled);
+                .set_led(Color::Yellow, channel, rf_disabled);
             c.resources.leds.set_led(Color::Red, channel, blocked);
         }
 

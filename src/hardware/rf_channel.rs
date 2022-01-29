@@ -49,14 +49,15 @@ pub enum Interlock {
 }
 
 /// A succinct representation of RF channel state for front panel status indication.
+/// The three flags match the three LED states.
 pub struct PowerStatus {
-    /// The RF channel is powered on.
+    /// The RF channel is powered on. Green LED.
     pub powered: bool,
 
-    /// The RF output switch is enabled.
-    pub rf_enabled: bool,
+    /// The RF output switch is disabled. Yellow LED
+    pub rf_disabled: bool,
 
-    /// The channel is in a force-disabled state due to a latched error.
+    /// The channel is in a force-disabled state due to a latched error. Red LED.
     pub blocked: bool,
 }
 
@@ -127,26 +128,6 @@ adc_pins!([
     gpioc, PC2, pc2, gpioc, PC3, pc3, gpioc, PF3, pf3, gpiof, PF4, pf4, gpiof, PF5, pf5, gpiof,
     PF6, pf6, gpiof, PF7, pf7, gpiof, PF8, pf8, gpiof, PF9, pf9, gpiof, PF10, pf10, gpiof
 ]);
-
-/// A collection of analog pins (ADC channels) associated with an RF channel.
-pub struct AnalogPins {
-    pub tx_power: AdcPin,
-    pub reflected_power: AdcPin,
-}
-
-impl AnalogPins {
-    /// Create a new analog pin structure.
-    ///
-    /// # Args
-    /// * `tx_power` - The pin to use for measuring transmitted power.
-    /// * `reflected_power` - The pin to use for measuring reflected power.
-    pub fn new(tx_power: AdcPin, reflected_power: AdcPin) -> Self {
-        Self {
-            tx_power,
-            reflected_power,
-        }
-    }
-}
 
 /// Represents all of the I2C devices on the bus for a single RF channel.
 pub struct Devices {
@@ -231,7 +212,8 @@ pub struct ChannelPins {
 
     signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
 
-    adc_pins: AnalogPins,
+    tx_power: AdcPin,
+    reflected_power: AdcPin,
 }
 
 impl ChannelPins {
@@ -244,14 +226,16 @@ impl ChannelPins {
     /// * `reflected_overdrive` - An input pin that indicates an input overdrive.
     /// * `output_overdrive` - An input pin that indicates an output overdrive.
     /// * `signal_on` - An output pin that is set high to enable output signal amplification.
-    /// * `adc_pins` - The AnalogPins that are associated with the channel.
+    /// * `tx_power` - The pin to use for measuring transmitted power.
+    /// * `reflected_power` - The pin to use for measuring reflected power.
     pub fn new(
         enable_power: hal::gpio::gpiod::PD<Output<PushPull>>,
         alert: hal::gpio::gpiod::PD<Input<Floating>>,
         reflected_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
         output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
         signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
-        adc_pins: AnalogPins,
+        tx_power: AdcPin,
+        reflected_power: AdcPin,
     ) -> Self {
         let mut pins = Self {
             enable_power,
@@ -259,18 +243,14 @@ impl ChannelPins {
             reflected_overdrive,
             output_overdrive,
             signal_on,
-            adc_pins,
+            tx_power,
+            reflected_power,
         };
 
-        pins.power_down_channel();
-
+        // Power down channel.
+        pins.signal_on.set_low().unwrap();
+        pins.enable_power.set_low().unwrap();
         pins
-    }
-
-    /// Power down a channel.
-    fn power_down_channel(&mut self) {
-        self.signal_on.set_low().unwrap();
-        self.enable_power.set_low().unwrap();
     }
 }
 
@@ -291,7 +271,7 @@ pub struct ChannelStatus {
 
 /// Represents a means of interacting with an RF output channel.
 pub struct RfChannel {
-    pub i2c_devices: Devices,
+    pub devices: Devices,
     pub pins: ChannelPins,
     settings: BoosterChannelSettings,
     clock: SystemTimer,
@@ -312,69 +292,70 @@ impl RfChannel {
     /// An option containing an RfChannel if a channel was discovered on the bus. None otherwise.
     pub fn new(
         manager: &'static I2cBusManager,
-        control_pins: ChannelPins,
+        pins: ChannelPins,
         delay: &mut impl DelayUs<u16>,
     ) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
-        match Devices::new(manager, delay) {
-            Some((devices, eeprom)) => {
-                let mut channel = Self {
-                    i2c_devices: devices,
-                    pins: control_pins,
-                    settings: BoosterChannelSettings::new(eeprom),
-                    clock: SystemTimer::default(),
-                };
+        Devices::new(manager, delay).map(|(devices, eeprom)| {
+            let mut channel = Self {
+                devices,
+                pins,
+                settings: BoosterChannelSettings::new(eeprom),
+                clock: SystemTimer::default(),
+            };
 
-                channel.apply_output_interlock_threshold().unwrap();
+            channel.apply_output_interlock_threshold().unwrap();
 
-                // The reflected power interlock threshold is always configured to 30 dBm (1W
-                // reflected power) to protect Booster hardware.
-                channel
-                    .set_reflected_interlock_threshold(platform::MAXIMUM_REFLECTED_POWER_DBM)
-                    .unwrap();
+            // The reflected power interlock threshold is always configured to 30 dBm (1W
+            // reflected power) to protect Booster hardware.
+            channel
+                .set_reflected_interlock_threshold(platform::MAXIMUM_REFLECTED_POWER_DBM)
+                .unwrap();
 
-                Some(channel)
-            }
-            None => None,
-        }
+            channel
+        })
     }
 
     /// Save the current channel configuration.
     pub fn save_configuration(&mut self) {
-        self.settings.save();
+        self.settings.save()
     }
 
     /// Set the interlock thresholds for the channel.
     ///
     /// # Args
     /// * `power` - The dBm interlock threshold to configure for reflected power.
-    fn set_reflected_interlock_threshold(&mut self, power: f32) -> Result<(), Error> {
-        match self.i2c_devices.interlock_thresholds_dac.set_voltage(
-            self.settings
-                .settings()
-                .reflected_power_transform
-                .invert(power),
-            ad5627::Dac::A,
-        ) {
-            Err(ad5627::Error::Range) => Err(Error::Bounds),
-            Err(ad5627::Error::I2c(_)) => Err(Error::Interface),
-            Ok(_) => Ok(()),
-        }
+    fn set_reflected_interlock_threshold(&mut self, power: f32) -> Result<f32, Error> {
+        self.devices
+            .interlock_thresholds_dac
+            .set_voltage(
+                self.settings
+                    .settings()
+                    .reflected_power_transform
+                    .invert(power),
+                ad5627::Dac::A,
+            )
+            .map_err(|e| match e {
+                ad5627::Error::Range => Error::Bounds,
+                ad5627::Error::I2c(_) => Error::Interface,
+            })
     }
 
-    fn apply_output_interlock_threshold(&mut self) -> Result<(), Error> {
+    fn apply_output_interlock_threshold(&mut self) -> Result<f32, Error> {
         let settings = self.settings.settings_mut();
 
-        match self.i2c_devices.interlock_thresholds_dac.set_voltage(
-            settings
-                .output_power_transform
-                .invert(settings.output_interlock_threshold),
-            ad5627::Dac::B,
-        ) {
-            Err(ad5627::Error::Range) => Err(Error::Bounds),
-            Err(ad5627::Error::I2c(_)) => Err(Error::Interface),
-            Ok(_) => Ok(()),
-        }
+        self.devices
+            .interlock_thresholds_dac
+            .set_voltage(
+                settings
+                    .output_power_transform
+                    .invert(settings.output_interlock_threshold),
+                ad5627::Dac::B,
+            )
+            .map_err(|e| match e {
+                ad5627::Error::Range => Error::Bounds,
+                ad5627::Error::I2c(_) => Error::Interface,
+            })
     }
 
     fn check_faults(&mut self) -> Option<ChannelFault> {
@@ -391,18 +372,13 @@ impl RfChannel {
     }
 
     fn get_overdrive_source(&mut self) -> Option<Interlock> {
-        let reflected_overdrive = self.pins.reflected_overdrive.is_high().unwrap();
-        let output_overdrive = self.pins.output_overdrive.is_high().unwrap();
-
         // The schematic indicates the maximum input power is 25dBm. We'll use 20dBm to provide
         // a safety margin.
-        let input_overdrive = self.get_input_power() > 20.0;
-
-        if input_overdrive {
+        if self.get_input_power() > 20.0 {
             Some(Interlock::Input)
-        } else if output_overdrive {
+        } else if self.pins.output_overdrive.is_high().unwrap() {
             Some(Interlock::Output)
-        } else if reflected_overdrive {
+        } else if self.pins.reflected_overdrive.is_high().unwrap() {
             Some(Interlock::Reflected)
         } else {
             None
@@ -451,23 +427,21 @@ impl RfChannel {
 
     /// Get the temperature of the channel in celsius.
     pub fn get_temperature(&mut self) -> f32 {
-        self.i2c_devices
+        self.devices
             .temperature_monitor
             .get_remote_temperature()
             .unwrap()
     }
 
-    fn apply_bias(&mut self) -> Result<(), Error> {
+    fn apply_bias(&mut self) -> Result<f32, Error> {
         // The bias voltage is the inverse of the DAC output voltage.
         let bias_voltage = -1.0 * self.settings().bias_voltage;
 
-        match self.i2c_devices.bias_dac.set_voltage(bias_voltage) {
-            Err(dac7571::Error::Bounds) => return Err(Error::Bounds),
+        match self.devices.bias_dac.set_voltage(bias_voltage) {
+            Err(dac7571::Error::Bounds) => Err(Error::Bounds),
             Err(_) => panic!("Failed to set DAC bias voltage"),
-            Ok(_) => {}
-        };
-
-        Ok(())
+            Ok(u) => Ok(u),
+        }
     }
 
     /// Get current power supply measurements from the channel.
@@ -476,7 +450,7 @@ impl RfChannel {
     /// The most recent power supply measurements of the channel.
     pub fn get_supply_measurements(&mut self) -> SupplyMeasurements {
         // Read the cached (scanned) ADC measurements from the monitor.
-        let voltages = self.i2c_devices.power_monitor.get_voltages().unwrap();
+        let voltages = self.devices.power_monitor.get_voltages().unwrap();
 
         // The P5V0 rail goes through a resistor divider of 15K -> 10K. This corresponds with a 2.5x
         // reduction in measured voltage.
@@ -527,7 +501,7 @@ impl RfChannel {
     /// The most recent P28V rail current measurements of the channel.
     pub fn get_p28v_current(&mut self) -> f32 {
         let p28v_rail_current_sense = self
-            .i2c_devices
+            .devices
             .power_monitor
             .get_voltage(ads7924::Channel::Zero)
             .unwrap();
@@ -540,7 +514,7 @@ impl RfChannel {
     /// # Returns
     /// The input power in dBm.
     pub fn get_input_power(&mut self) -> f32 {
-        let voltage = self.i2c_devices.input_power_adc.get_voltage().unwrap();
+        let voltage = self.devices.input_power_adc.get_voltage().unwrap();
 
         self.settings.settings().input_power_transform.map(voltage)
     }
@@ -555,7 +529,6 @@ impl RfChannel {
     pub fn get_reflected_power(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
         let sample = self
             .pins
-            .adc_pins
             .reflected_power
             .convert(adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
@@ -574,11 +547,7 @@ impl RfChannel {
     /// # Returns
     /// The output power in dBm.
     pub fn get_output_power(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
-        let sample = self
-            .pins
-            .adc_pins
-            .tx_power
-            .convert(adc, SampleTime::Cycles_480);
+        let sample = self.pins.tx_power.convert(adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
         self.settings.settings().output_power_transform.map(voltage)
@@ -627,31 +596,20 @@ mod sm {
 
     impl serde::Serialize for States {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            match *self {
-                States::Blocked(ChannelFault::OverTemperature) => {
-                    serializer.serialize_unit_variant("State", 0, "Blocked(OverTemperature)")
-                }
-                States::Blocked(ChannelFault::UnderTemperature) => {
-                    serializer.serialize_unit_variant("State", 0, "Blocked(UnderTemperature)")
-                }
-                States::Blocked(ChannelFault::SupplyAlert) => {
-                    serializer.serialize_unit_variant("State", 0, "Blocked(SupplyAlert)")
-                }
-                States::Off => serializer.serialize_unit_variant("State", 1, "Off"),
-                States::Powerup(_) => serializer.serialize_unit_variant("State", 2, "Powerup"),
-                States::Powered => serializer.serialize_unit_variant("State", 3, "Powered"),
-                States::Enabled => serializer.serialize_unit_variant("State", 4, "Enabled"),
-                States::Powerdown(_) => serializer.serialize_unit_variant("State", 6, "Powerdown"),
-                States::Tripped(Interlock::Output) => {
-                    serializer.serialize_unit_variant("State", 5, "Tripped(Output)")
-                }
-                States::Tripped(Interlock::Input) => {
-                    serializer.serialize_unit_variant("State", 5, "Tripped(Input)")
-                }
-                States::Tripped(Interlock::Reflected) => {
-                    serializer.serialize_unit_variant("State", 5, "Tripped(Reflected)")
-                }
-            }
+            let (idx, var) = match *self {
+                States::Blocked(ChannelFault::OverTemperature) => (0, "Blocked(OverTemperature)"),
+                States::Blocked(ChannelFault::UnderTemperature) => (0, "Blocked(UnderTemperature)"),
+                States::Blocked(ChannelFault::SupplyAlert) => (0, "Blocked(SupplyAlert)"),
+                States::Off => (1, "Off"),
+                States::Powerup(_) => (2, "Powerup"),
+                States::Powered => (3, "Powered"),
+                States::Enabled => (4, "Enabled"),
+                States::Powerdown(_) => (6, "Powerdown"),
+                States::Tripped(Interlock::Output) => (5, "Tripped(Output)"),
+                States::Tripped(Interlock::Input) => (5, "Tripped(Input)"),
+                States::Tripped(Interlock::Reflected) => (5, "Tripped(Reflected)"),
+            };
+            serializer.serialize_unit_variant("State", idx, var)
         }
     }
 
@@ -699,7 +657,7 @@ impl sm::StateMachineContext for RfChannel {
     /// The time at which the powerup process can be deemed complete.
     fn start_powerup(&mut self) -> Instant<SystemTimer> {
         // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
-        self.i2c_devices
+        self.devices
             .bias_dac
             .set_voltage(3.2)
             .expect("Failed to disable RF bias voltage");
@@ -772,7 +730,7 @@ impl sm::StateMachineContext for RfChannel {
         self.pins.signal_on.set_low().unwrap();
 
         // Set the bias DAC output into pinch-off.
-        self.i2c_devices
+        self.devices
             .bias_dac
             .set_voltage(3.2)
             .expect("Failed to disable RF bias voltage");
@@ -857,7 +815,7 @@ impl sm::StateMachine<RfChannel> {
 
         PowerStatus {
             powered: self.context_mut().pins.enable_power.is_high().unwrap(),
-            rf_enabled: self.context_mut().pins.signal_on.is_high().unwrap(),
+            rf_disabled: self.context_mut().pins.signal_on.is_low().unwrap(),
             blocked: matches!(self.state(), &sm::States::Blocked(_)),
         }
     }

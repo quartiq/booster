@@ -9,7 +9,7 @@ use super::{
     booster_channels::BoosterChannels,
     chassis_fans::ChassisFans,
     platform,
-    rf_channel::{AdcPin, AnalogPins as AdcPins, ChannelPins as RfChannelPins},
+    rf_channel::{AdcPin, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
     NetworkStack, UsbBus, CPU_FREQ, I2C,
 };
@@ -26,23 +26,6 @@ use hal::prelude::*;
 use heapless::String;
 use usb_device::prelude::*;
 
-/// Construct ADC pins associated with an RF channel.
-///
-/// # Args
-/// * `gpio` - The GPIO port used to instantiate analog pins.
-/// * `tx_power` - The name of the pin to instantiate for the TX power measurement.
-/// * `reflected_power` - The name of the pin to instantiate for the reflected power measurement.
-///
-/// # Returns
-/// An AdcPin enumeration describing the ADC pins.
-macro_rules! adc_pins {
-    ($gpio:ident, $tx_power:ident, $reflected_power:ident) => {{
-        let tx_power = AdcPin::$tx_power($gpio.$tx_power.into_analog());
-        let reflected_power = AdcPin::$reflected_power($gpio.$reflected_power.into_analog());
-        AdcPins::new(tx_power, reflected_power)
-    }};
-}
-
 /// Macro for genering an RfChannelPins structure.
 ///
 /// # Args
@@ -54,12 +37,15 @@ macro_rules! adc_pins {
 /// * `reflected_overdrive` - The pin ID of the input overdrive pin in GPIOE.
 /// * `output_overdrive` - The pin ID of the output overdrive pin in GPIOE.
 /// * `signal_on` - The pin ID of the signal on pin in GPIOG.
+/// * `gpioa` - The GPIO port used to instantiate analog pins.
+/// * `tx_power` - The name of the pin to instantiate for the TX power measurement.
+/// * `reflected_power` - The name of the pin to instantiate for the reflected power measurement.
 ///
 /// # Returns
 /// An option containing the RfChannelPins structure.
 macro_rules! channel_pins {
     ($gpiod:ident, $gpioe:ident, $gpiog:ident, $enable:ident, $alert:ident, $reflected_overdrive:ident,
-     $output_overdrive:ident, $signal_on:ident, $analog_pins:ident) => {{
+     $output_overdrive:ident, $signal_on:ident, $gpioa:ident, $tx_power:ident, $reflected_power:ident) => {{
         let enable_power = $gpiod.$enable.into_push_pull_output().downgrade();
         let alert = $gpiod.$alert.into_floating_input().downgrade();
         let reflected_overdrive = $gpioe
@@ -68,6 +54,8 @@ macro_rules! channel_pins {
             .downgrade();
         let output_overdrive = $gpioe.$output_overdrive.into_pull_down_input().downgrade();
         let signal_on = $gpiog.$signal_on.into_push_pull_output().downgrade();
+        let tx_power = AdcPin::$tx_power($gpioa.$tx_power.into_analog());
+        let reflected_power = AdcPin::$reflected_power($gpioa.$reflected_power.into_analog());
 
         Some(RfChannelPins::new(
             enable_power,
@@ -75,7 +63,8 @@ macro_rules! channel_pins {
             reflected_overdrive,
             output_overdrive,
             signal_on,
-            $analog_pins,
+            tx_power,
+            reflected_power,
         ))
     }};
 }
@@ -194,38 +183,23 @@ pub fn setup(
     // bus with all of the Booster peripheral devices.
     let channels = {
         let channel_pins = {
-            let ch1_pins = {
-                let analog_pins = adc_pins!(gpioa, pa0, pa1);
-                channel_pins!(gpiod, gpioe, gpiog, pd0, pd8, pe8, pe0, pg8, analog_pins)
-            };
-            let ch2_pins = {
-                let analog_pins = adc_pins!(gpioa, pa2, pa3);
-                channel_pins!(gpiod, gpioe, gpiog, pd1, pd9, pe9, pe1, pg9, analog_pins)
-            };
-            let ch3_pins = {
-                let analog_pins = adc_pins!(gpiof, pf6, pf7);
-                channel_pins!(gpiod, gpioe, gpiog, pd2, pd10, pe10, pe2, pg10, analog_pins)
-            };
-            let ch4_pins = {
-                let analog_pins = adc_pins!(gpiof, pf8, pf9);
-                channel_pins!(gpiod, gpioe, gpiog, pd3, pd11, pe11, pe3, pg11, analog_pins)
-            };
+            let ch1_pins =
+                { channel_pins!(gpiod, gpioe, gpiog, pd0, pd8, pe8, pe0, pg8, gpioa, pa0, pa1) };
+            let ch2_pins =
+                { channel_pins!(gpiod, gpioe, gpiog, pd1, pd9, pe9, pe1, pg9, gpioa, pa2, pa3) };
+            let ch3_pins =
+                { channel_pins!(gpiod, gpioe, gpiog, pd2, pd10, pe10, pe2, pg10, gpiof, pf6, pf7) };
+            let ch4_pins =
+                { channel_pins!(gpiod, gpioe, gpiog, pd3, pd11, pe11, pe3, pg11, gpiof, pf8, pf9) };
             let ch5_pins = {
-                let analog_pins = adc_pins!(gpiof, pf10, pf3);
-                channel_pins!(gpiod, gpioe, gpiog, pd4, pd12, pe12, pe4, pg12, analog_pins)
+                channel_pins!(gpiod, gpioe, gpiog, pd4, pd12, pe12, pe4, pg12, gpiof, pf10, pf3)
             };
-            let ch6_pins = {
-                let analog_pins = adc_pins!(gpioc, pc0, pc1);
-                channel_pins!(gpiod, gpioe, gpiog, pd5, pd13, pe13, pe5, pg13, analog_pins)
-            };
-            let ch7_pins = {
-                let analog_pins = adc_pins!(gpioc, pc2, pc3);
-                channel_pins!(gpiod, gpioe, gpiog, pd6, pd14, pe14, pe6, pg14, analog_pins)
-            };
-            let ch8_pins = {
-                let analog_pins = adc_pins!(gpiof, pf4, pf5);
-                channel_pins!(gpiod, gpioe, gpiog, pd7, pd15, pe15, pe7, pg15, analog_pins)
-            };
+            let ch6_pins =
+                { channel_pins!(gpiod, gpioe, gpiog, pd5, pd13, pe13, pe5, pg13, gpioc, pc0, pc1) };
+            let ch7_pins =
+                { channel_pins!(gpiod, gpioe, gpiog, pd6, pd14, pe14, pe6, pg14, gpioc, pc2, pc3) };
+            let ch8_pins =
+                { channel_pins!(gpiod, gpioe, gpiog, pd7, pd15, pe15, pe7, pg15, gpiof, pf4, pf5) };
 
             [
                 ch1_pins, ch2_pins, ch3_pins, ch4_pins, ch5_pins, ch6_pins, ch7_pins, ch8_pins,
