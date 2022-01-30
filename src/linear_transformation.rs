@@ -8,7 +8,7 @@
 use miniconf::Miniconf;
 
 /// A structure for mapping values between two different domains.
-#[derive(Miniconf, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(Miniconf, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq)]
 pub struct LinearTransformation {
     slope: f32,
     offset: f32,

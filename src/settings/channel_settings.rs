@@ -19,7 +19,7 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
 };
 
 /// Represents booster channel-specific configuration values.
-#[derive(Miniconf, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(Miniconf, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq)]
 pub struct ChannelSettings {
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,

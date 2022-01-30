@@ -257,22 +257,22 @@ impl ChannelPins {
 /// Contains channel status information in SI base units.
 #[derive(serde::Serialize)]
 pub struct ChannelStatus {
-    pub reflected_overdrive: bool,
-    pub output_overdrive: bool,
-    pub alert: bool,
-    pub temperature: f32,
-    pub p28v_current: f32,
-    pub p5v_current: f32,
-    pub p5v_voltage: f32,
-    pub input_power: f32,
-    pub reflected_power: f32,
-    pub output_power: f32,
+    reflected_overdrive: bool,
+    output_overdrive: bool,
+    alert: bool,
+    temperature: f32,
+    p28v_current: f32,
+    p5v_current: f32,
+    p5v_voltage: f32,
+    input_power: f32,
+    reflected_power: f32,
+    output_power: f32,
 }
 
 /// Represents a means of interacting with an RF output channel.
 pub struct RfChannel {
-    pub devices: Devices,
-    pub pins: ChannelPins,
+    devices: Devices,
+    pins: ChannelPins,
     settings: BoosterChannelSettings,
     clock: SystemTimer,
 }
@@ -393,7 +393,7 @@ impl RfChannel {
     ///
     /// # Args
     /// * `new_settings` - The new settings to apply to the channel.
-    pub fn apply_settings(&mut self, new_settings: &ChannelSettings) -> Result<(), Error> {
+    fn apply_settings(&mut self, new_settings: &ChannelSettings) -> Result<(), Error> {
         // If the settings haven't changed, we can short circuit now.
         if self.settings.settings() == new_settings {
             return Ok(());
@@ -417,7 +417,7 @@ impl RfChannel {
 
         // Copy transforms before applying the interlock threshold, since the interlock DAC level
         // is calculated from the output interlock transform.
-        *self.settings.settings_mut() = new_settings.clone();
+        *self.settings.settings_mut() = *new_settings;
 
         // Only update the interlock and bias DACs if they've actually changed.
         if output_interlock_updated {
@@ -456,7 +456,7 @@ impl RfChannel {
     ///
     /// # Returns
     /// The most recent power supply measurements of the channel.
-    pub fn get_supply_measurements(&mut self) -> SupplyMeasurements {
+    fn get_supply_measurements(&mut self) -> SupplyMeasurements {
         // Read the cached (scanned) ADC measurements from the monitor.
         let voltages = self.devices.power_monitor.get_voltages().unwrap();
 
@@ -521,7 +521,7 @@ impl RfChannel {
     ///
     /// # Returns
     /// The input power in dBm.
-    pub fn get_input_power(&mut self) -> f32 {
+    fn get_input_power(&mut self) -> f32 {
         let voltage = self.devices.input_power_adc.get_voltage().unwrap();
 
         self.settings.settings().input_power_transform.map(voltage)
@@ -584,8 +584,8 @@ impl RfChannel {
         }
     }
 
-    pub fn settings(&self) -> ChannelSettings {
-        self.settings.settings().clone()
+    pub fn settings(&self) -> &ChannelSettings {
+        self.settings.settings()
     }
 }
 

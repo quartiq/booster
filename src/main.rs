@@ -95,7 +95,7 @@ const APP: () = {
                 .channels
                 .channel_mut(idx)
                 .map(|(channel, _)| {
-                    settings.channel[idx as usize] = channel.context_mut().settings()
+                    settings.channel[idx as usize] = *channel.context_mut().settings()
                 })
                 .unwrap_or_else(|| {
                     settings.channel[idx as usize].enabled = false;
