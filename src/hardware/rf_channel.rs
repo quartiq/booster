@@ -707,7 +707,7 @@ impl sm::StateMachineContext for RfChannel {
         }
 
         // Do not enable output if it shouldn't be disabled due to settings.
-        if !settings.enabled || settings.output_disable {
+        if !settings.enabled || settings.rf_disable {
             return Err(());
         }
 
@@ -847,7 +847,7 @@ impl sm::StateMachine<RfChannel> {
             // If settings has us disabled, it's always okay to blindly power down.
             self.process_event(sm::Events::Disable).ok();
         } else if settings.enabled != self.context_mut().pins.enable_power.is_high().unwrap()
-            || settings.output_disable != self.context_mut().pins.signal_on.is_low().unwrap()
+            || settings.rf_disable != self.context_mut().pins.signal_on.is_low().unwrap()
         {
             // Our current power state has a mismatch with the settings. Reset ourselves into the
             // updated state.

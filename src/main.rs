@@ -99,7 +99,7 @@ const APP: () = {
                 })
                 .unwrap_or_else(|| {
                     settings.channel[idx as usize].enabled = false;
-                    settings.channel[idx as usize].output_disable = true;
+                    settings.channel[idx as usize].rf_disable = true;
                     settings.channel[idx as usize].bias_voltage = 0.0;
                 });
         }
