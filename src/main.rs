@@ -203,8 +203,7 @@ const APP: () = {
                 main_bus
                     .channels
                     .channel_mut(idx)
-                    .map(|(ch, adc)| ch.context_mut().get_status(adc))
-                    .map(|measurements| tele.report_telemetry(idx, &measurements))
+                    .map(|(ch, adc)| tele.report_telemetry(idx, &ch.context_mut().get_status(adc)))
             });
         }
 
