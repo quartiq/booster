@@ -134,25 +134,12 @@ impl BoosterChannelSettings {
             data: VersionedChannelData::default(),
         };
 
-        match settings.load_config() {
-            Ok(config) => {
+        settings.data = settings
+            .load_config()
+            .and_then(|config|
                 // If we loaded sinara configuration, deserialize the board data.
-                match VersionedChannelData::deserialize(&config.board_data) {
-                    Ok(data) => settings.data = data,
-
-                    Err(_) => {
-                        settings.data = VersionedChannelData::default();
-                        settings.save();
-                    }
-                }
-            }
-
-            // If we failed to load configuration, use a default config.
-            Err(_) => {
-                settings.data = VersionedChannelData::default();
-                settings.save();
-            }
-        };
+                VersionedChannelData::deserialize(&config.board_data))
+            .unwrap_or_default();
 
         settings
     }
