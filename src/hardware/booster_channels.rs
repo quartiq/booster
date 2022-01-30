@@ -10,13 +10,13 @@ use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal as hal;
 use tca9548::{self, Tca9548};
 
-use super::rf_channel::{ChannelPins as RfChannelPins, RfChannel, RfChannelWrapper};
+use super::rf_channel::{ChannelPins as RfChannelPins, RfChannel, RfChannelMachine};
 use super::{I2cBusManager, I2cProxy};
 use embedded_hal::blocking::delay::DelayUs;
 
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
-    channels: [Option<RfChannelWrapper>; 8],
+    channels: [Option<RfChannelMachine>; 8],
     adc: hal::adc::Adc<hal::stm32::ADC3>,
     mux: Tca9548<I2cProxy>,
 }
@@ -58,7 +58,7 @@ impl BoosterChannels {
         pins: [RfChannelPins; 8],
         delay: &mut impl DelayUs<u16>,
     ) -> Self {
-        let mut channels: [Option<RfChannelWrapper>; 8] =
+        let mut channels: [Option<RfChannelMachine>; 8] =
             [None, None, None, None, None, None, None, None];
 
         for (idx, pins) in Channel::into_enum_iter().zip(pins) {
@@ -67,7 +67,7 @@ impl BoosterChannels {
                 .expect("Failed to select channel");
 
             if let Some(channel) = RfChannel::new(manager, pins, delay) {
-                channels[idx as usize].replace(RfChannelWrapper::new(channel));
+                channels[idx as usize].replace(RfChannelMachine::new(channel));
             } else {
                 info!("Channel {} did not enumerate", idx as usize);
             }
@@ -88,7 +88,7 @@ impl BoosterChannels {
     pub fn channel_mut(
         &mut self,
         channel: Channel,
-    ) -> Option<(&mut RfChannelWrapper, &mut hal::adc::Adc<hal::stm32::ADC3>)> {
+    ) -> Option<(&mut RfChannelMachine, &mut hal::adc::Adc<hal::stm32::ADC3>)> {
         let mux = &mut self.mux;
         let adc = &mut self.adc;
         self.channels[channel as usize].as_mut().map(|ch| {

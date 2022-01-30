@@ -800,7 +800,7 @@ impl sm::StateMachineContext for RfChannel {
     }
 }
 
-pub type RfChannelWrapper = sm::StateMachine<RfChannel>;
+pub type RfChannelMachine = sm::StateMachine<RfChannel>;
 
 impl sm::StateMachine<RfChannel> {
     /// Periodically called to update the channel state machine.
