@@ -26,10 +26,10 @@ use stm32f4xx_hal::{
 };
 
 /// A structure representing power supply measurements of a channel.
-pub struct SupplyMeasurements {
-    pub v_p5v0mp: f32,
-    pub i_p5v0ch: f32,
-    pub i_p28v0ch: f32,
+struct SupplyMeasurements {
+    v_p5v0mp: f32,
+    i_p5v0ch: f32,
+    i_p28v0ch: f32,
 }
 
 /// Represents the possible channel fault conditions.
@@ -213,7 +213,7 @@ pub struct ChannelPins {
 
     signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
 
-    tx_power: AdcPin,
+    output_power: AdcPin,
     reflected_power: AdcPin,
 }
 
@@ -227,7 +227,7 @@ impl ChannelPins {
     /// * `reflected_overdrive` - An input pin that indicates an input overdrive.
     /// * `output_overdrive` - An input pin that indicates an output overdrive.
     /// * `signal_on` - An output pin that is set high to enable output signal amplification.
-    /// * `tx_power` - The pin to use for measuring transmitted power.
+    /// * `output_power` - The pin to use for measuring transmitted power.
     /// * `reflected_power` - The pin to use for measuring reflected power.
     pub fn new(
         enable_power: hal::gpio::gpiod::PD<Output<PushPull>>,
@@ -235,7 +235,7 @@ impl ChannelPins {
         reflected_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
         output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
         signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
-        tx_power: AdcPin,
+        output_power: AdcPin,
         reflected_power: AdcPin,
     ) -> Self {
         let mut pins = Self {
@@ -244,7 +244,7 @@ impl ChannelPins {
             reflected_overdrive,
             output_overdrive,
             signal_on,
-            tx_power,
+            output_power,
             reflected_power,
         };
 
@@ -556,7 +556,7 @@ impl RfChannel {
     /// # Returns
     /// The output power in dBm.
     pub fn get_output_power(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
-        let sample = self.pins.tx_power.convert(adc, SampleTime::Cycles_480);
+        let sample = self.pins.output_power.convert(adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
         self.settings.settings().output_power_transform.map(voltage)
