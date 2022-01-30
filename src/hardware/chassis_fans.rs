@@ -40,19 +40,11 @@ impl ChassisFans {
     ///
     /// # Args
     /// * `channel_temps` - The current channel temperatures in degrees celsius.
-    pub fn update(&mut self, channel_temps: [f32; 8]) {
+    pub fn update(&mut self, channel_temps: [Option<f32>; 8]) {
         // Calculate the maximum temperature encountered across all of the channels.
-        let max_temperature =
-            channel_temps.iter().fold(
-                f32::NEG_INFINITY,
-                |acc, &temp| {
-                    if acc > temp {
-                        acc
-                    } else {
-                        temp
-                    }
-                },
-            );
+        let max_temperature = channel_temps
+            .iter()
+            .fold(f32::NEG_INFINITY, |acc, &temp| acc.max(temp.unwrap_or(acc)));
 
         // Determine the maximum temperature error from the hottest channel to use in the fan
         // control algorithm.

@@ -12,7 +12,6 @@ use tca9548::{self, Tca9548};
 
 use super::rf_channel::{ChannelPins as RfChannelPins, RfChannel, RfChannelWrapper};
 use super::{I2cBusManager, I2cProxy};
-use crate::Error;
 use embedded_hal::blocking::delay::DelayUs;
 
 /// Represents a control structure for interfacing to booster RF channels.
@@ -77,33 +76,24 @@ impl BoosterChannels {
         BoosterChannels { channels, mux, adc }
     }
 
-    /// Perform an action on a channel.
+    /// Select a given channel oin the I2C multiplexer and get
+    /// mutable references to that channel and the ADC.
     ///
     /// # Args
-    /// * `channel` - The channel to perform the action on.
-    /// * `func` - A function called with the channel selected and
-    ///     with the channel and the ADC3 peripheral passed as arguments.
-    pub fn map<F, R>(&mut self, channel: Channel, func: F) -> Result<R, Error>
-    where
-        F: FnOnce(&mut RfChannel, &mut hal::adc::Adc<hal::stm32::ADC3>) -> Result<R, Error>,
-    {
+    /// * `channel` - The channel to get.
+    ///
+    /// # Returns
+    /// A optional pair of mutable references to the channel and the ADC.
+    /// `None` if the channel is absent.
+    pub fn channel_mut(
+        &mut self,
+        channel: Channel,
+    ) -> Option<(&mut RfChannelWrapper, &mut hal::adc::Adc<hal::stm32::ADC3>)> {
         let mux = &mut self.mux;
         let adc = &mut self.adc;
-        self.channels[channel as usize]
-            .as_mut()
-            .ok_or(Error::NotPresent)
-            .and_then(|ch| {
-                mux.select_bus(Some(channel.into())).unwrap();
-                func(ch.context_mut(), adc)
-            })
-    }
-
-    pub fn channel_mut(&mut self, channel: Channel) -> Result<&mut RfChannelWrapper, Error> {
-        if let Some(ref mut rf_channel) = self.channels[channel as usize] {
-            self.mux.select_bus(Some(channel.into())).unwrap();
-            Ok(rf_channel)
-        } else {
-            Err(Error::NotPresent)
-        }
+        self.channels[channel as usize].as_mut().map(|ch| {
+            mux.select_bus(Some(channel.into())).unwrap();
+            (ch, adc)
+        })
     }
 }

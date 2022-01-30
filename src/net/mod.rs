@@ -9,8 +9,6 @@ use crate::hardware::{clock::SystemTimer, NetworkStack};
 use core::fmt::Write;
 use heapless::String;
 
-use crate::delay::AsmDelay;
-
 mod mqtt_control;
 mod shared;
 mod telemetry;
@@ -42,12 +40,10 @@ impl NetworkDevices {
     /// * `broker` - The broker IP address for MQTT.
     /// * `stack` - The network stack to use for communications.
     /// * `identifier` - The unique identifier of this device.
-    /// * `delay` - A delay mechanism.
     pub fn new(
         broker: minimq::embedded_nal::IpAddr,
         stack: NetworkStack,
         identifier: &str,
-        delay: AsmDelay,
         settings: crate::Settings,
     ) -> Self {
         let shared =
@@ -62,7 +58,7 @@ impl NetworkDevices {
 
         Self {
             telemetry: telemetry::TelemetryClient::new(broker, shared.acquire_stack(), identifier),
-            controller: ControlState::new(broker, shared.acquire_stack(), identifier, delay),
+            controller: ControlState::new(broker, shared.acquire_stack(), identifier),
             settings: miniconf::MqttClient::new(
                 shared.acquire_stack(),
                 &miniconf_client,

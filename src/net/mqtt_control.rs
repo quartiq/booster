@@ -5,15 +5,13 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 use crate::{
-    delay::AsmDelay,
     hardware::{booster_channels::BoosterChannels, clock::SystemTimer},
-    Channel, Error, MainBus,
+    Channel, MainBus,
 };
 
 use super::NetworkStackProxy;
 
 use core::fmt::Write;
-use embedded_hal::blocking::delay::DelayUs;
 use heapless::String;
 use minimq::{Property, QoS};
 
@@ -89,19 +87,6 @@ impl Response {
 
         serde_json_core::to_string(&response).unwrap()
     }
-
-    /// Indicate that a command failed to be processed.
-    ///
-    /// # Args
-    /// * `error` - The error that was encountered while the command was being processed.
-    pub fn error(error: Error) -> String<256> {
-        let mut msg = String::<256>::new();
-        write!(&mut msg, "{:?}", error).unwrap();
-
-        let response = Response { code: 400, msg };
-
-        serde_json_core::to_string(&response).unwrap()
-    }
 }
 
 /// Represents a means of handling MQTT-based control interface.
@@ -110,7 +95,6 @@ pub struct ControlState {
     subscribed: bool,
     control_topic: String<64>,
     default_response_topic: String<64>,
-    delay: AsmDelay,
 }
 
 impl ControlState {
@@ -119,7 +103,6 @@ impl ControlState {
         broker: minimq::embedded_nal::IpAddr,
         stack: super::NetworkStackProxy,
         id: &str,
-        delay: AsmDelay,
     ) -> Self {
         let mut client_id: String<64> = String::new();
         write!(&mut client_id, "booster-{}-ctrl", id).unwrap();
@@ -135,7 +118,6 @@ impl ControlState {
             subscribed: false,
             control_topic,
             default_response_topic,
-            delay,
         }
     }
 
@@ -154,13 +136,11 @@ impl ControlState {
         }
 
         let response_topic = &self.default_response_topic;
-        let delay = &mut self.delay;
         let expected_topic = &self.control_topic;
 
         match self.mqtt.poll(|client, topic, message, properties| {
             let response = if topic == expected_topic {
-                main_bus
-                    .lock(|main_bus| handle_channel_update(message, &mut main_bus.channels, delay))
+                main_bus.lock(|main_bus| handle_channel_update(message, &mut main_bus.channels))
             } else {
                 Response::error_msg("Unexpected topic")
             };
@@ -210,11 +190,7 @@ impl ControlState {
 ///
 /// # Returns
 /// A String response indicating the result of the request.
-fn handle_channel_update(
-    message: &[u8],
-    channels: &mut BoosterChannels,
-    delay: &mut impl DelayUs<u16>,
-) -> String<256> {
+fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> String<256> {
     let mut response: String<256> = String::new();
 
     let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
@@ -222,18 +198,21 @@ fn handle_channel_update(
         Err(_) => return Response::error_msg("Failed to decode data"),
     };
     channels
-        .map(request.channel, |ch, _| match request.action {
-            ChannelAction::Save => {
-                ch.save_configuration();
-                Ok("Channel saved")
-            }
-            ChannelAction::ReadBiasCurrent => {
-                // Wait for 11 ms > 10.04 ms total cycle time to ensure an up-to-date
-                // current measurement.
-                delay.delay_us(11000);
-                response = ChannelBiasResponse::okay(ch.get_bias_voltage(), ch.get_p28v_current());
-                Ok(&response)
-            }
+        .channel_mut(request.channel)
+        .map(|(channel, _)| {
+            Response::okay(match request.action {
+                ChannelAction::Save => {
+                    channel.context_mut().save_configuration();
+                    "Channel saved"
+                }
+                ChannelAction::ReadBiasCurrent => {
+                    response = ChannelBiasResponse::okay(
+                        channel.context_mut().get_bias_voltage(),
+                        channel.context_mut().get_p28v_current(),
+                    );
+                    &response
+                }
+            })
         })
-        .map_or_else(Response::error, Response::okay)
+        .unwrap_or_else(|| Response::error_msg("Channel not present"))
 }
