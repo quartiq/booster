@@ -204,12 +204,12 @@ pub struct ChannelPins {
 
     // The alert and input overdrive pins have external pull resistors, so we don't need to pull
     // them internally.
-    pub alert: hal::gpio::gpiod::PD<Input<Floating>>,
+    alert: hal::gpio::gpiod::PD<Input<Floating>>,
 
-    pub reflected_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
+    reflected_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
 
     // There are no pullup/pulldown resistors on this input, so we will pull it down internally.
-    pub output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
+    output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
 
     signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
 
@@ -343,7 +343,7 @@ impl RfChannel {
     }
 
     fn apply_output_interlock_threshold(&mut self) -> Result<f32, Error> {
-        let settings = self.settings.settings_mut();
+        let settings = self.settings.settings();
 
         self.devices
             .interlock_thresholds_dac
@@ -395,12 +395,12 @@ impl RfChannel {
     /// # Args
     /// * `new_settings` - The new settings to apply to the channel.
     fn apply_settings(&mut self, new_settings: &ChannelSettings) -> Result<(), Error> {
+        let settings = self.settings.settings_mut();
+
         // If the settings haven't changed, we can short circuit now.
-        if self.settings.settings() == new_settings {
+        if settings == new_settings {
             return Ok(());
         }
-
-        let settings = self.settings.settings_mut();
 
         let bias_changed = new_settings.bias_voltage != settings.bias_voltage;
         let output_interlock_updated = settings
@@ -418,7 +418,7 @@ impl RfChannel {
 
         // Copy transforms before applying the interlock threshold, since the interlock DAC level
         // is calculated from the output interlock transform.
-        *self.settings.settings_mut() = *new_settings;
+        *settings = *new_settings;
 
         // Only update the interlock and bias DACs if they've actually changed.
         if output_interlock_updated {

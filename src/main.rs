@@ -221,29 +221,21 @@ const APP: () = {
             .lock(|watchdog| watchdog.check_in(WatchdogClient::Button));
 
         if let Some(event) = c.resources.buttons.update() {
-            match event {
-                ButtonEvent::InterlockReset => {
-                    for idx in Channel::into_enum_iter() {
-                        c.resources.main_bus.lock(|main_bus| {
-                            main_bus.channels.channel_mut(idx).map(|(channel, _)|
+            for idx in Channel::into_enum_iter() {
+                c.resources.main_bus.lock(|main_bus| {
+                    main_bus
+                        .channels
+                        .channel_mut(idx)
+                        .map(|(channel, _)| match event {
+                            ButtonEvent::InterlockReset => {
                                 // It is possible to attempt to re-enable the channel before it was
                                 // fully disabled. Ignore this transient error - the user may need
                                 // to press twice.
-                                channel.interlock_reset().ok())
-                        });
-                    }
-                }
-
-                ButtonEvent::Standby => {
-                    for idx in Channel::into_enum_iter() {
-                        c.resources.main_bus.lock(|main_bus| {
-                            main_bus
-                                .channels
-                                .channel_mut(idx)
-                                .map(|(channel, _)| channel.standby())
-                        });
-                    }
-                }
+                                channel.interlock_reset().ok();
+                            }
+                            ButtonEvent::Standby => channel.standby(),
+                        })
+                });
             }
         }
 
