@@ -50,6 +50,7 @@ pub enum Interlock {
 
 /// A succinct representation of RF channel state for front panel status indication.
 /// The three flags match the three LED states.
+#[derive(Default, Copy, Clone, Debug)]
 pub struct PowerStatus {
     /// The RF channel is powered on. Green LED.
     pub powered: bool,

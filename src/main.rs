@@ -41,7 +41,6 @@ use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
 
 use hardware::{
-    rf_channel::PowerStatus,
     setup::MainBus,
     user_interface::{ButtonEvent, Color, UserButtons, UserLeds},
     Channel, CPU_FREQ,
@@ -145,14 +144,8 @@ const APP: () = {
                 .channels
                 .channel_mut(idx)
                 .map(|(channel, _)| channel.update())
-                .unwrap_or(
-                    // Clear all LEDs for this channel.
-                    PowerStatus {
-                        powered: false,
-                        rf_disabled: false,
-                        blocked: false,
-                    },
-                );
+                // Clear all LEDs for this channel.
+                .unwrap_or_default();
             // Echo the measured values to the LEDs on the user interface for this channel.
             leds.set_led(Color::Green, idx, status.powered);
             leds.set_led(Color::Yellow, idx, status.rf_disabled);
