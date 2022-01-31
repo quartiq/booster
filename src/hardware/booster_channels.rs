@@ -10,14 +10,14 @@ use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal as hal;
 use tca9548::{self, Tca9548};
 
-use super::rf_channel::{ChannelPins as RfChannelPins, RfChannel};
+use super::rf_channel::{ChannelPins as RfChannelPins, RfChannel, RfChannelWrapper};
 use super::{I2cBusManager, I2cProxy};
 use crate::Error;
 use embedded_hal::blocking::delay::DelayUs;
 
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
-    channels: [Option<RfChannel>; 8],
+    channels: [Option<RfChannelWrapper>; 8],
     adc: hal::adc::Adc<hal::stm32::ADC3>,
     mux: Tca9548<I2cProxy>,
 }
@@ -59,7 +59,7 @@ impl BoosterChannels {
         mut pins: [Option<RfChannelPins>; 8],
         delay: &mut impl DelayUs<u16>,
     ) -> Self {
-        let mut rf_channels: [Option<RfChannel>; 8] =
+        let mut rf_channels: [Option<RfChannelWrapper>; 8] =
             [None, None, None, None, None, None, None, None];
 
         for channel in Channel::into_enum_iter() {
@@ -71,13 +71,10 @@ impl BoosterChannels {
                 .take()
                 .expect("Channel pins not available");
 
-            match RfChannel::new(&manager, control_pins, delay) {
-                Some(rf_channel) => {
-                    rf_channels[channel as usize].replace(rf_channel);
-                }
-                None => {
-                    info!("Channel {} did not enumerate", channel as usize);
-                }
+            if let Some(rf_channel) = RfChannel::new(&manager, control_pins, delay) {
+                rf_channels[channel as usize].replace(RfChannelWrapper::new(rf_channel));
+            } else {
+                info!("Channel {} did not enumerate", channel as usize);
             }
         }
 
@@ -105,7 +102,16 @@ impl BoosterChannels {
             .ok_or(Error::NotPresent)
             .and_then(|ch| {
                 mux.select_bus(Some(channel.into())).unwrap();
-                func(ch, adc)
+                func(ch.0.context_mut(), adc)
             })
+    }
+
+    pub fn channel_mut(&mut self, channel: Channel) -> Result<&mut RfChannelWrapper, Error> {
+        if let Some(ref mut rf_channel) = self.channels[channel as usize] {
+            self.mux.select_bus(Some(channel.into())).unwrap();
+            Ok(rf_channel)
+        } else {
+            Err(Error::NotPresent)
+        }
     }
 }

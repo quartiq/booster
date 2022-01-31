@@ -41,7 +41,7 @@ use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
 
 use hardware::{
-    rf_channel::ChannelState,
+    rf_channel::PowerStatus,
     setup::MainBus,
     user_interface::{ButtonEvent, Color, UserButtons, UserLeds},
     Channel, CPU_FREQ,
@@ -142,10 +142,12 @@ const APP: () = {
 
         // Check all of the timer channels.
         for channel in Channel::into_enum_iter() {
-            let state = match c.resources.main_bus.channels.map(channel, |ch, _| {
-                ch.update()?;
-                Ok(ch.get_state())
-            }) {
+            let PowerStatus {
+                powered,
+                rf_enabled,
+                blocked,
+            } = match c.resources.main_bus.channels.channel_mut(channel) {
+                Ok(channel) => channel.update(),
                 Err(Error::NotPresent) => {
                     // Clear all LEDs for this channel.
                     c.resources.leds.set_led(Color::Red, channel, false);
@@ -154,43 +156,19 @@ const APP: () = {
                     continue;
                 }
                 Err(error) => panic!("Invalid channel error: {:?}", error),
-                Ok(state) => state,
-            };
-
-            let powered = match state {
-                ChannelState::Powerup(_)
-                | ChannelState::Powered
-                | ChannelState::Powerdown(_)
-                | ChannelState::Enabled
-                | ChannelState::Tripped(_) => true,
-                _ => false,
-            };
-
-            let fault = if let ChannelState::Blocked(_) = state {
-                true
-            } else {
-                false
-            };
-
-            // RF is only enabled in the Enabled state. We also ignore the `blocked` state as this
-            // is indicated by the red fault LED instead.
-            let rf_disabled = match state {
-                ChannelState::Enabled | ChannelState::Blocked(_) => false,
-                _ => true,
             };
 
             // Echo the measured values to the LEDs on the user interface for this channel.
             c.resources.leds.set_led(Color::Green, channel, powered);
             c.resources
                 .leds
-                .set_led(Color::Yellow, channel, rf_disabled);
-            c.resources.leds.set_led(Color::Red, channel, fault);
+                .set_led(Color::Yellow, channel, !rf_enabled);
+            c.resources.leds.set_led(Color::Red, channel, blocked);
         }
 
         // Propagate the updated LED values to the user interface.
         c.resources.leds.update();
 
-        // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 10Hz.
         c.schedule
             .channel_monitor(c.scheduled + Duration::from_cycles(CPU_FREQ / 10))
@@ -224,7 +202,6 @@ const APP: () = {
             .main_bus
             .lock(|main_bus| main_bus.fans.update(temperatures));
 
-        // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 1Hz.
         c.schedule
             .fans(c.scheduled + Duration::from_cycles(CPU_FREQ))
@@ -255,7 +232,6 @@ const APP: () = {
             }
         }
 
-        // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task periodically at 2Hz.
         c.schedule
             .telemetry(c.scheduled + Duration::from_cycles(CPU_FREQ / 2))
@@ -274,15 +250,11 @@ const APP: () = {
                 ButtonEvent::InterlockReset => {
                     for chan in Channel::into_enum_iter() {
                         c.resources.main_bus.lock(|main_bus| {
-                            match main_bus.channels.map(chan, |ch, _| ch.start_powerup()) {
-                                Ok(_) | Err(Error::NotPresent) => {}
-
+                            if let Ok(ref mut channel) = main_bus.channels.channel_mut(chan) {
                                 // It is possible to attempt to re-enable the channel before it was
                                 // fully disabled. Ignore this transient error - the user may need
                                 // to press twice.
-                                Err(Error::InvalidState) => {}
-
-                                Err(e) => panic!("Reset failed on {:?}: {:?}", chan, e),
+                                channel.interlock_reset().ok();
                             }
                         })
                     }
@@ -291,9 +263,8 @@ const APP: () = {
                 ButtonEvent::Standby => {
                     for chan in Channel::into_enum_iter() {
                         c.resources.main_bus.lock(|main_bus| {
-                            match main_bus.channels.map(chan, |ch, _| Ok(ch.start_disable())) {
-                                Ok(_) | Err(Error::NotPresent) => {}
-                                Err(e) => panic!("Standby failed on {:?}: {:?}", chan, e),
+                            if let Ok(ref mut channel) = main_bus.channels.channel_mut(chan) {
+                                channel.standby()
                             }
                         })
                     }
@@ -301,7 +272,6 @@ const APP: () = {
             }
         }
 
-        // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task every 3ms.
         c.schedule
             .button(c.scheduled + Duration::from_cycles(3 * (CPU_FREQ / 1000)))
@@ -315,12 +285,10 @@ const APP: () = {
         for chan in Channel::into_enum_iter() {
             let settings = &all_settings.channel[chan as usize];
             c.resources.main_bus.lock(|main_bus| {
-                match main_bus
-                    .channels
-                    .map(chan, |channel, _| channel.apply_settings(settings))
-                {
-                    Ok(_) | Err(Error::NotPresent) => {}
-                    Err(e) => panic!("Settings update failed on {:?}: {:?}", chan, e),
+                if let Ok(ref mut channel) = main_bus.channels.channel_mut(chan) {
+                    if let Err(err) = channel.handle_settings(settings) {
+                        log::warn!("Settings failure on {:?}: {:?}", chan, err);
+                    }
                 }
             });
         }
@@ -339,7 +307,6 @@ const APP: () = {
         // Handle the USB serial terminal.
         c.resources.usb_terminal.process();
 
-        // TODO: Replace hard-coded CPU cycles here.
         // Schedule to run this task every 10ms.
         c.schedule
             .usb(c.scheduled + Duration::from_cycles(10 * (CPU_FREQ / 1_000)))

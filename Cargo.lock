@@ -148,6 +148,7 @@ dependencies = [
  "serde",
  "serde-json-core",
  "shared-bus",
+ "smlang 0.5.0",
  "smoltcp-nal",
  "stm32f4xx-hal",
  "tca9548",
@@ -728,7 +729,7 @@ dependencies = [
  "minimq",
  "serde",
  "serde-json-core",
- "smlang",
+ "smlang 0.4.2",
 ]
 
 [[package]]
@@ -742,7 +743,7 @@ dependencies = [
  "embedded-time",
  "enum-iterator",
  "heapless 0.7.9",
- "smlang",
+ "smlang 0.4.2",
 ]
 
 [[package]]
@@ -1065,7 +1066,16 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75f6a641648330c38cc8e0574ddc03807617dc8f27f3005c368522769f818896"
 dependencies = [
- "smlang-macros",
+ "smlang-macros 0.2.1",
+]
+
+[[package]]
+name = "smlang"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2a0b10e418886c0e8983ea20a45bcd114310eee62f3fbbf78ea75a0860dfad8"
+dependencies = [
+ "smlang-macros 0.5.0",
 ]
 
 [[package]]
@@ -1073,6 +1083,17 @@ name = "smlang-macros"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6db7d915f8478423db4889a8933f0f557ec345b3e94495800d7b32b1ac7250"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "smlang-macros"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5fdbc685c9f8e412c0ea544ac3bc304c06af3fe6e9dc802833465b345f4882d"
 dependencies = [
  "proc-macro2",
  "quote",

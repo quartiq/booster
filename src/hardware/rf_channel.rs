@@ -10,8 +10,9 @@ use dac7571::Dac7571;
 use max6642::Max6642;
 use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
+use minimq::embedded_time::{duration::Extensions, Clock, Instant};
 
-use super::{platform, I2cBusManager, I2cProxy};
+use super::{clock::SystemTimer, platform, I2cBusManager, I2cProxy};
 use crate::{
     settings::{channel_settings::ChannelSettings, BoosterChannelSettings},
     Error,
@@ -23,8 +24,6 @@ use stm32f4xx_hal::{
     gpio::{Analog, Floating, Input, Output, PullDown, PushPull},
     prelude::*,
 };
-
-use rtic::cyccnt::{Duration, Instant};
 
 /// A structure representing power supply measurements of a channel.
 pub struct SupplyMeasurements {
@@ -49,169 +48,16 @@ pub enum Interlock {
     Reflected,
 }
 
-/// The current state of an RF channel.
-#[derive(Debug, Copy, Clone)]
-pub enum ChannelState {
-    /// The channel has been blocked due to a fatal error condition.
-    Blocked(ChannelFault),
+/// A succinct representation of RF channel state for front panel status indication.
+pub struct PowerStatus {
+    /// The RF channel is powered on.
+    pub powered: bool,
 
-    /// The channel output is disabled.
-    Disabled,
+    /// The RF output switch is enabled.
+    pub rf_enabled: bool,
 
-    /// The channel is in the enabling process. The parameter is the instant that power-up began.
-    Powerup(Instant),
-
-    /// The channel is powered up, but outputs are not enabled.
-    Powered,
-
-    /// The channel is actively outputting.
-    Enabled,
-
-    /// The channel has tripped an interlock threshold. Outputs are disabled.
-    Tripped(Interlock),
-
-    /// The channel is in the process of shutting down.
-    Powerdown(Instant),
-
-    /// The channel should begin powerup and enabling as soon as possible.
-    WillPowerupEnable,
-}
-
-impl serde::Serialize for ChannelState {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match *self {
-            ChannelState::Blocked(ChannelFault::SupplyAlert) => {
-                serializer.serialize_unit_variant("ChannelState", 0, "Blocked(SupplyAlert)")
-            }
-            ChannelState::Blocked(ChannelFault::UnderTemperature) => {
-                serializer.serialize_unit_variant("ChannelState", 0, "Blocked(UnderTempeterature)")
-            }
-            ChannelState::Blocked(ChannelFault::OverTemperature) => {
-                serializer.serialize_unit_variant("ChannelState", 0, "Blocked(OverTemperature)")
-            }
-            ChannelState::Disabled => {
-                serializer.serialize_unit_variant("ChannelState", 1, "Disabled")
-            }
-            ChannelState::Powerup(_) => {
-                serializer.serialize_unit_variant("ChannelState", 2, "Powerup")
-            }
-            ChannelState::Powered => {
-                serializer.serialize_unit_variant("ChannelState", 3, "Powered")
-            }
-            ChannelState::Enabled => {
-                serializer.serialize_unit_variant("ChannelState", 4, "Enabled")
-            }
-            ChannelState::Tripped(Interlock::Input) => {
-                serializer.serialize_unit_variant("ChannelState", 5, "Tripped(Input)")
-            }
-            ChannelState::Tripped(Interlock::Output) => {
-                serializer.serialize_unit_variant("ChannelState", 5, "Tripped(Output)")
-            }
-            ChannelState::Tripped(Interlock::Reflected) => {
-                serializer.serialize_unit_variant("ChannelState", 5, "Tripped(Reflected)")
-            }
-            ChannelState::Powerdown(_) => {
-                serializer.serialize_unit_variant("ChannelState", 6, "Powerdown")
-            }
-            ChannelState::WillPowerupEnable => {
-                serializer.serialize_unit_variant("ChannelState", 7, "WillPowerupEnable")
-            }
-        }
-    }
-}
-
-struct StateMachine {
-    state: ChannelState,
-}
-
-impl StateMachine {
-    /// Construct a new state machine.
-    pub fn new(state: ChannelState) -> StateMachine {
-        Self { state }
-    }
-
-    /// Get the current state of the state machine.
-    pub fn state(&self) -> ChannelState {
-        self.state
-    }
-
-    /// Transition the state machine to a new state.
-    pub fn transition(&mut self, new_state: ChannelState) -> Result<(), Error> {
-        // Explicitly always allow the state machine to transition to the blocked state.
-        if let ChannelState::Blocked(fault) = new_state {
-            match self.state {
-                ChannelState::Blocked(_) => {}
-                _ => self.state = ChannelState::Blocked(fault),
-            }
-            return Ok(());
-        }
-
-        let new_state = match self.state {
-            // It is never valid to transition out of the blocked state.
-            ChannelState::Blocked(_) => return Err(Error::InvalidState),
-
-            // It is only valid to transition from disabled into the power-up state.
-            ChannelState::Disabled => match new_state {
-                ChannelState::Disabled
-                | ChannelState::Powerup(_)
-                | ChannelState::WillPowerupEnable => new_state,
-                _ => return Err(Error::InvalidState),
-            },
-
-            // During power up, it is only possible to transition to powered, enabled, or
-            // power-down.
-            ChannelState::Powerup(_) => match new_state {
-                ChannelState::Enabled | ChannelState::Powered | ChannelState::Powerdown(_) => {
-                    new_state
-                }
-                _ => return Err(Error::InvalidState),
-            },
-
-            // When powered, it is only valid to enter enabled or power-down.
-            ChannelState::Powered => match new_state {
-                ChannelState::Powered | ChannelState::Enabled | ChannelState::Powerdown(_) => {
-                    new_state
-                }
-                _ => return Err(Error::InvalidState),
-            },
-
-            // When enabled, it is only possible to transition to powered, powerdown, or tripped.
-            ChannelState::Enabled => match new_state {
-                ChannelState::Enabled
-                | ChannelState::Powered
-                | ChannelState::Tripped(_)
-                | ChannelState::Powerup(_)
-                | ChannelState::Powerdown(_) => new_state,
-                _ => return Err(Error::InvalidState),
-            },
-
-            // When powering down, it is only possible to finish the power-down process.
-            ChannelState::Powerdown(_) => match new_state {
-                ChannelState::Disabled => new_state,
-                _ => return Err(Error::InvalidState),
-            },
-
-            // When in the WillPowerUpEnable state, it is only valid to enter the `PowerUp` state
-            // with the enable flag asserted.
-            ChannelState::WillPowerupEnable => match new_state {
-                ChannelState::Powerup(_) => new_state,
-                _ => return Err(Error::InvalidState),
-            },
-
-            // When tripped, it is only possible to re-enable, enter powered mode, or enter
-            // power-down.  Note that semantically, `Powered` and `Tripped` are identical states -
-            // the channel is powered, but RF output is disabled.
-            ChannelState::Tripped(_) => match new_state {
-                ChannelState::Powerdown(_) | ChannelState::Powered | ChannelState::Enabled => {
-                    new_state
-                }
-                _ => return Err(Error::InvalidState),
-            },
-        };
-
-        self.state = new_state;
-        Ok(())
-    }
+    /// The channel is in a force-disabled state due to a latched error.
+    pub blocked: bool,
 }
 
 // Macro magic to generate an enum that looks like:
@@ -438,7 +284,7 @@ impl ChannelPins {
 }
 
 /// Contains channel status information in SI base units.
-#[derive(Debug, serde::Serialize)]
+#[derive(serde::Serialize)]
 pub struct ChannelStatus {
     pub reflected_overdrive: bool,
     pub output_overdrive: bool,
@@ -450,10 +296,6 @@ pub struct ChannelStatus {
     pub input_power: f32,
     pub reflected_power: f32,
     pub output_power: f32,
-    pub reflected_overdrive_threshold: f32,
-    pub output_overdrive_threshold: f32,
-    pub bias_voltage: f32,
-    pub state: ChannelState,
 }
 
 /// Represents a means of interacting with an RF output channel.
@@ -461,7 +303,7 @@ pub struct RfChannel {
     pub i2c_devices: Devices,
     pub pins: ChannelPins,
     settings: BoosterChannelSettings,
-    state_machine: StateMachine,
+    clock: SystemTimer,
 }
 
 impl RfChannel {
@@ -489,7 +331,7 @@ impl RfChannel {
                     i2c_devices: devices,
                     pins: control_pins,
                     settings: BoosterChannelSettings::new(eeprom),
-                    state_machine: StateMachine::new(ChannelState::Disabled),
+                    clock: SystemTimer::default(),
                 };
 
                 channel.apply_output_interlock_threshold().unwrap();
@@ -499,15 +341,6 @@ impl RfChannel {
                 channel
                     .set_reflected_interlock_threshold(platform::MAXIMUM_REFLECTED_POWER_DBM)
                     .unwrap();
-
-                // If the channel configuration specifies the channel as enabled, power up the
-                // channel now.
-                if channel.settings.settings().enabled && platform::watchdog_detected() == false {
-                    channel
-                        .state_machine
-                        .transition(ChannelState::WillPowerupEnable)
-                        .unwrap();
-                }
 
                 Some(channel)
             }
@@ -566,81 +399,6 @@ impl RfChannel {
         }
     }
 
-    /// Update the current state of the RF channel.
-    ///
-    /// # Note
-    /// This must be called periodically to facilitate enabling a channel.
-    pub fn update(&mut self) -> Result<(), Error> {
-        // Check potential fault conditions.
-        if let Some(fault) = self.check_faults() {
-            // Latch the fault condition.
-            self.state_machine
-                .transition(ChannelState::Blocked(fault))
-                .unwrap();
-
-            // Power off the channel if it was powered on.
-            if self.pins.enable_power.is_high().unwrap() {
-                self.start_disable();
-            }
-        }
-
-        match self.state_machine.state() {
-            ChannelState::Powerup(start_time) => {
-                // The LM3880 requires 180ms to power up all supplies on the channel. We add an
-                // additional 20ms margin.
-
-                // TODO: Replace constant definition of CPU frequency here.
-                if start_time.elapsed() > Duration::from_cycles(200 * (168_000_000 / 1000)) {
-                    if self.settings().enabled && !self.settings().output_disable {
-                        self.enable_output()?;
-                    } else {
-                        self.state_machine
-                            .transition(ChannelState::Powered)
-                            .unwrap();
-                    }
-                }
-            }
-
-            ChannelState::Powerdown(start_time) => {
-                // Note that we use 500ms here due to the worst-case power-sequencing operation of
-                // the LM3880 that occurs when a channel is disabled immediately after enable. In
-                // this case, the LM3880 will require 180ms to power up the channel, 120ms to
-                // stabilize, and then 180ms to power down the channel.
-
-                // TODO: Replace constant definition of CPU frequency here.
-                if start_time.elapsed() > Duration::from_cycles(500 * (168_000_000 / 1000)) {
-                    self.state_machine
-                        .transition(ChannelState::Disabled)
-                        .unwrap();
-                }
-            }
-
-            ChannelState::Enabled => {
-                // We explicitly only check for overdrive conditions once the channel has been
-                // fully enabled.
-                if let Some(trip_source) = self.get_overdrive_source() {
-                    // Manually disable the ON_OFFn net - this may be a software-initiated
-                    // interlock
-                    self.pins.signal_on.set_low().unwrap();
-                    self.state_machine
-                        .transition(ChannelState::Tripped(trip_source))
-                        .unwrap();
-                }
-            }
-
-            // Begin the power-up and enabling process immediately.
-            ChannelState::WillPowerupEnable => self.start_powerup().unwrap(),
-
-            // There's no active transitions in the following states.
-            ChannelState::Disabled
-            | ChannelState::Blocked(_)
-            | ChannelState::Tripped(_)
-            | ChannelState::Powered => {}
-        }
-
-        Ok(())
-    }
-
     fn get_overdrive_source(&mut self) -> Option<Interlock> {
         let reflected_overdrive = self.pins.reflected_overdrive.is_high().unwrap();
         let output_overdrive = self.pins.output_overdrive.is_high().unwrap();
@@ -657,111 +415,6 @@ impl RfChannel {
             Some(Interlock::Reflected)
         } else {
             None
-        }
-    }
-
-    /// Start the power-up process for channel.
-    pub fn start_powerup(&mut self) -> Result<(), Error> {
-        let should_enable = self.settings().enabled && !self.settings().output_disable;
-
-        // If we are just tripped or are already powered, we can re-enable the channel by cycling
-        // the ON_OFFn input.
-        match self.state_machine.state() {
-            ChannelState::Tripped(_) | ChannelState::Powered => {
-                if should_enable {
-                    return self.enable_output();
-                } else {
-                    return self.state_machine.transition(ChannelState::Powered);
-                }
-            }
-
-            // If we're already enabled and we're supposed to be, there's nothing to do.
-            ChannelState::Enabled if should_enable => return Ok(()),
-
-            // If we're already powering up, there's nothing to do.
-            ChannelState::Powerup(_) => return Ok(()),
-
-            _ => {}
-        }
-
-        // We will be starting the supply sequencer for the RF channel power rail. This will take
-        // some time. We can't set the bias DAC until those supplies have stabilized.
-        self.state_machine
-            .transition(ChannelState::Powerup(Instant::now()))
-            .unwrap();
-
-        // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
-        self.i2c_devices
-            .bias_dac
-            .set_voltage(3.2)
-            .expect("Failed to disable RF bias voltage");
-
-        // Ensure that the RF output is disabled during the power-up process.
-        self.pins.signal_on.set_low().unwrap();
-
-        // Start the LM3880 power supply sequencer.
-        self.pins.enable_power.set_high().unwrap();
-        Ok(())
-    }
-
-    /// Enable RF input/output signals on the channel.
-    ///
-    /// # Note
-    /// This can only be completed once the channel has been fully powered.
-    fn enable_output(&mut self) -> Result<(), Error> {
-        // It is only valid to enable the output if the channel is powered.
-        assert!(self.pins.enable_power.is_high().unwrap());
-
-        let settings = self.settings.settings_mut();
-
-        // It is not valid to enable the channel while the interlock thresholds are low. Due to
-        // hardware configurations, it is possible that this would result in a condition where the
-        // interlock is never tripped even though the output is exceeding the interlock threshold.
-        // As a workaround, we need to ensure that the interlock level is above the output power
-        // detector level. When RF is disabled, the power detectors output a near-zero value, so
-        // 100mV should be a sufficient level.
-        if settings.output_interlock_threshold < settings.output_power_transform.map(0.100) {
-            self.start_disable();
-            return Err(Error::Invalid);
-        }
-
-        self.apply_bias().unwrap();
-
-        self.pins.signal_on.set_high().unwrap();
-
-        self.state_machine
-            .transition(ChannelState::Enabled)
-            .expect("Invalid state transition");
-
-        Ok(())
-    }
-
-    /// Disable the channel and power it off.
-    pub fn start_disable(&mut self) {
-        let channel_was_powered = self.pins.enable_power.is_high().unwrap();
-
-        // The RF channel may be unconditionally disabled at any point to aid in preventing damage.
-        // The effect of this is that we must assume worst-case power-down timing, which increases
-        // the time until we can enable a channel after a power-down.
-        self.pins.signal_on.set_low().unwrap();
-
-        // Set the bias DAC output into pinch-off.
-        self.i2c_devices
-            .bias_dac
-            .set_voltage(3.2)
-            .expect("Failed to disable RF bias voltage");
-
-        self.pins.enable_power.set_low().unwrap();
-
-        if channel_was_powered {
-            // Only update the channel state if the channel has not latched an error.
-            match self.state_machine.state() {
-                ChannelState::Blocked(_) => {}
-                _ => self
-                    .state_machine
-                    .transition(ChannelState::Powerdown(Instant::now()))
-                    .expect("Failed to enter power-down"),
-            }
         }
     }
 
@@ -800,17 +453,6 @@ impl RfChannel {
 
         if bias_changed {
             self.apply_bias()?;
-        }
-
-        // Finally, update channel enable state.
-        if !new_settings.enabled {
-            // It's always valid to disable the channel even if it wasn't previously on.
-            self.start_disable();
-        } else {
-            // If the channel is in fault conditions, do not attempt to enable it.
-            if !matches!(self.get_state(), ChannelState::Blocked(_)) {
-                self.start_powerup().unwrap();
-            }
         }
 
         Ok(())
@@ -951,14 +593,6 @@ impl RfChannel {
         self.settings.settings().output_power_transform.map(voltage)
     }
 
-    /// Get the current output power interlock threshold.
-    ///
-    /// # Returns
-    /// The current output interlock threshold in dBm.
-    pub fn get_output_interlock_threshold(&self) -> f32 {
-        self.settings.settings().output_interlock_threshold
-    }
-
     /// Get the current bias voltage programmed to the RF amplification transistor.
     pub fn get_bias_voltage(&self) -> f32 {
         self.settings.settings().bias_voltage
@@ -979,21 +613,300 @@ impl RfChannel {
             input_power: self.get_input_power(),
             output_power: self.get_output_power(adc),
             reflected_power: self.get_reflected_power(adc),
-            reflected_overdrive_threshold: platform::MAXIMUM_REFLECTED_POWER_DBM,
-            output_overdrive_threshold: self.get_output_interlock_threshold(),
-            bias_voltage: self.get_bias_voltage(),
-            state: self.get_state(),
         };
 
         status
     }
 
-    /// Get the current state of the channel.
-    pub fn get_state(&self) -> ChannelState {
-        self.state_machine.state()
-    }
-
     pub fn settings(&self) -> ChannelSettings {
         self.settings.settings().clone()
+    }
+}
+
+mod sm {
+    use super::{ChannelFault, Interlock};
+    use crate::hardware::clock::SystemTimer;
+    use minimq::embedded_time::Instant;
+    use smlang::statemachine;
+
+    impl Copy for States {}
+    impl Clone for States {
+        fn clone(&self) -> States {
+            *self
+        }
+    }
+
+    impl serde::Serialize for States {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            match *self {
+                States::Blocked(ChannelFault::OverTemperature) => {
+                    serializer.serialize_unit_variant("State", 0, "Blocked(OverTemperature)")
+                }
+                States::Blocked(ChannelFault::UnderTemperature) => {
+                    serializer.serialize_unit_variant("State", 0, "Blocked(UnderTemperature)")
+                }
+                States::Blocked(ChannelFault::SupplyAlert) => {
+                    serializer.serialize_unit_variant("State", 0, "Blocked(SupplyAlert)")
+                }
+                States::Off => serializer.serialize_unit_variant("State", 1, "Off"),
+                States::Powerup(_) => serializer.serialize_unit_variant("State", 2, "Powerup"),
+                States::Powered => serializer.serialize_unit_variant("State", 3, "Powered"),
+                States::Enabled => serializer.serialize_unit_variant("State", 4, "Enabled"),
+                States::Powerdown(_) => serializer.serialize_unit_variant("State", 6, "Powerdown"),
+                States::Tripped(Interlock::Output) => {
+                    serializer.serialize_unit_variant("State", 5, "Tripped(Output)")
+                }
+                States::Tripped(Interlock::Input) => {
+                    serializer.serialize_unit_variant("State", 5, "Tripped(Input)")
+                }
+                States::Tripped(Interlock::Reflected) => {
+                    serializer.serialize_unit_variant("State", 5, "Tripped(Reflected)")
+                }
+            }
+        }
+    }
+
+    statemachine! {
+        transitions: {
+            *Off + InterlockReset / start_powerup = Powerup(Instant<SystemTimer>),
+            Off + Disable = Off,
+            Off + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
+
+            Powerup(Instant<SystemTimer>) + Update [check_timeout] = Powered,
+            Powerup(Instant<SystemTimer>) + Disable / start_disable_instant = Powerdown(Instant<SystemTimer>),
+            Powerup(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault_instant = Blocked(ChannelFault),
+
+            Powered + Update [guard_enable] / enable_output = Enabled,
+            Powered + Disable / start_disable = Powerdown(Instant<SystemTimer>),
+            Powered + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
+
+            Enabled + InterlockReset / start_powerup = Powerup(Instant<SystemTimer>),
+            Enabled + Trip(Interlock) / handle_trip = Tripped(Interlock),
+            Enabled + Disable / start_disable = Powerdown(Instant<SystemTimer>),
+            Enabled + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
+
+            Tripped(Interlock) + InterlockReset / start_powerup_interlock = Powerup(Instant<SystemTimer>),
+            Tripped(Interlock) + Disable / start_disable_interlock = Powerdown(Instant<SystemTimer>),
+            Tripped(Interlock) + Fault(ChannelFault) / handle_fault_interlock = Blocked(ChannelFault),
+
+            Powerdown(Instant<SystemTimer>) + Update [check_timeout] = Off,
+            Powerdown(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault_instant = Blocked(ChannelFault),
+
+            Blocked(ChannelFault) + Fault(ChannelFault) / handle_recurrent_fault = Blocked(ChannelFault),
+        }
+    }
+}
+
+impl sm::StateMachineContext for RfChannel {
+    /// Handle the occurrence of a tripped interlock.
+    fn handle_trip(&mut self, interlock: &Interlock) -> Interlock {
+        self.pins.signal_on.set_low().unwrap();
+        *interlock
+    }
+
+    /// Begin the process of powering up the channel.
+    ///
+    /// # Returns
+    /// The time at which the powerup process can be deemed complete.
+    fn start_powerup(&mut self) -> Instant<SystemTimer> {
+        // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
+        self.i2c_devices
+            .bias_dac
+            .set_voltage(3.2)
+            .expect("Failed to disable RF bias voltage");
+
+        // Ensure that the RF output is disabled during the power-up process.
+        self.pins.signal_on.set_low().unwrap();
+
+        // Start the LM3880 power supply sequencer.
+        self.pins.enable_power.set_high().unwrap();
+
+        // The LM3880 requires 180ms to power up all supplies on the channel. We add an additional
+        // 20ms margin.
+        self.clock.try_now().unwrap() + 200_u32.milliseconds()
+    }
+
+    fn start_powerup_interlock(&mut self, _: &Interlock) -> Instant<SystemTimer> {
+        self.start_powerup()
+    }
+
+    /// Check to see if it's currently acceptable to enable the RF output switch.
+    ///
+    /// # Returns
+    /// An error if it's not currently acceptable to enable. Otherwise, Ok.
+    fn guard_enable(&mut self) -> Result<(), ()> {
+        let settings = self.settings.settings();
+
+        if platform::watchdog_detected() {
+            return Err(());
+        }
+
+        // It is not valid to enable the channel while the interlock thresholds are low. Due to
+        // hardware configurations, it is possible that this would result in a condition where the
+        // interlock is never tripped even though the output is exceeding the interlock threshold.
+        // As a workaround, we need to ensure that the interlock level is above the output power
+        // detector level. When RF is disabled, the power detectors output a near-zero value, so
+        // 100mV should be a sufficient level.
+        if settings.output_interlock_threshold < settings.output_power_transform.map(0.100) {
+            return Err(());
+        }
+
+        // Do not enable output if it shouldn't be disabled due to settings.
+        if settings.enabled == false || settings.output_disable {
+            return Err(());
+        }
+
+        // Enable power should always be high before we're enabling the RF switch.
+        if self.pins.enable_power.is_low().unwrap() {
+            return Err(());
+        }
+
+        Ok(())
+    }
+
+    fn enable_output(&mut self) {
+        let settings = self.settings.settings();
+
+        // It is only valid to enable the output if the channel is powered.
+        assert!(self.pins.enable_power.is_high().unwrap());
+        assert!(settings.output_interlock_threshold > settings.output_power_transform.map(0.100));
+
+        self.apply_bias().unwrap();
+        self.pins.signal_on.set_high().unwrap();
+    }
+
+    /// Begin the process of powering down the channel.
+    ///
+    /// # Returns
+    /// The time at which the powerdown process can be deemed complete.
+    fn start_disable(&mut self) -> Instant<SystemTimer> {
+        self.pins.signal_on.set_low().unwrap();
+
+        // Set the bias DAC output into pinch-off.
+        self.i2c_devices
+            .bias_dac
+            .set_voltage(3.2)
+            .expect("Failed to disable RF bias voltage");
+
+        self.pins.enable_power.set_low().unwrap();
+
+        // Note that we use 500ms here due to the worst-case power-sequencing operation of the
+        // LM3880 that occurs when a channel is disabled immediately after enable. In this case,
+        // the LM3880 will require 180ms to power up the channel, 120ms to stabilize, and then
+        // 180ms to power down the channel.
+        self.clock.try_now().unwrap() + 500_u32.milliseconds()
+    }
+
+    fn start_disable_instant(&mut self, _: &Instant<SystemTimer>) -> Instant<SystemTimer> {
+        self.start_disable()
+    }
+
+    fn start_disable_interlock(&mut self, _: &Interlock) -> Instant<SystemTimer> {
+        self.start_disable()
+    }
+
+    /// Check if a deadline has been met.
+    ///
+    /// # Returns
+    /// Ok if the deadline (timeout) has occurred. Error otherwise.
+    fn check_timeout(&mut self, deadline: &Instant<SystemTimer>) -> Result<(), ()> {
+        if self.clock.try_now().unwrap() > *deadline {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    /// Handle the occurrence of a channel fault.
+    fn handle_fault(&mut self, fault: &ChannelFault) -> ChannelFault {
+        self.start_disable();
+        *fault
+    }
+
+    fn handle_fault_instant(
+        &mut self,
+        _: &Instant<SystemTimer>,
+        fault: &ChannelFault,
+    ) -> ChannelFault {
+        self.handle_fault(fault)
+    }
+
+    fn handle_fault_interlock(&mut self, _: &Interlock, fault: &ChannelFault) -> ChannelFault {
+        self.handle_fault(fault)
+    }
+
+    fn handle_recurrent_fault(
+        &mut self,
+        old_fault: &ChannelFault,
+        _: &ChannelFault,
+    ) -> ChannelFault {
+        self.handle_fault(old_fault)
+    }
+}
+
+/// A wrapper around the RF channel state machine.
+pub struct RfChannelWrapper(pub sm::StateMachine<RfChannel>);
+
+impl RfChannelWrapper {
+    /// Construct a new channel state manager.
+    pub fn new(channel: RfChannel) -> Self {
+        Self(sm::StateMachine::new(channel))
+    }
+
+    /// Periodically called to update the channel state machine.
+    ///
+    /// # Returns
+    /// The current channel [PowerStatus]
+    pub fn update(&mut self) -> PowerStatus {
+        // Check for channel faults.
+        if let Some(fault) = self.0.context_mut().check_faults() {
+            self.0.process_event(sm::Events::Fault(fault)).unwrap();
+        }
+
+        // Check for interlock trips.
+        if matches!(self.0.state(), &sm::States::Enabled) {
+            if let Some(interlock) = self.0.context_mut().get_overdrive_source() {
+                self.0.process_event(sm::Events::Trip(interlock)).unwrap();
+            }
+        }
+
+        self.0.process_event(sm::Events::Update).ok();
+
+        PowerStatus {
+            powered: self.0.context_mut().pins.enable_power.is_high().unwrap(),
+            rf_enabled: self.0.context_mut().pins.signal_on.is_high().unwrap(),
+            blocked: matches!(self.0.state(), &sm::States::Blocked(_)),
+        }
+    }
+
+    /// Handle the user pressing the "Interlock Reset" button.
+    pub fn interlock_reset(&mut self) -> Result<(), sm::Error> {
+        self.0.process_event(sm::Events::InterlockReset)?;
+        Ok(())
+    }
+
+    /// Handle the user pressing the "Standby" button.
+    pub fn standby(&mut self) {
+        self.0.process_event(sm::Events::Disable).ok();
+    }
+
+    /// Handle an update to channel settings.
+    pub fn handle_settings(&mut self, settings: &ChannelSettings) -> Result<(), Error> {
+        self.0.context_mut().apply_settings(settings)?;
+
+        if !settings.enabled {
+            // If settings has us disabled, it's always okay to blindly power down.
+            self.0.process_event(sm::Events::Disable).ok();
+        } else {
+            if settings.enabled != self.0.context_mut().pins.enable_power.is_high().unwrap()
+                || settings.output_disable != self.0.context_mut().pins.signal_on.is_low().unwrap()
+            {
+                // Our current power state has a mismatch with the settings. Reset ourselves into the
+                // updated state.
+                self.0.process_event(sm::Events::InterlockReset).ok();
+            }
+        }
+
+        Ok(())
     }
 }
