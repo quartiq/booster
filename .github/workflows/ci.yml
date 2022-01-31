@@ -45,7 +45,7 @@ jobs:
           - phy_enc424j600
         include:
           - toolchain: nightly
-            features: 'unstable,phy_w5500'
+            features: phy_w5500
     steps:
       - uses: actions/checkout@v2
 

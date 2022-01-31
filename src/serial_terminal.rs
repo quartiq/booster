@@ -143,7 +143,6 @@ impl SerialTerminal {
                     cortex_m::peripheral::SCB::sys_reset();
                 }
 
-                #[cfg(feature = "unstable")]
                 Request::ResetBootloader => {
                     cortex_m::interrupt::disable();
 
@@ -151,13 +150,6 @@ impl SerialTerminal {
                     platform::shutdown_channels();
 
                     platform::reset_to_dfu_bootloader();
-                }
-
-                #[cfg(not(feature = "unstable"))]
-                Request::ResetBootloader => {
-                    self.write(
-                        "Reset to DFU bootloader not supported with stable toolchain".as_bytes(),
-                    );
                 }
 
                 Request::ServiceInfo => {
