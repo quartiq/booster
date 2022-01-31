@@ -105,7 +105,6 @@ pub fn clear_reset_flags() {
     rcc.csr.modify(|_, w| w.rmvf().set_bit());
 }
 
-#[cfg(feature = "unstable")]
 /// Reset the device to the internal DFU bootloader.
 pub fn reset_to_dfu_bootloader() {
     // Disable the SysTick peripheral.
@@ -154,13 +153,8 @@ pub fn reset_to_dfu_bootloader() {
     // address from system memory and begin execution. The datasheet indicates that
     // the initial stack pointer is stored at an offset of 0x0000 and the first
     // instruction begins at an offset of 0x0004.
-    let system_memory_address: u32 = 0x1FFF_0000;
     unsafe {
-        core::arch::asm!(
-            "LDR sp, [r3, #0]\n
-             LDR r3, [r3, #4]\n
-             BX r3\n",
-             in("r3") system_memory_address,
-        );
+        let system_memory_address: *const u32 = 0x1FFF_0000 as *const u32;
+        cortex_m::asm::bootload(system_memory_address);
     }
 }
