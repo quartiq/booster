@@ -30,16 +30,12 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --verbose
 
   compile:
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.toolchain == 'nightly' || matrix.features == 'phy_enc424j600'}}
     strategy:
+      max-parallel: 2
       matrix:
         toolchain:
           - stable
@@ -48,8 +44,6 @@ jobs:
           - phy_w5500
           - phy_enc424j600
         include:
-          - toolchain: beta
-            features: phy_w5500
           - toolchain: nightly
             features: 'unstable,phy_w5500'
     steps:
