@@ -194,14 +194,14 @@ const APP: () = {
         c.resources
             .watchdog
             .lock(|watchdog| watchdog.check_in(WatchdogClient::Telemetry));
-        let tele = &mut c.resources.net_devices.telemetry;
+        let control = &mut c.resources.net_devices.control;
         // Gather telemetry for all of the channels.
+        // And broadcast the measured data over the telemetry interface.
         for idx in Channel::into_enum_iter() {
             c.resources.main_bus.lock(|main_bus| {
-                main_bus
-                    .channels
-                    .channel_mut(idx)
-                    .map(|(ch, adc)| tele.report_telemetry(idx, &ch.context_mut().get_status(adc)))
+                main_bus.channels.channel_mut(idx).map(|(ch, adc)| {
+                    control.report_telemetry(idx, &ch.context_mut().get_status(adc))
+                })
             });
         }
 
@@ -297,7 +297,7 @@ const APP: () = {
             let main_bus = &mut c.resources.main_bus;
             c.resources
                 .net_devices
-                .lock(|net| net.controller.update(main_bus));
+                .lock(|net| net.control.update(main_bus));
 
             // Handle the network stack processing if needed.
             c.resources.net_devices.lock(|net| net.process());

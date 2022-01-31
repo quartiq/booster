@@ -14,6 +14,7 @@ use super::NetworkStackProxy;
 use core::fmt::Write;
 use heapless::String;
 use minimq::{Property, QoS};
+use serde::Serialize;
 
 /// Specifies an action to take on a channel.
 #[derive(serde::Deserialize, Debug)]
@@ -90,15 +91,16 @@ impl Response {
 }
 
 /// Represents a means of handling MQTT-based control interface.
-pub struct ControlState {
-    mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 256, 1>,
+pub struct ControlClient {
+    mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 512, 1>,
     subscribed: bool,
     control_topic: String<64>,
+    telemetry_prefix: String<128>,
     default_response_topic: String<64>,
 }
 
-impl ControlState {
-    /// Construct the MQTT control state manager.
+impl ControlClient {
+    /// Construct the MQTT control manager.
     pub fn new(
         broker: minimq::embedded_nal::IpAddr,
         stack: super::NetworkStackProxy,
@@ -110,6 +112,9 @@ impl ControlState {
         let mut control_topic: String<64> = String::new();
         write!(&mut control_topic, "dt/sinara/booster/{}/control", id).unwrap();
 
+        let mut telemetry_prefix: String<128> = String::new();
+        write!(&mut telemetry_prefix, "dt/sinara/booster/{}/telemetry", id).unwrap();
+
         let mut default_response_topic: String<64> = String::new();
         write!(&mut default_response_topic, "dt/sinara/booster/{}/log", id).unwrap();
 
@@ -117,8 +122,33 @@ impl ControlState {
             mqtt: minimq::Minimq::new(broker, &client_id, stack, SystemTimer::default()).unwrap(),
             subscribed: false,
             control_topic,
+            telemetry_prefix,
             default_response_topic,
         }
+    }
+
+    /// Publish telemetry for a specific channel.
+    ///
+    /// # Args
+    /// * `channel` - The channel that telemetry is being reported for.
+    /// * `telemetry` - The associated telemetry of the channel to report.
+    pub fn report_telemetry(&mut self, channel: Channel, telemetry: &impl Serialize) {
+        let mut topic: String<64> = String::new();
+        write!(&mut topic, "{}/ch{}", self.telemetry_prefix, channel as u8).unwrap();
+
+        let message: String<1024> = serde_json_core::to_string(telemetry).unwrap();
+
+        // All telemtry is published in a best-effort manner.
+        self.mqtt
+            .client
+            .publish(
+                topic.as_str(),
+                &message.into_bytes(),
+                minimq::QoS::AtMostOnce,
+                minimq::Retain::NotRetained,
+                &[],
+            )
+            .unwrap();
     }
 
     /// Handle the MQTT-based control interface.
