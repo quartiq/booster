@@ -605,7 +605,7 @@ mod sm {
 
     impl serde::Serialize for States {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            let (idx, var) = match *self {
+            let (idx, var) = match self {
                 States::Blocked(ChannelFault::OverTemperature) => (0, "Blocked(OverTemperature)"),
                 States::Blocked(ChannelFault::UnderTemperature) => (0, "Blocked(UnderTemperature)"),
                 States::Blocked(ChannelFault::SupplyAlert) => (0, "Blocked(SupplyAlert)"),
@@ -823,8 +823,8 @@ impl sm::StateMachine<RfChannel> {
         self.process_event(sm::Events::Update).ok();
 
         PowerStatus {
-            powered: self.context_mut().pins.enable_power.is_high().unwrap(),
-            rf_disabled: self.context_mut().pins.signal_on.is_low().unwrap(),
+            powered: self.context().pins.enable_power.is_high().unwrap(),
+            rf_disabled: self.context().pins.signal_on.is_low().unwrap(),
             blocked: matches!(self.state(), &sm::States::Blocked(_)),
         }
     }
@@ -847,8 +847,8 @@ impl sm::StateMachine<RfChannel> {
         if !settings.enabled {
             // If settings has us disabled, it's always okay to blindly power down.
             self.process_event(sm::Events::Disable).ok();
-        } else if settings.enabled != self.context_mut().pins.enable_power.is_high().unwrap()
-            || settings.rf_disable != self.context_mut().pins.signal_on.is_low().unwrap()
+        } else if settings.enabled != self.context().pins.enable_power.is_high().unwrap()
+            || settings.rf_disable != self.context().pins.signal_on.is_low().unwrap()
         {
             // Our current power state has a mismatch with the settings. Reset ourselves into the
             // updated state.

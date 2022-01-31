@@ -193,26 +193,26 @@ impl ControlState {
 fn handle_channel_update(message: &[u8], channels: &mut BoosterChannels) -> String<256> {
     let mut response: String<256> = String::new();
 
-    let request = match serde_json_core::from_slice::<ChannelRequest>(message) {
-        Ok((data, _)) => data,
-        Err(_) => return Response::error_msg("Failed to decode data"),
-    };
-    channels
-        .channel_mut(request.channel)
-        .map(|(channel, _)| {
-            Response::okay(match request.action {
-                ChannelAction::Save => {
-                    channel.context_mut().save_configuration();
-                    "Channel saved"
-                }
-                ChannelAction::ReadBiasCurrent => {
-                    response = ChannelBiasResponse::okay(
-                        channel.context_mut().get_bias_voltage(),
-                        channel.context_mut().get_p28v_current(),
-                    );
-                    &response
-                }
-            })
+    serde_json_core::from_slice::<ChannelRequest>(message)
+        .map(|(request, _)| {
+            channels
+                .channel_mut(request.channel)
+                .map(|(channel, _)| {
+                    Response::okay(match request.action {
+                        ChannelAction::Save => {
+                            channel.context_mut().save_configuration();
+                            "Channel saved"
+                        }
+                        ChannelAction::ReadBiasCurrent => {
+                            response = ChannelBiasResponse::okay(
+                                channel.context_mut().get_bias_voltage(),
+                                channel.context_mut().get_p28v_current(),
+                            );
+                            &response
+                        }
+                    })
+                })
+                .unwrap_or_else(|| Response::error_msg("Channel not present"))
         })
-        .unwrap_or_else(|| Response::error_msg("Channel not present"))
+        .unwrap_or_else(|_| Response::error_msg("Failed to decode data"))
 }

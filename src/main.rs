@@ -93,9 +93,7 @@ const APP: () = {
                 .main_bus
                 .channels
                 .channel_mut(idx)
-                .map(|(channel, _)| {
-                    settings.channel[idx as usize] = *channel.context_mut().settings()
-                })
+                .map(|(channel, _)| settings.channel[idx as usize] = *channel.context().settings())
                 .unwrap_or_else(|| {
                     settings.channel[idx as usize].enabled = false;
                     settings.channel[idx as usize].rf_disable = true;
