@@ -75,27 +75,27 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --no-default-features --features "${{ matrix.variant }}"
+          args: --no-default-features --features "${{ matrix.features }}"
 
       - name: Build [Release]
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --no-default-features --features "${{ matrix.variant }}"
+          args: --release --no-default-features --features "${{ matrix.features }}"
 
       - name: Extract Binary
         uses: actions-rs/cargo@v1
         with:
           command: objcopy
-          args: --release --no-default-features --features "${{ matrix.variant }}" --verbose -- -O binary booster-release.bin
+          args: --release --no-default-features --features "${{ matrix.features }}" --verbose -- -O binary booster-release.bin
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v2
-        if: ${{ matrix.toolchain == 'stable' }} &&
-            (${{ github.ref == 'refs/heads/master' }} ||
-             ${{ github.ref == 'refs/heads/develop' }})
+        if: ${{ matrix.toolchain == 'stable'
+          && (github.ref == 'refs/heads/master'
+          || github.ref == 'refs/heads/develop') }}
         with:
-          name: Firmware Images (variant=${{ matrix.variant }})
+          name: Firmware Images (features=${{ matrix.features }})
           path: |
             target/*/release/booster
             booster-release.bin
