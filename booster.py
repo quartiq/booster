@@ -157,7 +157,7 @@ class BoosterApi:
             the measured RF amplifier drain current.
         """
         # Power up the channel. Wait for the channel to fully power-up before continuing.
-        await self.settings_interface.command(f'channel/{channel}/output_disable', True, retain=False)
+        await self.settings_interface.command(f'channel/{channel}/rf_disable', True, retain=False)
         await self.settings_interface.command(f'channel/{channel}/enabled', True, retain=False)
         await asyncio.sleep(0.4)
 
