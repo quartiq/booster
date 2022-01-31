@@ -164,6 +164,8 @@ class BoosterApi:
         async def set_bias(voltage):
             await self.settings_interface.command(f'channel/{channel}/bias_voltage',
                                                   voltage, retain=False)
+            # Sleep 100 ms for bias current to settle and for ADC to take current measurement.
+            await asyncio.sleep(0.1)
             response = await self.perform_action(Action.ReadBiasCurrent, channel)
             response = json.loads(response['msg'])
             vgs, ids = response['vgs'], response['ids']
