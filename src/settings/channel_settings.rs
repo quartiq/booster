@@ -19,7 +19,7 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
 };
 
 /// Represents booster channel-specific configuration values.
-#[derive(Miniconf, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(Miniconf, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq)]
 pub struct ChannelSettings {
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,
@@ -30,7 +30,7 @@ pub struct ChannelSettings {
 
     // Note: This field is not persisted to external memory.
     #[serde(skip)]
-    pub output_disable: bool,
+    pub rf_disable: bool,
 }
 
 impl Default for ChannelSettings {
@@ -40,7 +40,7 @@ impl Default for ChannelSettings {
             output_interlock_threshold: 0.0,
             bias_voltage: -3.2,
             enabled: false,
-            output_disable: false,
+            rf_disable: false,
 
             // When operating at 100MHz, the power detectors specify the following output
             // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
@@ -134,25 +134,12 @@ impl BoosterChannelSettings {
             data: VersionedChannelData::default(),
         };
 
-        match settings.load_config() {
-            Ok(config) => {
+        settings.data = settings
+            .load_config()
+            .and_then(|config|
                 // If we loaded sinara configuration, deserialize the board data.
-                match VersionedChannelData::deserialize(&config.board_data) {
-                    Ok(data) => settings.data = data,
-
-                    Err(_) => {
-                        settings.data = VersionedChannelData::default();
-                        settings.save();
-                    }
-                }
-            }
-
-            // If we failed to load configuration, use a default config.
-            Err(_) => {
-                settings.data = VersionedChannelData::default();
-                settings.save();
-            }
-        };
+                VersionedChannelData::deserialize(&config.board_data))
+            .unwrap_or_default();
 
         settings
     }

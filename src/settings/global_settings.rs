@@ -31,7 +31,7 @@ fn array_to_addr(addr: &[u8; 4]) -> Ipv4Addr {
     Ipv4Addr::new(addr[0], addr[1], addr[2], addr[3])
 }
 
-fn identifier_is_valid<'a>(id: &'a str) -> bool {
+fn identifier_is_valid(id: &str) -> bool {
     id.len() <= 23 && id.chars().all(|x| x.is_alphanumeric() || x == '-')
 }
 
@@ -93,7 +93,7 @@ impl BoosterMainBoardData {
 
         // Validate configuration parameters.
         let identifier = core::str::from_utf8(config.id()).map_err(|_| Error::Invalid)?;
-        if identifier_is_valid(identifier) == false {
+        if !identifier_is_valid(identifier) {
             return Err(Error::Invalid);
         }
 
@@ -131,7 +131,7 @@ impl BoosterMainBoardData {
     }
 
     /// Get the MQTT identifier of Booster.
-    pub fn id<'a>(&'a self) -> &'a [u8] {
+    pub fn id(&self) -> &[u8] {
         &self.identifier[..self.id_size]
     }
 
@@ -143,9 +143,9 @@ impl BoosterMainBoardData {
     ///
     /// # Returns
     /// Ok if the update was successful. Otherwise, returns an error.
-    pub fn set_id<'a>(&mut self, id: &'a str) -> Result<(), Error> {
+    pub fn set_id(&mut self, id: &str) -> Result<(), Error> {
         // TODO: Verify the ID is valid.
-        if identifier_is_valid(id) == false {
+        if !identifier_is_valid(id) {
             return Err(Error::Invalid);
         }
 
@@ -255,7 +255,7 @@ impl BoosterSettings {
     }
 
     /// Get the Booster unique identifier.
-    pub fn id<'a>(&'a self) -> &'a str {
+    pub fn id(&self) -> &str {
         core::str::from_utf8(self.board_data.id()).unwrap()
     }
 
@@ -324,11 +324,10 @@ impl BoosterSettings {
     }
 
     /// Update the booster MQTT client identifier.
-    pub fn set_id<'a>(&mut self, id: &'a str) -> Result<(), Error> {
-        self.board_data.set_id(id).and_then(|_| {
+    pub fn set_id(&mut self, id: &str) -> Result<(), Error> {
+        self.board_data.set_id(id).map(|_| {
             self.dirty = true;
-            self.save();
-            Ok(())
+            self.save()
         })
     }
 }

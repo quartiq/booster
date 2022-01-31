@@ -89,12 +89,12 @@ pub enum Request {
 fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<128> {
     let mut msg = String::<128>::new();
     match prop {
-        Property::Identifier => write!(&mut msg, "{}\n", settings.id()).unwrap(),
-        Property::Mac => write!(&mut msg, "{}\n", settings.mac()).unwrap(),
-        Property::SelfAddress => write!(&mut msg, "{}\n", settings.ip()).unwrap(),
-        Property::BrokerAddress => write!(&mut msg, "{}\n", settings.broker()).unwrap(),
-        Property::Netmask => write!(&mut msg, "{}\n", settings.subnet()).unwrap(),
-        Property::Gateway => write!(&mut msg, "{}\n", settings.gateway()).unwrap(),
+        Property::Identifier => writeln!(&mut msg, "{}", settings.id()).unwrap(),
+        Property::Mac => writeln!(&mut msg, "{}", settings.mac()).unwrap(),
+        Property::SelfAddress => writeln!(&mut msg, "{}", settings.ip()).unwrap(),
+        Property::BrokerAddress => writeln!(&mut msg, "{}", settings.broker()).unwrap(),
+        Property::Netmask => writeln!(&mut msg, "{}", settings.subnet()).unwrap(),
+        Property::Gateway => writeln!(&mut msg, "{}", settings.gateway()).unwrap(),
     };
     msg
 }
@@ -154,9 +154,9 @@ impl SerialTerminal {
 
                 Request::ServiceInfo => {
                     let mut msg: String<256> = String::new();
-                    write!(
+                    writeln!(
                         &mut msg,
-                        "{:<20}: {} [{}]\n",
+                        "{:<20}: {} [{}]",
                         "Version",
                         build_info::GIT_VERSION.unwrap_or("Unspecified"),
                         build_info::PROFILE
@@ -167,9 +167,9 @@ impl SerialTerminal {
                     self.write(msg.as_bytes());
 
                     msg.clear();
-                    write!(
+                    writeln!(
                         &mut msg,
-                        "{:<20}: {}\n",
+                        "{:<20}: {}",
                         "Build Time",
                         build_info::BUILT_TIME_UTC
                     )
@@ -179,9 +179,9 @@ impl SerialTerminal {
                     self.write(msg.as_bytes());
 
                     msg.clear();
-                    write!(
+                    writeln!(
                         &mut msg,
-                        "{:<20}: {}\n",
+                        "{:<20}: {}",
                         "Rustc Version",
                         build_info::RUSTC_VERSION
                     )
@@ -191,9 +191,9 @@ impl SerialTerminal {
                     self.write(msg.as_bytes());
 
                     msg.clear();
-                    write!(
+                    writeln!(
                         &mut msg,
-                        "{:<20}: {} (dirty = {})\n",
+                        "{:<20}: {} (dirty = {})",
                         "Git revision",
                         build_info::GIT_COMMIT_HASH.unwrap_or("Unspecified"),
                         build_info::GIT_DIRTY.unwrap_or(false)
@@ -204,15 +204,10 @@ impl SerialTerminal {
                     self.write(msg.as_bytes());
 
                     msg.clear();
-                    write!(
-                        &mut msg,
-                        "{:<20}: {}\n",
-                        "Features",
-                        build_info::FEATURES_STR
-                    )
-                    .unwrap_or_else(|_| {
-                        msg = String::from("Features: too long");
-                    });
+                    writeln!(&mut msg, "{:<20}: {}", "Features", build_info::FEATURES_STR)
+                        .unwrap_or_else(|_| {
+                            msg = String::from("Features: too long");
+                        });
                     self.write(msg.as_bytes());
 
                     msg.clear();
@@ -220,17 +215,15 @@ impl SerialTerminal {
                     // string.
                     write!(&mut msg, "{:<20}: ", "Panic Info").unwrap();
                     self.write(msg.as_bytes());
-                    self.write(
-                        panic_persist::get_panic_message_bytes().unwrap_or("None".as_bytes()),
-                    );
+                    self.write(panic_persist::get_panic_message_bytes().unwrap_or(b"None"));
                     self.write("\n".as_bytes());
 
                     msg.clear();
                     // Note(unwrap): The msg size is long enough to be sufficient for all possible
                     // formats.
-                    write!(
+                    writeln!(
                         &mut msg,
-                        "{:<20}: {}\n",
+                        "{:<20}: {}",
                         "Watchdog Detected",
                         platform::watchdog_detected()
                     )
@@ -325,7 +318,7 @@ impl SerialTerminal {
     /// Poll the serial interface for any pending requests from the user.
     fn poll(&mut self) -> Option<Request> {
         // Update the USB serial port.
-        if self.usb_device.poll(&mut [&mut self.usb_serial]) == false {
+        if !self.usb_device.poll(&mut [&mut self.usb_serial]) {
             return None;
         }
 
@@ -372,10 +365,9 @@ impl SerialTerminal {
                 self.input_buffer.clear();
                 self.output_buffer_consumer
                     .read()
-                    .and_then(|grant| {
+                    .map(|grant| {
                         let len = grant.buf().len();
                         grant.release(len);
-                        Ok(())
                     })
                     .ok();
                 None
@@ -410,7 +402,7 @@ characters.
     fn parse_buffer(&self) -> Result<Option<Request>, &'static str> {
         // If there's a line available in the buffer, parse it as a command.
         let mut lex = {
-            if let Some(pos) = self.input_buffer.iter().position(|&c| c == '\n' as u8) {
+            if let Some(pos) = self.input_buffer.iter().position(|&c| c == b'\n') {
                 // Attempt to convert the slice to a string.
                 let line =
                     core::str::from_utf8(&self.input_buffer[..pos]).map_err(|_| "Invalid bytes")?;

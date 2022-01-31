@@ -95,7 +95,7 @@ where
     pub fn update(&mut self) -> bool {
         match self.button.update().unwrap() {
             DebounceState::Active => {
-                let result = self.was_active == false;
+                let result = !self.was_active;
                 self.was_active = true;
                 result
             }
@@ -143,7 +143,7 @@ impl UserLeds {
             red: 0u8,
             yellow: 0u8,
             green: 0u8,
-            spi: spi,
+            spi,
             spi_csn: csn,
         };
 

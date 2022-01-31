@@ -41,7 +41,6 @@ use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
 
 use hardware::{
-    rf_channel::PowerStatus,
     setup::MainBus,
     user_interface::{ButtonEvent, Color, UserButtons, UserLeds},
     Channel, CPU_FREQ,
@@ -58,7 +57,6 @@ use rtic::cyccnt::Duration;
 pub enum Error {
     Invalid,
     InvalidState,
-    NotPresent,
     Interface,
     Foldback,
     Bounds,
@@ -90,20 +88,17 @@ const APP: () = {
 
         let mut settings = Settings::default();
 
-        for chan in Channel::into_enum_iter() {
-            match booster
+        for idx in Channel::into_enum_iter() {
+            booster
                 .main_bus
                 .channels
-                .map(chan, |channel, _| Ok(channel.settings()))
-            {
-                Ok(channel_settings) => settings.channel[chan as usize] = channel_settings,
-                Err(Error::NotPresent) => {
-                    settings.channel[chan as usize].enabled = false;
-                    settings.channel[chan as usize].output_disable = true;
-                    settings.channel[chan as usize].bias_voltage = 0.0;
-                }
-                Err(other) => panic!("Failed to extract channel {:?} settings: {:?}", chan, other),
-            }
+                .channel_mut(idx)
+                .map(|(channel, _)| settings.channel[idx as usize] = *channel.context().settings())
+                .unwrap_or_else(|| {
+                    settings.channel[idx as usize].enabled = false;
+                    settings.channel[idx as usize].rf_disable = true;
+                    settings.channel[idx as usize].bias_voltage = 0.0;
+                });
         }
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
@@ -123,7 +118,6 @@ const APP: () = {
                 minimq::embedded_nal::IpAddr::V4(booster.settings.broker()),
                 booster.network_stack,
                 booster.settings.id(),
-                booster.delay,
                 settings,
             ),
             usb_terminal: SerialTerminal::new(
@@ -138,36 +132,25 @@ const APP: () = {
     #[task(priority = 3, schedule = [channel_monitor], resources=[main_bus, leds, watchdog])]
     fn channel_monitor(c: channel_monitor::Context) {
         // Check in with the watchdog.
-        c.resources.watchdog.check_in(WatchdogClient::MonitorTask);
-
+        c.resources.watchdog.check_in(WatchdogClient::Monitor);
         // Check all of the timer channels.
-        for channel in Channel::into_enum_iter() {
-            let PowerStatus {
-                powered,
-                rf_enabled,
-                blocked,
-            } = match c.resources.main_bus.channels.channel_mut(channel) {
-                Ok(channel) => channel.update(),
-                Err(Error::NotPresent) => {
-                    // Clear all LEDs for this channel.
-                    c.resources.leds.set_led(Color::Red, channel, false);
-                    c.resources.leds.set_led(Color::Yellow, channel, false);
-                    c.resources.leds.set_led(Color::Green, channel, false);
-                    continue;
-                }
-                Err(error) => panic!("Invalid channel error: {:?}", error),
-            };
-
+        let leds = c.resources.leds;
+        for idx in Channel::into_enum_iter() {
+            let status = c
+                .resources
+                .main_bus
+                .channels
+                .channel_mut(idx)
+                .map(|(channel, _)| channel.update())
+                // Clear all LEDs for this channel.
+                .unwrap_or_default();
             // Echo the measured values to the LEDs on the user interface for this channel.
-            c.resources.leds.set_led(Color::Green, channel, powered);
-            c.resources
-                .leds
-                .set_led(Color::Yellow, channel, !rf_enabled);
-            c.resources.leds.set_led(Color::Red, channel, blocked);
+            leds.set_led(Color::Green, idx, status.powered);
+            leds.set_led(Color::Yellow, idx, status.rf_disabled);
+            leds.set_led(Color::Red, idx, status.blocked);
         }
-
         // Propagate the updated LED values to the user interface.
-        c.resources.leds.update();
+        leds.update();
 
         // Schedule to run this task periodically at 10Hz.
         c.schedule
@@ -180,21 +163,18 @@ const APP: () = {
         // Check in with the watchdog.
         c.resources
             .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::FanTask));
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::Fan));
 
         // Determine the maximum channel temperature.
-        let mut temperatures: [f32; 8] = [0.0; 8];
+        let mut temperatures: [Option<f32>; 8] = [None; 8];
 
-        for channel in Channel::into_enum_iter() {
-            temperatures[channel as usize] = match c.resources.main_bus.lock(|main_bus| {
+        for idx in Channel::into_enum_iter() {
+            temperatures[idx as usize] = c.resources.main_bus.lock(|main_bus| {
                 main_bus
                     .channels
-                    .map(channel, |ch, _| Ok(ch.get_temperature()))
-            }) {
-                Ok(temp) => temp,
-                Err(Error::NotPresent) => 0.0,
-                err => err.unwrap(),
-            };
+                    .channel_mut(idx)
+                    .map(|(channel, _)| channel.context_mut().get_temperature())
+            });
         }
 
         // Update the fan speeds.
@@ -213,23 +193,16 @@ const APP: () = {
         // Check in with the watchdog.
         c.resources
             .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::TelemetryTask));
-
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::Telemetry));
+        let control = &mut c.resources.net_devices.control;
         // Gather telemetry for all of the channels.
-        for channel in Channel::into_enum_iter() {
-            let measurements = c.resources.main_bus.lock(|main_bus| {
-                main_bus
-                    .channels
-                    .map(channel, |ch, adc| Ok(ch.get_status(adc)))
+        // And broadcast the measured data over the telemetry interface.
+        for idx in Channel::into_enum_iter() {
+            c.resources.main_bus.lock(|main_bus| {
+                main_bus.channels.channel_mut(idx).map(|(ch, adc)| {
+                    control.report_telemetry(idx, &ch.context_mut().get_status(adc))
+                })
             });
-
-            // Broadcast the measured data over the telemetry interface.
-            if let Ok(ref measurements) = measurements {
-                c.resources
-                    .net_devices
-                    .control
-                    .report_telemetry(channel, measurements);
-            }
         }
 
         // Schedule to run this task periodically at 2Hz.
@@ -243,32 +216,24 @@ const APP: () = {
         // Check in with the watchdog.
         c.resources
             .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::ButtonTask));
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::Button));
 
         if let Some(event) = c.resources.buttons.update() {
-            match event {
-                ButtonEvent::InterlockReset => {
-                    for chan in Channel::into_enum_iter() {
-                        c.resources.main_bus.lock(|main_bus| {
-                            if let Ok(ref mut channel) = main_bus.channels.channel_mut(chan) {
+            for idx in Channel::into_enum_iter() {
+                c.resources.main_bus.lock(|main_bus| {
+                    main_bus
+                        .channels
+                        .channel_mut(idx)
+                        .map(|(channel, _)| match event {
+                            ButtonEvent::InterlockReset => {
                                 // It is possible to attempt to re-enable the channel before it was
                                 // fully disabled. Ignore this transient error - the user may need
                                 // to press twice.
                                 channel.interlock_reset().ok();
                             }
+                            ButtonEvent::Standby => channel.standby(),
                         })
-                    }
-                }
-
-                ButtonEvent::Standby => {
-                    for chan in Channel::into_enum_iter() {
-                        c.resources.main_bus.lock(|main_bus| {
-                            if let Ok(ref mut channel) = main_bus.channels.channel_mut(chan) {
-                                channel.standby()
-                            }
-                        })
-                    }
-                }
+                });
             }
         }
 
@@ -282,14 +247,14 @@ const APP: () = {
     fn update_settings(mut c: update_settings::Context) {
         let all_settings = c.resources.net_devices.settings.settings();
 
-        for chan in Channel::into_enum_iter() {
-            let settings = &all_settings.channel[chan as usize];
+        for idx in Channel::into_enum_iter() {
+            let settings = &all_settings.channel[idx as usize];
             c.resources.main_bus.lock(|main_bus| {
-                if let Ok(ref mut channel) = main_bus.channels.channel_mut(chan) {
-                    if let Err(err) = channel.handle_settings(settings) {
-                        log::warn!("Settings failure on {:?}: {:?}", chan, err);
-                    }
-                }
+                main_bus.channels.channel_mut(idx).map(|(channel, _)| {
+                    channel.handle_settings(settings).unwrap_or_else(|err| {
+                        log::warn!("Settings failure on {:?}: {:?}", idx, err)
+                    })
+                })
             });
         }
     }
@@ -299,10 +264,10 @@ const APP: () = {
         // Check in with the watchdog.
         c.resources
             .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::UsbTask));
+            .lock(|watchdog| watchdog.check_in(WatchdogClient::Usb));
 
         // Process any log output.
-        LOGGER.process(&mut c.resources.usb_terminal);
+        LOGGER.process(c.resources.usb_terminal);
 
         // Handle the USB serial terminal.
         c.resources.usb_terminal.process();
@@ -319,7 +284,7 @@ const APP: () = {
             // Check in with the watchdog.
             c.resources
                 .watchdog
-                .lock(|watchdog| watchdog.check_in(WatchdogClient::IdleTask));
+                .lock(|watchdog| watchdog.check_in(WatchdogClient::Idle));
 
             // Handle the Miniconf settings interface.
             match c.resources.net_devices.lock(|net| net.settings.update()) {
