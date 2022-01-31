@@ -22,6 +22,7 @@ jobs:
           toolchain: stable
           target: thumbv7em-none-eabihf
           override: true
+      - uses: Swatinem/rust-cache@v1
       - name: cargo fmt --check
         uses: actions-rs/cargo@v1
         with:
