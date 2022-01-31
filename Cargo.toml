@@ -81,7 +81,6 @@ path = "microchip-24aa02e48"
 path = "tca9548"
 
 [features]
-unstable = []
 phy_enc424j600 = [ "enc424j600", "smoltcp-nal", "embedded-time" ]
 phy_w5500 = [ "w5500" ]
 default = [ "phy_w5500" ]
