@@ -76,14 +76,14 @@ impl BoosterChannels {
         BoosterChannels { channels, mux, adc }
     }
 
-    /// Select a given channel oin the I2C multiplexer and get
+    /// Select a given channel on the I2C multiplexer and get
     /// mutable references to that channel and the ADC.
     ///
     /// # Args
     /// * `channel` - The channel to get.
     ///
     /// # Returns
-    /// A optional pair of mutable references to the channel and the ADC.
+    /// An optional pair of mutable references to the channel and the ADC and
     /// `None` if the channel is absent.
     pub fn channel_mut(
         &mut self,
