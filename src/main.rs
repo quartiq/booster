@@ -173,7 +173,14 @@ const APP: () = {
                 main_bus
                     .channels
                     .channel_mut(idx)
-                    .map(|(channel, _)| channel.context_mut().get_temperature())
+                    .and_then(|(channel, _)| {
+                        if channel.context().is_enabled() {
+                            Some(channel)
+                        } else {
+                            None
+                        }
+                    })
+                    .map(|channel| channel.context_mut().get_temperature())
             });
         }
 

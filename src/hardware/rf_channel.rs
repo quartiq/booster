@@ -322,6 +322,11 @@ impl RfChannel {
         self.settings.save()
     }
 
+    /// Check if the channel RF output is enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.pins.signal_on.is_high().unwrap()
+    }
+
     /// Set the interlock thresholds for the channel.
     ///
     /// # Args

@@ -39,12 +39,17 @@ impl ChassisFans {
     /// Update the fans based on the current channel temperatures.
     ///
     /// # Args
-    /// * `channel_temps` - The current channel temperatures in degrees celsius.
+    /// * `channel_temps` - The current channel temperatures in degrees celsius if the channel is
+    /// enabled.
     pub fn update(&mut self, channel_temps: [Option<f32>; 8]) {
         // Calculate the maximum temperature encountered across all of the channels.
         let max_temperature = channel_temps
             .iter()
             .fold(f32::NEG_INFINITY, |acc, &temp| acc.max(temp.unwrap_or(acc)));
+
+        let channels_enabled = channel_temps
+            .iter()
+            .fold(false, |enabled, &temp| enabled || temp.is_some());
 
         // Determine the maximum temperature error from the hottest channel to use in the fan
         // control algorithm.
@@ -69,27 +74,15 @@ impl ChassisFans {
             }
         };
 
-        // Only turn on the fans if temperature has been exceeded by at least 3 degrees. Fan speeds
-        // at below 20% can cause clicking. This algorithm ensures that fans will turn on once
-        // temperatures reach 34.5 *C (with 30 *C threshold and 30 *C range to 100% cycle) and will
-        // not disable until temperature falls below 30 *C (while maintaining at least 20% duty
-        // cycle).
-
-        // This algorithm is intended to prevent issues with the fan turning on/off constantly when
-        // right at the temperature threshold.
-        let final_duty = if temperature_error > 3.0 {
-            // When the temperature is above threshold, turn on the fans to at least 20% duty cycle.
+        // If any channel is enabled, the duty cycle will always be at least 20%
+        let final_duty = if channels_enabled {
             if duty_cycle > 0.20 {
                 duty_cycle
             } else {
                 0.20
             }
-        } else if temperature_error > 0.01 && self.fans_spinning {
-            // If the temperature error is above 0 and the fans are currently spinning, we
-            // need to continue driving the fans at least a minimum drive to prevent clicking.
-            // Comparison is done to 0.01 degrees to avoid floating-point comparison issues.
-            0.20
         } else {
+            // No channels are enabled, so don't bother turning on the fans.
             0.0
         };
 
