@@ -14,7 +14,9 @@ use minimq::embedded_time::{duration::Extensions, Clock, Instant};
 
 use super::{clock::SystemTimer, platform, I2cBusManager, I2cProxy};
 use crate::{
-    settings::{channel_settings::ChannelSettings, BoosterChannelSettings},
+    settings::{
+        channel_settings::ChannelSettings, channel_settings::ChannelState, BoosterChannelSettings,
+    },
     Error,
 };
 use embedded_hal::blocking::delay::DelayUs;
@@ -708,7 +710,7 @@ impl sm::StateMachineContext for RfChannel {
         }
 
         // Do not enable output if it shouldn't be disabled due to settings.
-        if !settings.enabled || settings.rf_disable {
+        if matches!(settings.power_state, ChannelState::Off) {
             return Err(());
         }
 
@@ -844,11 +846,13 @@ impl sm::StateMachine<RfChannel> {
     pub fn handle_settings(&mut self, settings: &ChannelSettings) -> Result<(), Error> {
         self.context_mut().apply_settings(settings)?;
 
-        if !settings.enabled {
+        if !matches!(settings.power_state, ChannelState::Enabled) {
             // If settings has us disabled, it's always okay to blindly power down.
             self.process_event(sm::Events::Disable).ok();
-        } else if settings.enabled != self.context().pins.enable_power.is_high().unwrap()
-            || settings.rf_disable != self.context().pins.signal_on.is_low().unwrap()
+        } else if matches!(settings.power_state, ChannelState::Enabled)
+            != self.context().pins.enable_power.is_high().unwrap()
+            || matches!(settings.power_state, ChannelState::Powered)
+                != self.context().pins.signal_on.is_low().unwrap()
         {
             // Our current power state has a mismatch with the settings. Reset ourselves into the
             // updated state.

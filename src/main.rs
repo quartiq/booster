@@ -46,7 +46,7 @@ use hardware::{
     Channel, CPU_FREQ,
 };
 
-use settings::channel_settings::ChannelSettings;
+use settings::channel_settings::{ChannelSettings, ChannelState};
 
 use watchdog::{WatchdogClient, WatchdogManager};
 
@@ -95,8 +95,7 @@ const APP: () = {
                 .channel_mut(idx)
                 .map(|(channel, _)| settings.channel[idx as usize] = *channel.context().settings())
                 .unwrap_or_else(|| {
-                    settings.channel[idx as usize].enabled = false;
-                    settings.channel[idx as usize].rf_disable = true;
+                    settings.channel[idx as usize].power_state = ChannelState::Off;
                     settings.channel[idx as usize].bias_voltage = 0.0;
                 });
         }

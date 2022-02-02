@@ -18,19 +18,25 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
     patch: 1,
 };
 
+/// Indicates the enabled state of a channel.
+#[derive(serde::Serialize, serde::Deserialize, Miniconf, Copy, Clone, PartialEq)]
+pub enum ChannelState {
+    Off = 0,
+    // For compatibility reasons, Enabled is stored with the value equivalent to "true"
+    Enabled = 1,
+
+    Powered = 2,
+}
+
 /// Represents booster channel-specific configuration values.
 #[derive(Miniconf, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq)]
 pub struct ChannelSettings {
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,
-    pub enabled: bool,
+    pub power_state: ChannelState,
     pub input_power_transform: LinearTransformation,
     pub output_power_transform: LinearTransformation,
     pub reflected_power_transform: LinearTransformation,
-
-    // Note: This field is not persisted to external memory.
-    #[serde(skip)]
-    pub rf_disable: bool,
 }
 
 impl Default for ChannelSettings {
@@ -39,8 +45,7 @@ impl Default for ChannelSettings {
         Self {
             output_interlock_threshold: 0.0,
             bias_voltage: -3.2,
-            enabled: false,
-            rf_disable: false,
+            power_state: ChannelState::Off,
 
             // When operating at 100MHz, the power detectors specify the following output
             // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
@@ -63,7 +68,7 @@ impl Default for ChannelSettings {
 }
 
 /// Represents versioned channel-specific configuration values.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone)]
 struct VersionedChannelData {
     version: SemVersion,
     settings: ChannelSettings,
@@ -108,8 +113,15 @@ impl VersionedChannelData {
     /// # Args
     /// * `config` - The sinara configuration to serialize the booster configuration into.
     pub fn serialize_into(&self, config: &mut SinaraConfiguration) {
+        // We will never store `Powered` in EEPROM, since this is never desired. Cache the current
+        // power state while we serialize to ensure we only serialize Enabled and Off.
+        let mut versioned_copy = *self;
+        if matches!(versioned_copy.settings.power_state, ChannelState::Powered) {
+            versioned_copy.settings.power_state = ChannelState::Off;
+        }
+
         let mut buffer: [u8; 64] = [0; 64];
-        let serialized = postcard::to_slice(self, &mut buffer).unwrap();
+        let serialized = postcard::to_slice(&versioned_copy, &mut buffer).unwrap();
         config.board_data[..serialized.len()].copy_from_slice(serialized);
     }
 }
