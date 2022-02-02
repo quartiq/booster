@@ -378,15 +378,13 @@ pub fn setup(
             serial_number.replace(serial_string);
         }
 
-        let usb_device = UsbDeviceBuilder::new(
-            usb_bus.as_ref().unwrap(),
-            UsbVidPid(0x1209, 0x3933),
-        )
-        .manufacturer("ARTIQ/Sinara")
-        .product("Booster")
-        .serial_number(serial_number.as_ref().unwrap().as_str())
-        .device_class(usbd_serial::USB_CLASS_CDC)
-        .build();
+        let usb_device =
+            UsbDeviceBuilder::new(usb_bus.as_ref().unwrap(), UsbVidPid(0x1209, 0x3933))
+                .manufacturer("ARTIQ/Sinara")
+                .product("Booster")
+                .serial_number(serial_number.as_ref().unwrap().as_str())
+                .device_class(usbd_serial::USB_CLASS_CDC)
+                .build();
 
         (usb_device, usb_serial)
     };
