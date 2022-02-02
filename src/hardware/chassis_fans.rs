@@ -47,9 +47,7 @@ impl ChassisFans {
             .iter()
             .fold(f32::NEG_INFINITY, |acc, &temp| acc.max(temp.unwrap_or(acc)));
 
-        let channels_enabled = channel_temps
-            .iter()
-            .fold(false, |enabled, &temp| enabled || temp.is_some());
+        let channels_enabled = channel_temps.iter().any(|&temp| temp.is_some());
 
         // Determine the maximum temperature error from the hottest channel to use in the fan
         // control algorithm.
