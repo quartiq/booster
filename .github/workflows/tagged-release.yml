@@ -50,12 +50,9 @@ jobs:
           command: objcopy
           args: --release -- -O binary booster-release.bin
 
-      - uses: marvinpinto/action-automatic-releases@v1.1.0
-        with:
-          prerelease: false
-          repo_token: '${{ secrets.ACCESS_TOKEN }}'
-          files: |
-            target/thumbv7em/debug/booster
-            target/thumbv7em/release/booster
-            booster-debug.bin
-            booster-release.bin
+      - name: Generate Release
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          VERSION_TAG: ${{ github.event.ref##*/ }}
+        run: |
+          hub release create -a target/thumbv7em/debug/booster -a target/thumbv7em/release/booster -a booster-debug.bin -a booster-release.bin -m "Release ${{env.VERSION_TAG}}"
