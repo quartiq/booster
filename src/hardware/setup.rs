@@ -380,8 +380,7 @@ pub fn setup(
 
         let usb_device = UsbDeviceBuilder::new(
             usb_bus.as_ref().unwrap(),
-            // TODO: Look into sub-licensing from ST.
-            UsbVidPid(0x0483, 0x5740),
+            UsbVidPid(0x1209, 0x3933),
         )
         .manufacturer("ARTIQ/Sinara")
         .product("Booster")

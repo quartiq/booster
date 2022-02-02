@@ -844,10 +844,11 @@ checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
 
 [[package]]
 name = "panic-persist"
-version = "0.2.1"
-source = "git+https://github.com/jamesmunns/panic-persist?branch=master#3f892297e97adc6a415145193000e3749b1959df"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32bb382689ecd2c4d2d4df9fd56700ba8d43b7b31cca11018cc0e6f8aef39fd5"
 dependencies = [
- "cortex-m 0.6.7",
+ "cortex-m 0.7.4",
 ]
 
 [[package]]
