@@ -379,6 +379,7 @@ pub fn setup(
         }
 
         let usb_device =
+            // USB VID/PID registered at https://pid.codes/1209/3933/
             UsbDeviceBuilder::new(usb_bus.as_ref().unwrap(), UsbVidPid(0x1209, 0x3933))
                 .manufacturer("ARTIQ/Sinara")
                 .product("Booster")
