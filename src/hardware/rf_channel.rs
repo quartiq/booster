@@ -710,7 +710,7 @@ impl sm::StateMachineContext for RfChannel {
         }
 
         // Do not enable output if it shouldn't be disabled due to settings.
-        if matches!(settings.power_state, ChannelState::Off) {
+        if !matches!(settings.power_state, ChannelState::Enabled) {
             return Err(());
         }
 
