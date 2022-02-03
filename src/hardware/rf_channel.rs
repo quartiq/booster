@@ -662,7 +662,6 @@ impl sm::StateMachineContext for RfChannel {
         *interlock
     }
 
-
     /// Begin the process of powering up the channel.
     ///
     /// # Returns
@@ -723,7 +722,7 @@ impl sm::StateMachineContext for RfChannel {
             return Err(());
         }
 
-        // Do not enable output if it shouldn't be disabled due to settings.
+        // Do not enable output if it shouldn't be enabled due to settings.
         if settings.state != ChannelState::Enabled {
             return Err(());
         }
