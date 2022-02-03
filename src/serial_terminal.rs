@@ -176,10 +176,10 @@ impl SerialTerminal {
                     writeln!(
                         &mut msg,
                         "{:<20}: {}",
-                        "Hardware Rev", self.hardware_version
+                        "Hardware Revision", self.hardware_version
                     )
                     .unwrap_or_else(|_| {
-                        msg = String::from("Build: too long");
+                        msg = String::from("Hardware version: too long");
                     });
                     self.write(msg.as_bytes());
 
