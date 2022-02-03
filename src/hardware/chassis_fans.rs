@@ -10,6 +10,7 @@ use max6639::Max6639;
 /// Provides control of the chassis-mounted cooling fans.
 pub struct ChassisFans {
     fans: [Max6639<I2cProxy>; 3],
+    duty_cycle: f32,
 }
 
 impl ChassisFans {
@@ -17,18 +18,40 @@ impl ChassisFans {
     ///
     /// # Args
     /// * `fans` - The fan controllers to use.
+    /// * `duty_cycle` - The default (normalized) duty cycle to use when enabling fans.
     ///
     /// # Returns
     /// A new fan controller.
     pub fn new(fans: [Max6639<I2cProxy>; 3]) -> Self {
-        ChassisFans { fans }
+        ChassisFans {
+            fans,
+            duty_cycle: 0.2,
+        }
+    }
+
+    /// Configure the duty cycle that fans operate at.
+    ///
+    /// # Args
+    /// * `duty_cycle` - The default duty cycle to use when enabling fans.
+    pub fn set_default_duty_cycle(&mut self, duty_cycle: f32) {
+        self.duty_cycle = duty_cycle.clamp(0.0, 1.0);
+    }
+
+    /// Enable all fans.
+    pub fn turn_on(&mut self) {
+        self.set_duty_cycles(self.duty_cycle)
+    }
+
+    /// Turn off fans.
+    pub fn turn_off(&mut self) {
+        self.set_duty_cycles(0.0)
     }
 
     /// Set the duty cycle of the fans.
     ///
     /// # Args
     /// * `duty_cycle` - The normalized desired duty cycle of fans. Will be bounded to [0, 1].
-    pub fn set_duty_cycles(&mut self, duty_cycle: f32) {
+    fn set_duty_cycles(&mut self, duty_cycle: f32) {
         // Bound the duty cycle to a normalized range.
         let duty_cycle = duty_cycle.clamp(0.0, 1.0);
 
