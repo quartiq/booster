@@ -63,9 +63,19 @@ pub enum Error {
     Fault,
 }
 
-#[derive(Default, Miniconf)]
+#[derive(Miniconf)]
 pub struct Settings {
     pub channel: [Option<ChannelSettings>; 8],
+    fan_speed: f32,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            channel: [None; 8],
+            fan_speed: 0.2,
+        }
+    }
 }
 
 static LOGGER: BufferedLog = BufferedLog::new();
@@ -81,7 +91,7 @@ const APP: () = {
         watchdog: WatchdogManager,
     }
 
-    #[init(schedule = [telemetry, channel_monitor, button, usb, fans])]
+    #[init(schedule = [telemetry, channel_monitor, button, usb])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure booster hardware.
         let mut booster = hardware::setup::setup(c.core, c.device);
@@ -98,12 +108,16 @@ const APP: () = {
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
 
+        booster
+            .main_bus
+            .fans
+            .set_default_duty_cycle(settings.fan_speed);
+
         // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
         c.schedule.telemetry(c.start).unwrap();
         c.schedule.button(c.start).unwrap();
         c.schedule.usb(c.start).unwrap();
-        c.schedule.fans(c.start).unwrap();
 
         init::LateResources {
             main_bus: booster.main_bus,
@@ -128,7 +142,10 @@ const APP: () = {
     fn channel_monitor(c: channel_monitor::Context) {
         // Check in with the watchdog.
         c.resources.watchdog.check_in(WatchdogClient::Monitor);
-        // Check all of the timer channels.
+
+        // Check all of the channels.
+        let mut fans_enabled = false;
+
         let leds = c.resources.leds;
         for idx in Channel::into_enum_iter() {
             let status = c
@@ -136,50 +153,35 @@ const APP: () = {
                 .main_bus
                 .channels
                 .channel_mut(idx)
-                .map(|(channel, _)| channel.update())
+                .map(|(channel, _)| {
+                    if channel.context().is_enabled() {
+                        fans_enabled = true;
+                    }
+
+                    channel.update()
+                })
                 // Clear all LEDs for this channel.
                 .unwrap_or_default();
+
             // Echo the measured values to the LEDs on the user interface for this channel.
             leds.set_led(Color::Green, idx, status.powered);
             leds.set_led(Color::Yellow, idx, status.rf_disabled);
             leds.set_led(Color::Red, idx, status.blocked);
         }
+
+        // Update the fan speeds.
+        if fans_enabled {
+            c.resources.main_bus.fans.turn_on();
+        } else {
+            c.resources.main_bus.fans.turn_off();
+        }
+
         // Propagate the updated LED values to the user interface.
         leds.update();
 
         // Schedule to run this task periodically at 10Hz.
         c.schedule
             .channel_monitor(c.scheduled + Duration::from_cycles(CPU_FREQ / 10))
-            .unwrap();
-    }
-
-    #[task(priority = 1, schedule = [fans], resources=[main_bus, watchdog])]
-    fn fans(mut c: fans::Context) {
-        // Check in with the watchdog.
-        c.resources
-            .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::Fan));
-
-        // Determine the maximum channel temperature.
-        let mut temperatures: [Option<f32>; 8] = [None; 8];
-
-        for idx in Channel::into_enum_iter() {
-            temperatures[idx as usize] = c.resources.main_bus.lock(|main_bus| {
-                main_bus
-                    .channels
-                    .channel_mut(idx)
-                    .map(|(channel, _)| channel.context_mut().get_temperature())
-            });
-        }
-
-        // Update the fan speeds.
-        c.resources
-            .main_bus
-            .lock(|main_bus| main_bus.fans.update(temperatures));
-
-        // Schedule to run this task periodically at 1Hz.
-        c.schedule
-            .fans(c.scheduled + Duration::from_cycles(CPU_FREQ))
             .unwrap();
     }
 
@@ -255,6 +257,11 @@ const APP: () = {
                     })
             });
         }
+
+        // Update the fan speed.
+        c.resources
+            .main_bus
+            .lock(|main_bus| main_bus.fans.set_default_duty_cycle(all_settings.fan_speed))
     }
 
     #[task(priority = 2, schedule=[usb], resources=[usb_terminal, watchdog])]

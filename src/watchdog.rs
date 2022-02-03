@@ -15,8 +15,7 @@ pub enum WatchdogClient {
     Idle = 1,
     Usb = 2,
     Button = 3,
-    Fan = 4,
-    Monitor = 5,
+    Monitor = 4,
 }
 
 /// A manager for the device indepedent watchdog.
@@ -24,7 +23,7 @@ pub enum WatchdogClient {
 /// The manager waits for a number of clients to check in before feeding the watchdog.
 pub struct WatchdogManager {
     watchdog: hal::watchdog::IndependentWatchdog,
-    check_ins: [bool; 6],
+    check_ins: [bool; 5],
 }
 
 impl WatchdogManager {
@@ -38,7 +37,7 @@ impl WatchdogManager {
 
         Self {
             watchdog,
-            check_ins: [false; 6],
+            check_ins: [false; 5],
         }
     }
 
@@ -52,7 +51,7 @@ impl WatchdogManager {
         // If all clients have checked in, service the watchdog.
         if self.check_ins.iter().all(|&x| x) {
             self.watchdog.feed();
-            self.check_ins = [false; 6];
+            self.check_ins = [false; 5];
         }
     }
 }
