@@ -30,13 +30,7 @@ impl ChassisFans {
     /// * `duty_cycle` - The normalized desired duty cycle of fans. Will be bounded to [0, 1].
     pub fn set_duty_cycles(&mut self, duty_cycle: f32) {
         // Bound the duty cycle to a normalized range.
-        let duty_cycle = if duty_cycle > 1.0 {
-            1.0
-        } else if duty_cycle < 0.0 {
-            0.0
-        } else {
-            duty_cycle
-        };
+        let duty_cycle = duty_cycle.clamp(0.0, 1.0);
 
         // Keep retrying until the configuration succeeds or the maximum number of retry
         // attempts is exhausted.

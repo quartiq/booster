@@ -89,9 +89,10 @@ const APP: () = {
         usb_terminal: SerialTerminal,
         net_devices: net::NetworkDevices,
         watchdog: WatchdogManager,
+        fan_speed: f32,
     }
 
-    #[init(schedule = [telemetry, channel_monitor, button, usb, fans])]
+    #[init(schedule = [telemetry, channel_monitor, button, usb])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure booster hardware.
         let mut booster = hardware::setup::setup(c.core, c.device);
@@ -113,12 +114,12 @@ const APP: () = {
         c.schedule.telemetry(c.start).unwrap();
         c.schedule.button(c.start).unwrap();
         c.schedule.usb(c.start).unwrap();
-        c.schedule.fans(c.start).unwrap();
 
         init::LateResources {
             main_bus: booster.main_bus,
             buttons: booster.buttons,
             leds: booster.leds,
+            fan_speed: settings.fan_speed,
             net_devices: net::NetworkDevices::new(
                 minimq::embedded_nal::IpAddr::V4(booster.settings.broker()),
                 booster.network_stack,
@@ -134,11 +135,15 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 3, schedule = [channel_monitor], resources=[main_bus, leds, watchdog])]
+    #[task(priority = 3, schedule = [channel_monitor], resources=[main_bus, leds, watchdog, fan_speed])]
     fn channel_monitor(c: channel_monitor::Context) {
         // Check in with the watchdog.
         c.resources.watchdog.check_in(WatchdogClient::Monitor);
-        // Check all of the timer channels.
+
+        // Check all of the channels.
+        let fan_speed = *c.resources.fan_speed;
+        let mut duty_cycle = 0.0;
+
         let leds = c.resources.leds;
         for idx in Channel::into_enum_iter() {
             let status = c
@@ -146,51 +151,31 @@ const APP: () = {
                 .main_bus
                 .channels
                 .channel_mut(idx)
-                .map(|(channel, _)| channel.update())
+                .map(|(channel, _)| {
+                    if channel.context().is_enabled() {
+                        duty_cycle = fan_speed;
+                    }
+
+                    channel.update()
+                })
                 // Clear all LEDs for this channel.
                 .unwrap_or_default();
+
             // Echo the measured values to the LEDs on the user interface for this channel.
             leds.set_led(Color::Green, idx, status.powered);
             leds.set_led(Color::Yellow, idx, status.rf_disabled);
             leds.set_led(Color::Red, idx, status.blocked);
         }
+
+        // Update the fan speeds.
+        c.resources.main_bus.fans.set_duty_cycles(duty_cycle);
+
         // Propagate the updated LED values to the user interface.
         leds.update();
 
         // Schedule to run this task periodically at 10Hz.
         c.schedule
             .channel_monitor(c.scheduled + Duration::from_cycles(CPU_FREQ / 10))
-            .unwrap();
-    }
-
-    #[task(priority = 1, schedule = [fans], resources=[main_bus, watchdog, net_devices])]
-    fn fans(mut c: fans::Context) {
-        // Check in with the watchdog.
-        c.resources
-            .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::Fan));
-
-        let fan_speed = c.resources.net_devices.settings.settings().fan_speed;
-        let mut duty_cycle = 0.0;
-
-        for idx in Channel::into_enum_iter() {
-            c.resources.main_bus.lock(|main_bus| {
-                main_bus.channels.channel_mut(idx).map(|(channel, _)| {
-                    if channel.context().is_enabled() {
-                        duty_cycle = fan_speed;
-                    }
-                })
-            });
-        }
-
-        // Update the fan speeds.
-        c.resources
-            .main_bus
-            .lock(|main_bus| main_bus.fans.set_duty_cycles(duty_cycle));
-
-        // Schedule to run this task periodically at 1Hz.
-        c.schedule
-            .fans(c.scheduled + Duration::from_cycles(CPU_FREQ))
             .unwrap();
     }
 
@@ -249,7 +234,7 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, resources=[net_devices, main_bus])]
+    #[task(priority = 1, resources=[net_devices, main_bus, fan_speed])]
     fn update_settings(mut c: update_settings::Context) {
         let all_settings = c.resources.net_devices.settings.settings();
 
@@ -266,6 +251,11 @@ const APP: () = {
                     })
             });
         }
+
+        // Update the fan speed.
+        c.resources
+            .fan_speed
+            .lock(|speed| *speed = all_settings.fan_speed);
     }
 
     #[task(priority = 2, schedule=[usb], resources=[usb_terminal, watchdog])]
