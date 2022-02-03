@@ -371,7 +371,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.3.0"
-source = "git+https://github.com/quartiq/miniconf?branch=feature/optional-settings#2268a180d8e7c50361e92819bae0d403a5a71ce9"
+source = "git+https://github.com/quartiq/miniconf?rev=5a0afac#5a0afac2740b6d133fb1514a42d1ee2663cd895a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -721,7 +721,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.3.0"
-source = "git+https://github.com/quartiq/miniconf?branch=feature/optional-settings#2268a180d8e7c50361e92819bae0d403a5a71ce9"
+source = "git+https://github.com/quartiq/miniconf?rev=5a0afac#5a0afac2740b6d133fb1514a42d1ee2663cd895a"
 dependencies = [
  "derive_miniconf",
  "heapless 0.7.9",
