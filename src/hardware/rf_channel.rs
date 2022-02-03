@@ -162,7 +162,9 @@ impl Devices {
         let mut dac7571 = Dac7571::default(manager.acquire_i2c());
 
         // Ensure the bias DAC is placing the RF amplifier in pinch off (disabled).
-        dac7571.set_voltage(3.2).expect("Bias DAC did not respond");
+        dac7571
+            .set_voltage(platform::BIAS_DAC_VCC)
+            .expect("Bias DAC did not respond");
 
         // Verify we can communicate with the power monitor.
         let mut ads7924 = Ads7924::default(manager.acquire_i2c(), delay)

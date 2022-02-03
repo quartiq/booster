@@ -12,6 +12,12 @@ use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 // corresponds with a value of 30 dBm.
 pub const MAXIMUM_REFLECTED_POWER_DBM: f32 = 30.0;
 
+// The maximum allowable output power. This is calculated as:
+// 38dBm (nominal) + 6 dB (glitches) + 3 dB (margin)
+pub const MAX_OUTPUT_POWER_DBM: f32 = 47.0;
+
+pub const BIAS_DAC_VCC: f32 = 3.2;
+
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     cortex_m::interrupt::disable();
