@@ -4,7 +4,10 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::{hardware::platform, hardware::UsbBus, BoosterSettings};
+use super::{
+    hardware::{platform, HardwareVersion, UsbBus},
+    BoosterSettings,
+};
 use bbqueue::BBBuffer;
 use heapless::{String, Vec};
 use logos::Logos;
@@ -110,6 +113,7 @@ pub struct SerialTerminal {
     input_buffer: Vec<u8, 128>,
     output_buffer_producer: bbqueue::Producer<'static, 1024>,
     output_buffer_consumer: bbqueue::Consumer<'static, 1024>,
+    hardware_version: HardwareVersion,
 }
 
 impl SerialTerminal {
@@ -118,6 +122,7 @@ impl SerialTerminal {
         usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
         usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
         settings: BoosterSettings,
+        hardware_version: HardwareVersion,
     ) -> Self {
         let (producer, consumer) = OUTPUT_BUFFER.try_split().unwrap();
         Self {
@@ -127,6 +132,7 @@ impl SerialTerminal {
             input_buffer: Vec::new(),
             output_buffer_producer: producer,
             output_buffer_consumer: consumer,
+            hardware_version,
         }
     }
 
@@ -163,6 +169,17 @@ impl SerialTerminal {
                     )
                     .unwrap_or_else(|_| {
                         msg = String::from("Version: too long");
+                    });
+                    self.write(msg.as_bytes());
+
+                    msg.clear();
+                    writeln!(
+                        &mut msg,
+                        "{:<20}: {}",
+                        "Hardware Rev", self.hardware_version
+                    )
+                    .unwrap_or_else(|_| {
+                        msg = String::from("Build: too long");
                     });
                     self.write(msg.as_bytes());
 

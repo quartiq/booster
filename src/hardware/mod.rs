@@ -12,6 +12,7 @@ use stm32f4xx_hal as hal;
 pub mod booster_channels;
 pub mod chassis_fans;
 pub mod clock;
+pub mod delay;
 mod mutex;
 pub mod platform;
 pub mod rf_channel;
@@ -83,4 +84,33 @@ pub enum Channel {
     Five = 5,
     Six = 6,
     Seven = 7,
+}
+
+pub enum HardwareVersion {
+    Rev1_2OrEarlier,
+    Rev1_3,
+    Rev1_5,
+    Unknown(u8),
+}
+
+impl From<u8> for HardwareVersion {
+    fn from(bitfield: u8) -> Self {
+        match bitfield {
+            0b000 => HardwareVersion::Rev1_2OrEarlier,
+            0b011 => HardwareVersion::Rev1_3,
+            0b100 => HardwareVersion::Rev1_5,
+            other => HardwareVersion::Unknown(other),
+        }
+    }
+}
+
+impl core::fmt::Display for HardwareVersion {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            HardwareVersion::Rev1_2OrEarlier => write!(f, ">= v1.2"),
+            HardwareVersion::Rev1_3 => write!(f, "v1.3"),
+            HardwareVersion::Rev1_5 => write!(f, "v1.5"),
+            HardwareVersion::Unknown(other) => write!(f, "Unknown ({:#b})", other),
+        }
+    }
 }
