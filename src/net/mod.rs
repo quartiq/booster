@@ -23,7 +23,7 @@ type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
 /// potential pre-emption when using the `shared` network stack.
 pub struct NetworkDevices {
     pub control: mqtt_control::ControlClient,
-    pub settings: miniconf::MqttClient<crate::Settings, NetworkStackProxy, SystemTimer, 256>,
+    pub settings: miniconf::MqttClient<crate::RuntimeSettings, NetworkStackProxy, SystemTimer, 256>,
 
     // The stack reference is only used if the ENC424J600 PHY is used.
     #[allow(dead_code)]
@@ -41,7 +41,7 @@ impl NetworkDevices {
         broker: minimq::embedded_nal::IpAddr,
         stack: NetworkStack,
         identifier: &str,
-        settings: crate::Settings,
+        settings: crate::RuntimeSettings,
     ) -> Self {
         let shared =
             cortex_m::singleton!(: NetworkManager<NetworkStack> = NetworkManager::new(stack))

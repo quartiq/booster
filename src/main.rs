@@ -19,7 +19,6 @@ compile_error!("Cannot enable multiple ethernet PHY devices.");
 compile_error!("ENC424J600 is not currently implemented");
 
 use enum_iterator::IntoEnumIterator;
-use miniconf::Miniconf;
 use stm32f4xx_hal as hal;
 
 #[macro_use]
@@ -41,13 +40,12 @@ use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
 
 use hardware::{
-    platform,
     setup::MainBus,
     user_interface::{ButtonEvent, Color, UserButtons, UserLeds},
     Channel, CPU_FREQ,
 };
 
-use settings::channel_settings::ChannelSettings;
+use settings::runtime_settings::RuntimeSettings;
 
 use watchdog::{WatchdogClient, WatchdogManager};
 
@@ -62,45 +60,6 @@ pub enum Error {
     Foldback,
     Bounds,
     Fault,
-}
-
-#[derive(Default, Clone, Miniconf)]
-pub struct Settings {
-    pub channel: [Option<ChannelSettings>; 8],
-}
-
-impl Settings {
-    pub fn handle_update(
-        _: &str,
-        settings: &mut Self,
-        new_settings: &Settings,
-    ) -> Result<(), &'static str> {
-        for idx in Channel::into_enum_iter() {
-            if let Some(ref settings) = new_settings.channel[idx as usize] {
-                // Check that the interlock thresholds are sensible.
-                if settings.output_interlock_threshold > platform::MAX_OUTPUT_POWER_DBM {
-                    return Err("Interlock threshold too high");
-                }
-
-                // Validate bias voltage.
-                if settings.bias_voltage < 0.0 || settings.bias_voltage > platform::BIAS_DAC_VCC {
-                    return Err("Bias voltage out of range");
-                }
-                // Validate that the output interlock threshold voltage (after mapping) is actually
-                // configurable on the DAC.
-                let output_interlock_voltage = settings
-                    .output_power_transform
-                    .map(settings.output_interlock_threshold);
-                if output_interlock_voltage < 0.0 || output_interlock_voltage > ad5627::MAX_VOLTAGE
-                {
-                    return Err("Output interlock threshold voltage out of range");
-                }
-            }
-        }
-
-        *settings = new_settings.clone();
-        Ok(())
-    }
 }
 
 static LOGGER: BufferedLog = BufferedLog::new();
@@ -121,7 +80,7 @@ const APP: () = {
         // Configure booster hardware.
         let mut booster = hardware::setup::setup(c.core, c.device);
 
-        let mut settings = Settings::default();
+        let mut settings = RuntimeSettings::default();
 
         for idx in Channel::into_enum_iter() {
             settings.channel[idx as usize] = booster
@@ -323,7 +282,7 @@ const APP: () = {
             let mut republish = false;
             match c.resources.net_devices.lock(|net| {
                 net.settings.handled_update(|path, old, new| {
-                    let result = Settings::handle_update(path, old, new);
+                    let result = RuntimeSettings::handle_update(path, old, new);
                     if result.is_err() {
                         republish = true;
                     }
