@@ -107,7 +107,7 @@ impl From<u8> for HardwareVersion {
 impl core::fmt::Display for HardwareVersion {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            HardwareVersion::Rev1_2OrEarlier => write!(f, ">= v1.2"),
+            HardwareVersion::Rev1_2OrEarlier => write!(f, "<= v1.2"),
             HardwareVersion::Rev1_3 => write!(f, "v1.3"),
             HardwareVersion::Rev1_5 => write!(f, "v1.5"),
             HardwareVersion::Unknown(other) => write!(f, "Unknown ({:#b})", other),
