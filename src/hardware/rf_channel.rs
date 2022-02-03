@@ -626,7 +626,7 @@ mod sm {
 
     statemachine! {
         transitions: {
-            *Off + InterlockReset / start_powerup = Powerup(Instant<SystemTimer>),
+            *Off + InterlockReset [guard_powerup] / start_powerup = Powerup(Instant<SystemTimer>),
             Off + Disable = Off,
             Off + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
 
@@ -662,6 +662,7 @@ impl sm::StateMachineContext for RfChannel {
         *interlock
     }
 
+
     /// Begin the process of powering up the channel.
     ///
     /// # Returns
@@ -688,6 +689,19 @@ impl sm::StateMachineContext for RfChannel {
         self.start_powerup()
     }
 
+    /// Guard against powering up the channel.
+    ///
+    /// # Returns
+    /// Ok if the channel can power up. Err otherwise.
+    fn guard_powerup(&mut self) -> Result<(), ()> {
+        let settings = self.settings.settings();
+        if settings.state == ChannelState::Off {
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+
     /// Check to see if it's currently acceptable to enable the RF output switch.
     ///
     /// # Returns
@@ -710,7 +724,7 @@ impl sm::StateMachineContext for RfChannel {
         }
 
         // Do not enable output if it shouldn't be disabled due to settings.
-        if !matches!(settings.power_state, ChannelState::Enabled) {
+        if settings.state != ChannelState::Enabled {
             return Err(());
         }
 
@@ -846,17 +860,21 @@ impl sm::StateMachine<RfChannel> {
     pub fn handle_settings(&mut self, settings: &ChannelSettings) -> Result<(), Error> {
         self.context_mut().apply_settings(settings)?;
 
-        if matches!(settings.power_state, ChannelState::Off) {
-            // If settings has us disabled, it's always okay to blindly power down.
-            self.process_event(sm::Events::Disable).ok();
-        } else if matches!(settings.power_state, ChannelState::Off)
-            != self.context().pins.enable_power.is_low().unwrap()
-            || matches!(settings.power_state, ChannelState::Enabled)
-                != self.context().pins.signal_on.is_high().unwrap()
-        {
-            // Our current power state has a mismatch with the settings. Reset ourselves into the
-            // updated state.
-            self.process_event(sm::Events::InterlockReset).ok();
+        match (self.state(), settings.state) {
+            // It's always acceptable to power off.
+            (_, ChannelState::Off) => {
+                self.process_event(sm::Events::Disable).ok();
+            }
+
+            // For cases when the channel needs to be powered, generate an interlock reset if the
+            // current power state doesn't match the desired state to kick the state machine into
+            // processing transitions.
+            (sm::States::Enabled | sm::States::Tripped(_), ChannelState::Powered)
+            | (sm::States::Off, ChannelState::Powered | ChannelState::Enabled) => {
+                self.process_event(sm::Events::InterlockReset).unwrap();
+            }
+
+            _ => {}
         }
 
         Ok(())

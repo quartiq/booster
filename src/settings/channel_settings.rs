@@ -18,14 +18,17 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
     patch: 1,
 };
 
-/// Indicates the enabled state of a channel.
+/// Indicates the desired state of a channel.
 #[derive(serde::Serialize, serde::Deserialize, Miniconf, Copy, Clone, PartialEq)]
 pub enum ChannelState {
+    /// The channel should be turned off and power should be disconnected.
     Off = 0,
+
+    /// The channel stages are powered and the RF switch is enabled.
     // For compatibility reasons, Enabled is stored with the value equivalent to "true"
     Enabled = 1,
 
-    // Stages are powered but RF switch is disabled. Used for bias current tuning.
+    /// Stages are powered but RF switch is disabled. Used for bias current tuning.
     Powered = 2,
 }
 
@@ -34,7 +37,7 @@ pub enum ChannelState {
 pub struct ChannelSettings {
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,
-    pub power_state: ChannelState,
+    pub state: ChannelState,
     pub input_power_transform: LinearTransformation,
     pub output_power_transform: LinearTransformation,
     pub reflected_power_transform: LinearTransformation,
@@ -46,7 +49,7 @@ impl Default for ChannelSettings {
         Self {
             output_interlock_threshold: 0.0,
             bias_voltage: -3.2,
-            power_state: ChannelState::Off,
+            state: ChannelState::Off,
 
             // When operating at 100MHz, the power detectors specify the following output
             // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
@@ -117,8 +120,8 @@ impl VersionedChannelData {
         // We will never store `Powered` in EEPROM, since this is never desired. Cache the current
         // power state while we serialize to ensure we only serialize Enabled and Off.
         let mut versioned_copy = *self;
-        if matches!(versioned_copy.settings.power_state, ChannelState::Powered) {
-            versioned_copy.settings.power_state = ChannelState::Off;
+        if versioned_copy.settings.state == ChannelState::Powered {
+            versioned_copy.settings.state = ChannelState::Off;
         }
 
         let mut buffer: [u8; 64] = [0; 64];
