@@ -324,6 +324,11 @@ impl RfChannel {
         self.settings.save()
     }
 
+    /// Check if the channel RF output is enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.pins.signal_on.is_high().unwrap()
+    }
+
     /// Set the interlock thresholds for the channel.
     ///
     /// # Args
@@ -437,7 +442,7 @@ impl RfChannel {
     }
 
     /// Get the temperature of the channel in celsius.
-    pub fn get_temperature(&mut self) -> f32 {
+    fn get_temperature(&mut self) -> f32 {
         self.devices
             .temperature_monitor
             .get_remote_temperature()

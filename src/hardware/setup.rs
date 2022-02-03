@@ -8,19 +8,21 @@
 use super::{
     booster_channels::BoosterChannels,
     chassis_fans::ChassisFans,
+    delay::AsmDelay,
     platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
-    NetworkStack, UsbBus, CPU_FREQ, I2C,
+    HardwareVersion, NetworkStack, UsbBus, CPU_FREQ, I2C,
 };
 
 #[cfg(feature = "phy_enc424j600")]
 use super::{enc424j600_api, Enc424j600};
 
-use crate::{delay::AsmDelay, new_atomic_check_manager, settings::BoosterSettings};
+use crate::{new_atomic_check_manager, settings::BoosterSettings};
 
 use stm32f4xx_hal as hal;
 
+use bit_field::BitField;
 use core::fmt::Write;
 use hal::prelude::*;
 use heapless::String;
@@ -85,7 +87,7 @@ pub struct BoosterDevices {
     pub usb_device: UsbDevice<'static, UsbBus>,
     pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
     pub settings: BoosterSettings,
-    pub delay: AsmDelay,
+    pub hardware_version: HardwareVersion,
 }
 
 /// Configure Booster hardware peripherals and RF channels.
@@ -243,8 +245,6 @@ pub fn setup(
         UserLeds::new(spi, csn, oen)
     };
 
-    info!("Startup complete");
-
     // Read the EUI48 identifier and configure the ethernet MAC address.
     let settings = {
         let i2c2 = {
@@ -261,6 +261,19 @@ pub fn setup(
 
         let eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
         BoosterSettings::new(eui)
+    };
+
+    // Read the hardware version pins.
+    let hardware_version = {
+        let hwrev0 = gpiof.pf0.into_pull_down_input();
+        let hwrev1 = gpiof.pf1.into_pull_down_input();
+        let hwrev2 = gpiof.pf2.into_pull_down_input();
+
+        HardwareVersion::from(
+            *0u8.set_bit(0, hwrev0.is_high().unwrap())
+                .set_bit(1, hwrev1.is_high().unwrap())
+                .set_bit(2, hwrev2.is_high().unwrap()),
+        )
     };
 
     let network_stack = {
@@ -403,6 +416,6 @@ pub fn setup(
         usb_device,
         usb_serial,
         watchdog,
-        delay,
+        hardware_version,
     }
 }
