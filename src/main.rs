@@ -170,21 +170,18 @@ const APP: () = {
             .watchdog
             .lock(|watchdog| watchdog.check_in(WatchdogClient::Fan));
 
-        let duty_cycle = if Channel::into_enum_iter().any(|idx| {
-            c.resources
-                .main_bus
-                .lock(|main_bus| {
-                    main_bus
-                        .channels
-                        .channel_mut(idx)
-                        .map(|(channel, _)| channel.context().is_enabled())
+        let fan_speed = c.resources.net_devices.settings.settings().fan_speed;
+        let mut duty_cycle = 0.0;
+
+        for idx in Channel::into_enum_iter() {
+            c.resources.main_bus.lock(|main_bus| {
+                main_bus.channels.channel_mut(idx).map(|(channel, _)| {
+                    if channel.context().is_enabled() {
+                        duty_cycle = fan_speed;
+                    }
                 })
-                .unwrap_or(false)
-        }) {
-            c.resources.net_devices.settings.settings().fan_speed
-        } else {
-            0.0
-        };
+            });
+        }
 
         // Update the fan speeds.
         c.resources
