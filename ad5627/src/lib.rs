@@ -108,7 +108,7 @@ where
     pub fn set_voltage(&mut self, voltage: f32, dac: Dac) -> Result<f32, Error<I2C::Error>> {
         // Assuming a 1.25V internal reference with a 2x output stage gain, our full scale range is
         // 2.5V.
-        if !(0.0..=crate::MAX_VOLTAGE).contains(voltage) {
+        if !(0.0..=crate::MAX_VOLTAGE).contains(&voltage) {
             return Err(Error::Range);
         }
 
