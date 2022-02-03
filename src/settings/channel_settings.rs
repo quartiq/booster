@@ -25,6 +25,7 @@ pub enum ChannelState {
     // For compatibility reasons, Enabled is stored with the value equivalent to "true"
     Enabled = 1,
 
+    // Stages are powered but RF switch is disabled. Used for bias current tuning.
     Powered = 2,
 }
 
