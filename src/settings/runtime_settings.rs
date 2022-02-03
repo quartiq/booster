@@ -9,9 +9,19 @@ use crate::hardware::{platform, Channel};
 use enum_iterator::IntoEnumIterator;
 use miniconf::Miniconf;
 
-#[derive(Default, Clone, Miniconf)]
+#[derive(Clone, Miniconf)]
 pub struct RuntimeSettings {
     pub channel: [Option<ChannelSettings>; 8],
+    pub fan_speed: f32,
+}
+
+impl Default for RuntimeSettings {
+    fn default() -> Self {
+        Self {
+            channel: [None; 8],
+            fan_speed: 0.2,
+        }
+    }
 }
 
 impl RuntimeSettings {
@@ -41,6 +51,10 @@ impl RuntimeSettings {
                     return Err("Output interlock threshold voltage out of range");
                 }
             }
+        }
+
+        if !(0.0..=1.0).contains(&new_settings.fan_speed) {
+            return Err("Invalid fan speed");
         }
 
         *settings = new_settings.clone();
