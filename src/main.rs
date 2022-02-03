@@ -65,7 +65,7 @@ pub enum Error {
 
 #[derive(Default, Miniconf)]
 pub struct Settings {
-    pub channel: [ChannelSettings; 8],
+    pub channel: [Option<ChannelSettings>; 8],
 }
 
 static LOGGER: BufferedLog = BufferedLog::new();
@@ -89,16 +89,11 @@ const APP: () = {
         let mut settings = Settings::default();
 
         for idx in Channel::into_enum_iter() {
-            booster
+            settings.channel[idx as usize] = booster
                 .main_bus
                 .channels
                 .channel_mut(idx)
-                .map(|(channel, _)| settings.channel[idx as usize] = *channel.context().settings())
-                .unwrap_or_else(|| {
-                    settings.channel[idx as usize].enabled = false;
-                    settings.channel[idx as usize].rf_disable = true;
-                    settings.channel[idx as usize].bias_voltage = 0.0;
-                });
+                .map(|(channel, _)| *channel.context().settings())
         }
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
@@ -248,13 +243,16 @@ const APP: () = {
         let all_settings = c.resources.net_devices.settings.settings();
 
         for idx in Channel::into_enum_iter() {
-            let settings = &all_settings.channel[idx as usize];
             c.resources.main_bus.lock(|main_bus| {
-                main_bus.channels.channel_mut(idx).map(|(channel, _)| {
-                    channel.handle_settings(settings).unwrap_or_else(|err| {
-                        log::warn!("Settings failure on {:?}: {:?}", idx, err)
+                main_bus
+                    .channels
+                    .channel_mut(idx)
+                    .zip(all_settings.channel[idx as usize].as_ref())
+                    .map(|((channel, _), settings)| {
+                        channel.handle_settings(settings).unwrap_or_else(|err| {
+                            log::warn!("Settings failure on {:?}: {:?}", idx, err)
+                        })
                     })
-                })
             });
         }
     }
