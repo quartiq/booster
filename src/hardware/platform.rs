@@ -16,6 +16,7 @@ pub const MAXIMUM_REFLECTED_POWER_DBM: f32 = 30.0;
 // 38dBm (nominal) + 6 dB (glitches) + 3 dB (margin)
 pub const MAX_OUTPUT_POWER_DBM: f32 = 47.0;
 
+// The voltage supply to the RF transitor bias DAC.
 pub const BIAS_DAC_VCC: f32 = 3.2;
 
 #[panic_handler]
