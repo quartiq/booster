@@ -46,7 +46,7 @@ use hardware::{
     Channel, CPU_FREQ,
 };
 
-use settings::channel_settings::{ChannelSettings, ChannelState};
+use settings::channel_settings::ChannelSettings;
 
 use watchdog::{WatchdogClient, WatchdogManager};
 
