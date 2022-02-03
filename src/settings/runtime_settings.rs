@@ -38,7 +38,7 @@ impl RuntimeSettings {
                 }
 
                 // Validate bias voltage.
-                if !(0.0..=platform::BIAS_DAC_VCC).contains(&settings.bias_voltage) {
+                if !(0.0..=platform::BIAS_DAC_VCC).contains(&(-1.0 * settings.bias_voltage)) {
                     return Err("Bias voltage out of range");
                 }
 
@@ -46,7 +46,7 @@ impl RuntimeSettings {
                 // configurable on the DAC.
                 let output_interlock_voltage = settings
                     .output_power_transform
-                    .map(settings.output_interlock_threshold);
+                    .invert(settings.output_interlock_threshold);
                 if !(0.00..=ad5627::MAX_VOLTAGE).contains(&output_interlock_voltage) {
                     return Err("Output interlock threshold voltage out of range");
                 }
