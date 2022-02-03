@@ -10,9 +10,6 @@ use max6639::Max6639;
 /// Provides control of the chassis-mounted cooling fans.
 pub struct ChassisFans {
     fans: [Max6639<I2cProxy>; 3],
-    threshold_temperature: f32,
-    proportional_gain: f32,
-    fans_spinning: bool,
 }
 
 impl ChassisFans {
@@ -24,70 +21,23 @@ impl ChassisFans {
     /// # Returns
     /// A new fan controller.
     pub fn new(fans: [Max6639<I2cProxy>; 3]) -> Self {
-        ChassisFans {
-            fans,
-            threshold_temperature: 30.0,
-
-            // Set the Kp parameter such that fans will be at 100% speed when 30.0 *C above the
-            // temperature threshold.
-            proportional_gain: 1.0 / 30.0,
-
-            fans_spinning: false,
-        }
+        ChassisFans { fans }
     }
 
-    /// Update the fans based on the current channel temperatures.
+    /// Set the duty cycle of the fans.
     ///
     /// # Args
-    /// * `channel_temps` - The current channel temperatures in degrees celsius if the channel is
-    /// enabled.
-    pub fn update(&mut self, channel_temps: [Option<f32>; 8]) {
-        // Calculate the maximum temperature encountered across all of the channels.
-        let max_temperature = channel_temps
-            .iter()
-            .fold(f32::NEG_INFINITY, |acc, &temp| acc.max(temp.unwrap_or(acc)));
-
-        let channels_enabled = channel_temps.iter().any(|&temp| temp.is_some());
-
-        // Determine the maximum temperature error from the hottest channel to use in the fan
-        // control algorithm.
-        let temperature_error = {
-            let error = max_temperature - self.threshold_temperature;
-            if error > 0.0 {
-                error
-            } else {
-                0.0
-            }
-        };
-
-        // Calculate the desired duty cycle based on the temperature error.
-        let duty_cycle = {
-            let duty = self.proportional_gain * temperature_error;
-
-            // Cap the duty cycle to 100%
-            if duty > 1.0 {
-                1.0
-            } else {
-                duty
-            }
-        };
-
-        // If any channel is enabled, the duty cycle will always be at least 20%
-        let final_duty = if channels_enabled {
-            if duty_cycle > 0.20 {
-                duty_cycle
-            } else {
-                0.20
-            }
-        } else {
-            // No channels are enabled, so don't bother turning on the fans.
+    /// * `duty_cycle` - The normalized desired duty cycle of fans. Will be bounded to [0, 1].
+    pub fn set_duty_cycles(&mut self, duty_cycle: f32) {
+        // Bound the duty cycle to a normalized range.
+        let duty_cycle = if duty_cycle > 1.0 {
+            1.0
+        } else if duty_cycle < 0.0 {
             0.0
+        } else {
+            duty_cycle
         };
 
-        self.set_duty_cycles(final_duty);
-    }
-
-    fn set_duty_cycles(&mut self, duty_cycle: f32) {
         // Keep retrying until the configuration succeeds or the maximum number of retry
         // attempts is exhausted.
         let retry_set = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| {
@@ -104,11 +54,6 @@ impl ChassisFans {
             retry_set(fan, max6639::Fan::Fan1, duty_cycle);
             retry_set(fan, max6639::Fan::Fan2, duty_cycle);
         }
-
-        // Deem the fans to be spinning if the duty cycle is greater than 5%. This is to avoid
-        // floating-point comparison errors at near-zero duty cycle. The driver should not be
-        // configuring fans to a non-zero duty cycle below 20%.
-        self.fans_spinning = duty_cycle > 0.05;
     }
 
     fn read_rpms(&mut self) -> [u16; 6] {

@@ -63,9 +63,19 @@ pub enum Error {
     Fault,
 }
 
-#[derive(Default, Miniconf)]
+#[derive(Miniconf)]
 pub struct Settings {
     pub channel: [Option<ChannelSettings>; 8],
+    fan_speed: f32,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            channel: [None; 8],
+            fan_speed: 0.2,
+        }
+    }
 }
 
 static LOGGER: BufferedLog = BufferedLog::new();
@@ -153,30 +163,33 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [fans], resources=[main_bus, watchdog])]
+    #[task(priority = 1, schedule = [fans], resources=[main_bus, watchdog, net_devices])]
     fn fans(mut c: fans::Context) {
         // Check in with the watchdog.
         c.resources
             .watchdog
             .lock(|watchdog| watchdog.check_in(WatchdogClient::Fan));
 
-        // Determine the maximum channel temperature.
-        let mut temperatures: [Option<f32>; 8] = [None; 8];
-
-        for idx in Channel::into_enum_iter() {
-            temperatures[idx as usize] = c.resources.main_bus.lock(|main_bus| {
-                main_bus
-                    .channels
-                    .channel_mut(idx)
-                    .filter(|(channel, _)| channel.context().is_enabled())
-                    .map(|(channel, _)| channel.context_mut().get_temperature())
-            });
-        }
+        let duty_cycle = if Channel::into_enum_iter().any(|idx| {
+            c.resources
+                .main_bus
+                .lock(|main_bus| {
+                    main_bus
+                        .channels
+                        .channel_mut(idx)
+                        .map(|(channel, _)| channel.context().is_enabled())
+                })
+                .unwrap_or(false)
+        }) {
+            c.resources.net_devices.settings.settings().fan_speed
+        } else {
+            0.0
+        };
 
         // Update the fan speeds.
         c.resources
             .main_bus
-            .lock(|main_bus| main_bus.fans.update(temperatures));
+            .lock(|main_bus| main_bus.fans.set_duty_cycles(duty_cycle));
 
         // Schedule to run this task periodically at 1Hz.
         c.schedule

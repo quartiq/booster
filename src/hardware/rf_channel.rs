@@ -440,7 +440,7 @@ impl RfChannel {
     }
 
     /// Get the temperature of the channel in celsius.
-    pub fn get_temperature(&mut self) -> f32 {
+    fn get_temperature(&mut self) -> f32 {
         self.devices
             .temperature_monitor
             .get_remote_temperature()
