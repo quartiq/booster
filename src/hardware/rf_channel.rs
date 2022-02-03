@@ -638,12 +638,14 @@ mod sm {
             Powered + Disable / start_disable = Powerdown(Instant<SystemTimer>),
             Powered + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
 
-            Enabled + InterlockReset / start_powerup = Powerup(Instant<SystemTimer>),
+            Enabled + InterlockReset = Enabled,
             Enabled + Trip(Interlock) / handle_trip = Tripped(Interlock),
+            Enabled + DisableRf / disable_rf_switch = Powered,
             Enabled + Disable / start_disable = Powerdown(Instant<SystemTimer>),
             Enabled + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
 
-            Tripped(Interlock) + InterlockReset / start_powerup_interlock = Powerup(Instant<SystemTimer>),
+            Tripped(Interlock) + InterlockReset = Powered,
+            Tripped(Interlock) + DisableRf = Powered,
             Tripped(Interlock) + Disable / start_disable_interlock = Powerdown(Instant<SystemTimer>),
             Tripped(Interlock) + Fault(ChannelFault) / handle_fault_interlock = Blocked(ChannelFault),
 
@@ -658,8 +660,13 @@ mod sm {
 impl sm::StateMachineContext for RfChannel {
     /// Handle the occurrence of a tripped interlock.
     fn handle_trip(&mut self, interlock: &Interlock) -> Interlock {
-        self.pins.signal_on.set_low().unwrap();
+        self.disable_rf_switch();
         *interlock
+    }
+
+    /// Turn off the RF output enable switch.
+    fn disable_rf_switch(&mut self) {
+        self.pins.signal_on.set_low().unwrap();
     }
 
     /// Begin the process of powering up the channel.
@@ -674,7 +681,7 @@ impl sm::StateMachineContext for RfChannel {
             .expect("Failed to disable RF bias voltage");
 
         // Ensure that the RF output is disabled during the power-up process.
-        self.pins.signal_on.set_low().unwrap();
+        self.disable_rf_switch();
 
         // Start the LM3880 power supply sequencer.
         self.pins.enable_power.set_high().unwrap();
@@ -682,10 +689,6 @@ impl sm::StateMachineContext for RfChannel {
         // The LM3880 requires 180ms to power up all supplies on the channel. We add an additional
         // 20ms margin.
         self.clock.try_now().unwrap() + 200_u32.milliseconds()
-    }
-
-    fn start_powerup_interlock(&mut self, _: &Interlock) -> Instant<SystemTimer> {
-        self.start_powerup()
     }
 
     /// Guard against powering up the channel.
@@ -751,7 +754,7 @@ impl sm::StateMachineContext for RfChannel {
     /// # Returns
     /// The time at which the powerdown process can be deemed complete.
     fn start_disable(&mut self) -> Instant<SystemTimer> {
-        self.pins.signal_on.set_low().unwrap();
+        self.disable_rf_switch();
 
         // Set the bias DAC output into pinch-off.
         self.devices
@@ -855,6 +858,13 @@ impl sm::StateMachine<RfChannel> {
         self.process_event(sm::Events::Disable).ok();
     }
 
+    /// Handle initial startup of the channel.
+    pub fn handle_startup(&mut self) {
+        // Start powering up the channel. Note that we guard against the current channel
+        // configuration state here.
+        self.process_event(sm::Events::InterlockReset).ok();
+    }
+
     /// Handle an update to channel settings.
     pub fn handle_settings(&mut self, settings: &ChannelSettings) -> Result<(), Error> {
         self.context_mut().apply_settings(settings)?;
@@ -865,14 +875,17 @@ impl sm::StateMachine<RfChannel> {
                 self.process_event(sm::Events::Disable).ok();
             }
 
-            // For cases when the channel needs to be powered, generate an interlock reset if the
-            // current power state doesn't match the desired state to kick the state machine into
-            // processing transitions.
-            (sm::States::Enabled | sm::States::Tripped(_), ChannelState::Powered)
-            | (sm::States::Off, ChannelState::Powered | ChannelState::Enabled) => {
+            // For bias tuning, we may need to disable the RF switch.
+            (sm::States::Enabled | sm::States::Tripped(_), ChannelState::Powered) => {
+                self.process_event(sm::Events::DisableRf).unwrap();
+            }
+
+            (sm::States::Off, ChannelState::Powered | ChannelState::Enabled) => {
                 self.process_event(sm::Events::InterlockReset).unwrap();
             }
 
+            // Note: Note: Powered -> Enabled transitions are handled via the periodic `Update`
+            // service event automatically.
             _ => {}
         }
 
