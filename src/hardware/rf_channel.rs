@@ -846,13 +846,13 @@ impl sm::StateMachine<RfChannel> {
     pub fn handle_settings(&mut self, settings: &ChannelSettings) -> Result<(), Error> {
         self.context_mut().apply_settings(settings)?;
 
-        if !matches!(settings.power_state, ChannelState::Enabled) {
+        if matches!(settings.power_state, ChannelState::Off) {
             // If settings has us disabled, it's always okay to blindly power down.
             self.process_event(sm::Events::Disable).ok();
-        } else if matches!(settings.power_state, ChannelState::Enabled)
-            != self.context().pins.enable_power.is_high().unwrap()
-            || matches!(settings.power_state, ChannelState::Powered)
-                != self.context().pins.signal_on.is_low().unwrap()
+        } else if matches!(settings.power_state, ChannelState::Off)
+            != self.context().pins.enable_power.is_low().unwrap()
+            || matches!(settings.power_state, ChannelState::Enabled)
+                != self.context().pins.signal_on.is_high().unwrap()
         {
             // Our current power state has a mismatch with the settings. Reset ourselves into the
             // updated state.
