@@ -27,7 +27,6 @@ extern crate log;
 
 use panic_persist as _;
 
-mod delay;
 mod hardware;
 mod linear_transformation;
 mod logger;
@@ -133,6 +132,7 @@ const APP: () = {
                 booster.usb_device,
                 booster.usb_serial,
                 booster.settings,
+                booster.hardware_version,
             ),
             watchdog: watchdog_manager,
         }
