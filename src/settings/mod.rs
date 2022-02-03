@@ -15,7 +15,7 @@ pub use channel_settings::BoosterChannelSettings;
 pub use global_settings::BoosterSettings;
 
 /// A semantic version control for recording software versions.
-#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Copy, Clone)]
 pub struct SemVersion {
     major: u8,
     minor: u8,

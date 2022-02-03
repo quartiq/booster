@@ -67,7 +67,9 @@ impl BoosterChannels {
                 .expect("Failed to select channel");
 
             if let Some(channel) = RfChannel::new(manager, pins, delay) {
-                channels[idx as usize].replace(RfChannelMachine::new(channel));
+                let mut machine = RfChannelMachine::new(channel);
+                machine.handle_startup();
+                channels[idx as usize].replace(machine);
             } else {
                 info!("Channel {} did not enumerate", idx as usize);
             }
