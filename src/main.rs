@@ -45,7 +45,6 @@ use hardware::{
 };
 
 use settings::runtime_settings::RuntimeSettings;
-
 use watchdog::{WatchdogClient, WatchdogManager};
 
 use rtic::cyccnt::Duration;
@@ -90,11 +89,6 @@ const APP: () = {
         }
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
-
-        booster
-            .main_bus
-            .fans
-            .set_default_duty_cycle(settings.fan_speed);
 
         // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
@@ -169,13 +163,10 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, net_devices, watchdog])]
+    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, net_devices])]
     fn telemetry(mut c: telemetry::Context) {
-        // Check in with the watchdog.
-        c.resources
-            .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::Telemetry));
         let control = &mut c.resources.net_devices.control;
+
         // Gather telemetry for all of the channels.
         // And broadcast the measured data over the telemetry interface.
         for idx in Channel::into_enum_iter() {
@@ -187,9 +178,8 @@ const APP: () = {
             });
         }
 
-        // Schedule to run this task periodically at 2Hz.
         c.schedule
-            .telemetry(c.scheduled + Duration::from_cycles(CPU_FREQ / 2))
+            .telemetry(c.scheduled + Duration::from_cycles(control.telemetry_period_cycles()))
             .unwrap();
     }
 
@@ -246,7 +236,13 @@ const APP: () = {
         // Update the fan speed.
         c.resources
             .main_bus
-            .lock(|main_bus| main_bus.fans.set_default_duty_cycle(all_settings.fan_speed))
+            .lock(|main_bus| main_bus.fans.set_default_duty_cycle(all_settings.fan_speed));
+
+        // Update the telemetry rate.
+        c.resources
+            .net_devices
+            .control
+            .set_telemetry_period(all_settings.telemetry_period);
     }
 
     #[task(priority = 2, schedule=[usb], resources=[usb_terminal, watchdog])]

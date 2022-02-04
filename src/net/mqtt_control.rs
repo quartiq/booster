@@ -16,6 +16,9 @@ use heapless::String;
 use minimq::{Property, QoS};
 use serde::Serialize;
 
+/// The default telemetry period.
+pub const DEFAULT_TELEMETRY_PERIOD_SECS: f32 = 10.0;
+
 /// Specifies an action to take on a channel.
 #[derive(serde::Deserialize, Debug)]
 enum ChannelAction {
@@ -97,6 +100,7 @@ pub struct ControlClient {
     control_topic: String<64>,
     telemetry_prefix: String<128>,
     default_response_topic: String<64>,
+    telemetry_period: f32,
 }
 
 impl ControlClient {
@@ -124,6 +128,7 @@ impl ControlClient {
             control_topic,
             telemetry_prefix,
             default_response_topic,
+            telemetry_period: DEFAULT_TELEMETRY_PERIOD_SECS,
         }
     }
 
@@ -209,6 +214,32 @@ impl ControlClient {
 
             Err(e) => error!("Unexpected error: {:?}", e),
         }
+    }
+
+    /// Get the period between telemetry updates in CPU cycles.
+    pub fn telemetry_period_cycles(&self) -> u32 {
+        let period = (crate::CPU_FREQ as f32) * self.telemetry_period;
+
+        // Elapsed cycles must always be less than half of the container size because of the
+        // wrapping nature of cycle counting. Specifically, cycles > MAX/2 in the future are
+        // indistinguishable from cycles in the past due to integer wrap. Because of this, we cap
+        // the cycle period to less than half an integer wrap.
+        if period >= (u32::MAX / 2) as f32 {
+            u32::MAX / 2 - 1
+        } else {
+            period as u32
+        }
+    }
+
+    /// Set the telemetry period.
+    ///
+    /// # Note
+    /// The telemetry period has a minimum period of 0.5 seconds
+    ///
+    /// # Args
+    /// * `period` - The telemetry period in seconds.
+    pub fn set_telemetry_period(&mut self, period: f32) {
+        self.telemetry_period = period.clamp(0.5, period);
     }
 }
 

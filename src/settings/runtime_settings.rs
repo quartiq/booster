@@ -5,21 +5,34 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 use super::channel_settings::ChannelSettings;
-use crate::hardware::{platform, Channel};
+use crate::{
+    hardware::{self, platform, Channel},
+    net,
+};
 use enum_iterator::IntoEnumIterator;
 use miniconf::Miniconf;
 
 #[derive(Clone, Miniconf)]
 pub struct RuntimeSettings {
     pub channel: [Option<ChannelSettings>; 8],
+
+    /// The normalized fan speed. 1.0 corresponds to 100% on and 0.0 corresponds to completely
+    /// off.
     pub fan_speed: f32,
+
+    /// The configured telemetry period.
+    ///
+    /// # Note
+    /// Currently, this can only be configured to values within [0.5, 13).
+    pub telemetry_period: f32,
 }
 
 impl Default for RuntimeSettings {
     fn default() -> Self {
         Self {
             channel: [None; 8],
-            fan_speed: 0.2,
+            fan_speed: hardware::chassis_fans::DEFAULT_FAN_SPEED,
+            telemetry_period: net::mqtt_control::DEFAULT_TELEMETRY_PERIOD_SECS,
         }
     }
 }

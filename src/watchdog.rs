@@ -11,11 +11,10 @@ use hal::time::U32Ext;
 
 /// Represents various clients that can check in with the watchdog.
 pub enum WatchdogClient {
-    Telemetry = 0,
-    Idle = 1,
-    Usb = 2,
-    Button = 3,
-    Monitor = 4,
+    Idle = 0,
+    Usb = 1,
+    Button = 2,
+    Monitor = 3,
 }
 
 /// A manager for the device indepedent watchdog.
@@ -23,7 +22,7 @@ pub enum WatchdogClient {
 /// The manager waits for a number of clients to check in before feeding the watchdog.
 pub struct WatchdogManager {
     watchdog: hal::watchdog::IndependentWatchdog,
-    check_ins: [bool; 5],
+    check_ins: [bool; 4],
 }
 
 impl WatchdogManager {
@@ -37,7 +36,7 @@ impl WatchdogManager {
 
         Self {
             watchdog,
-            check_ins: [false; 5],
+            check_ins: [false; 4],
         }
     }
 
@@ -51,7 +50,7 @@ impl WatchdogManager {
         // If all clients have checked in, service the watchdog.
         if self.check_ins.iter().all(|&x| x) {
             self.watchdog.feed();
-            self.check_ins = [false; 5];
+            self.check_ins = [false; 4];
         }
     }
 }
