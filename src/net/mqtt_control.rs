@@ -216,6 +216,7 @@ impl ControlClient {
         }
     }
 
+    /// Get the period between telemetry updates in CPU cycles.
     pub fn telemetry_period_cycles(&self) -> u32 {
         let period = (crate::CPU_FREQ as f32) * self.telemetry_period;
 
@@ -230,8 +231,15 @@ impl ControlClient {
         }
     }
 
+    /// Set the telemetry period.
+    ///
+    /// # Note
+    /// The telemetry period has a minimum period of 0.5 seconds
+    ///
+    /// # Args
+    /// * `period` - The telemetry period in seconds.
     pub fn set_telemetry_period(&mut self, period: f32) {
-        self.telemetry_period = period.clamp(0.0, period);
+        self.telemetry_period = period.clamp(0.5, period);
     }
 }
 
