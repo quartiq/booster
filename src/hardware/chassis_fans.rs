@@ -7,6 +7,9 @@
 use super::{I2cError, I2cProxy};
 use max6639::Max6639;
 
+/// The default fan speed on power-up.
+pub const DEFAULT_FAN_SPEED: f32 = 0.2;
+
 /// Provides control of the chassis-mounted cooling fans.
 pub struct ChassisFans {
     fans: [Max6639<I2cProxy>; 3],
@@ -25,7 +28,7 @@ impl ChassisFans {
     pub fn new(fans: [Max6639<I2cProxy>; 3]) -> Self {
         ChassisFans {
             fans,
-            duty_cycle: 0.2,
+            duty_cycle: DEFAULT_FAN_SPEED,
         }
     }
 

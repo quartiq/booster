@@ -16,6 +16,9 @@ use heapless::String;
 use minimq::{Property, QoS};
 use serde::Serialize;
 
+/// The default telemetry period.
+pub const DEFAULT_TELEMETRY_PERIOD_SECS: f32 = 10.0;
+
 /// Specifies an action to take on a channel.
 #[derive(serde::Deserialize, Debug)]
 enum ChannelAction {
@@ -97,6 +100,7 @@ pub struct ControlClient {
     control_topic: String<64>,
     telemetry_prefix: String<128>,
     default_response_topic: String<64>,
+    telemetry_period: f32,
 }
 
 impl ControlClient {
@@ -124,6 +128,7 @@ impl ControlClient {
             control_topic,
             telemetry_prefix,
             default_response_topic,
+            telemetry_period: DEFAULT_TELEMETRY_PERIOD_SECS,
         }
     }
 
@@ -209,6 +214,20 @@ impl ControlClient {
 
             Err(e) => error!("Unexpected error: {:?}", e),
         }
+    }
+
+    pub fn telemetry_period_cycles(&self) -> u32 {
+        let period = (crate::CPU_FREQ as f32) * self.telemetry_period;
+
+        if period > u32::MAX as f32 {
+            u32::MAX
+        } else {
+            period as u32
+        }
+    }
+
+    pub fn set_telemetry_period(&mut self, period: f32) {
+        self.telemetry_period = period.clamp(0.0, period);
     }
 }
 

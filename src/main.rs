@@ -66,13 +66,15 @@ pub enum Error {
 pub struct Settings {
     pub channel: [Option<ChannelSettings>; 8],
     fan_speed: f32,
+    telemetry_period: f32,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             channel: [None; 8],
-            fan_speed: 0.2,
+            fan_speed: hardware::chassis_fans::DEFAULT_FAN_SPEED,
+            telemetry_period: net::mqtt_control::DEFAULT_TELEMETRY_PERIOD_SECS,
         }
     }
 }
@@ -106,11 +108,6 @@ const APP: () = {
         }
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
-
-        booster
-            .main_bus
-            .fans
-            .set_default_duty_cycle(settings.fan_speed);
 
         // Kick-start the periodic software tasks.
         c.schedule.channel_monitor(c.start).unwrap();
@@ -191,6 +188,7 @@ const APP: () = {
         c.resources
             .watchdog
             .lock(|watchdog| watchdog.check_in(WatchdogClient::Telemetry));
+
         let control = &mut c.resources.net_devices.control;
         // Gather telemetry for all of the channels.
         // And broadcast the measured data over the telemetry interface.
@@ -202,9 +200,8 @@ const APP: () = {
             });
         }
 
-        // Schedule to run this task periodically at 2Hz.
         c.schedule
-            .telemetry(c.scheduled + Duration::from_cycles(CPU_FREQ / 2))
+            .telemetry(c.scheduled + Duration::from_cycles(control.telemetry_period_cycles()))
             .unwrap();
     }
 
@@ -261,7 +258,13 @@ const APP: () = {
         // Update the fan speed.
         c.resources
             .main_bus
-            .lock(|main_bus| main_bus.fans.set_default_duty_cycle(all_settings.fan_speed))
+            .lock(|main_bus| main_bus.fans.set_default_duty_cycle(all_settings.fan_speed));
+
+        // Update the telemetry rate.
+        c.resources
+            .net_devices
+            .control
+            .set_telemetry_period(all_settings.telemetry_period);
     }
 
     #[task(priority = 2, schedule=[usb], resources=[usb_terminal, watchdog])]

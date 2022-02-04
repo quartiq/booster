@@ -9,7 +9,7 @@ use crate::hardware::{clock::SystemTimer, NetworkStack};
 use core::fmt::Write;
 use heapless::String;
 
-mod mqtt_control;
+pub mod mqtt_control;
 mod shared;
 
 use shared::NetworkManager;
