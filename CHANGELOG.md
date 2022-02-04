@@ -15,3 +15,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#140](https://github.com/quartiq/booster/issues/140)), by using a I2C transfer retry mechanism.
   [#158](https://github.com/quartiq/booster/pull/158)
 * Code reorganized to move hardware configuration into a module
+* Added runtime settings control via Miniconf
+* Telemetry period is now configurable between 0.5 and 13 seconds

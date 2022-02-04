@@ -13,6 +13,9 @@
 
 use embedded_hal::blocking::i2c::Write;
 
+/// The maximum voltage that the DAC can output.
+pub const MAX_VOLTAGE: f32 = 2.5;
+
 /// The driver representing the programmable reference generator.
 pub struct Ad5627<I2C>
 where
@@ -105,7 +108,7 @@ where
     pub fn set_voltage(&mut self, voltage: f32, dac: Dac) -> Result<f32, Error<I2C::Error>> {
         // Assuming a 1.25V internal reference with a 2x output stage gain, our full scale range is
         // 2.5V.
-        if voltage > 2.5 || voltage < 0.0 {
+        if !(0.0..=crate::MAX_VOLTAGE).contains(&voltage) {
             return Err(Error::Range);
         }
 

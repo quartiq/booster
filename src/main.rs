@@ -19,7 +19,6 @@ compile_error!("Cannot enable multiple ethernet PHY devices.");
 compile_error!("ENC424J600 is not currently implemented");
 
 use enum_iterator::IntoEnumIterator;
-use miniconf::Miniconf;
 use stm32f4xx_hal as hal;
 
 #[macro_use]
@@ -45,8 +44,7 @@ use hardware::{
     Channel, CPU_FREQ,
 };
 
-use settings::channel_settings::ChannelSettings;
-
+use settings::runtime_settings::RuntimeSettings;
 use watchdog::{WatchdogClient, WatchdogManager};
 
 use rtic::cyccnt::Duration;
@@ -60,23 +58,6 @@ pub enum Error {
     Foldback,
     Bounds,
     Fault,
-}
-
-#[derive(Miniconf)]
-pub struct Settings {
-    pub channel: [Option<ChannelSettings>; 8],
-    fan_speed: f32,
-    telemetry_period: f32,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            channel: [None; 8],
-            fan_speed: hardware::chassis_fans::DEFAULT_FAN_SPEED,
-            telemetry_period: net::mqtt_control::DEFAULT_TELEMETRY_PERIOD_SECS,
-        }
-    }
 }
 
 static LOGGER: BufferedLog = BufferedLog::new();
@@ -97,7 +78,7 @@ const APP: () = {
         // Configure booster hardware.
         let mut booster = hardware::setup::setup(c.core, c.device);
 
-        let mut settings = Settings::default();
+        let mut settings = RuntimeSettings::default();
 
         for idx in Channel::into_enum_iter() {
             settings.channel[idx as usize] = booster
