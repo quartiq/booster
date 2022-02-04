@@ -270,6 +270,7 @@ pub struct ChannelStatus {
     input_power: f32,
     reflected_power: f32,
     output_power: f32,
+    state: sm::States,
 }
 
 /// Represents a means of interacting with an RF output channel.
@@ -572,24 +573,6 @@ impl RfChannel {
     /// Get the current bias voltage programmed to the RF amplification transistor.
     pub fn get_bias_voltage(&self) -> f32 {
         self.settings.settings().bias_voltage
-    }
-
-    /// Get the channel status.
-    pub fn get_status(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> ChannelStatus {
-        let power_measurements = self.get_supply_measurements();
-
-        ChannelStatus {
-            reflected_overdrive: self.pins.reflected_overdrive.is_high().unwrap(),
-            output_overdrive: self.pins.output_overdrive.is_high().unwrap(),
-            alert: self.pins.alert.is_low().unwrap(),
-            temperature: self.get_temperature(),
-            p28v_current: power_measurements.i_p28v0ch,
-            p5v_current: power_measurements.i_p5v0ch,
-            p5v_voltage: power_measurements.v_p5v0mp,
-            input_power: self.get_input_power(),
-            output_power: self.get_output_power(adc),
-            reflected_power: self.get_reflected_power(adc),
-        }
     }
 
     pub fn settings(&self) -> &ChannelSettings {
@@ -895,5 +878,26 @@ impl sm::StateMachine<RfChannel> {
         }
 
         Ok(())
+    }
+
+    /// Get status information about the channel.
+    pub fn get_status(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> ChannelStatus {
+        let channel = self.context_mut();
+
+        let power_measurements = channel.get_supply_measurements();
+
+        ChannelStatus {
+            reflected_overdrive: channel.pins.reflected_overdrive.is_high().unwrap(),
+            output_overdrive: channel.pins.output_overdrive.is_high().unwrap(),
+            alert: channel.pins.alert.is_low().unwrap(),
+            temperature: channel.get_temperature(),
+            p28v_current: power_measurements.i_p28v0ch,
+            p5v_current: power_measurements.i_p5v0ch,
+            p5v_voltage: power_measurements.v_p5v0mp,
+            input_power: channel.get_input_power(),
+            output_power: channel.get_output_power(adc),
+            reflected_power: channel.get_reflected_power(adc),
+            state: *self.state(),
+        }
     }
 }

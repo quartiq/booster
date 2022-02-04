@@ -196,9 +196,10 @@ const APP: () = {
         // And broadcast the measured data over the telemetry interface.
         for idx in Channel::into_enum_iter() {
             c.resources.main_bus.lock(|main_bus| {
-                main_bus.channels.channel_mut(idx).map(|(ch, adc)| {
-                    control.report_telemetry(idx, &ch.context_mut().get_status(adc))
-                })
+                main_bus
+                    .channels
+                    .channel_mut(idx)
+                    .map(|(ch, adc)| control.report_telemetry(idx, &ch.get_status(adc)))
             });
         }
 
