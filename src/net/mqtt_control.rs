@@ -219,8 +219,12 @@ impl ControlClient {
     pub fn telemetry_period_cycles(&self) -> u32 {
         let period = (crate::CPU_FREQ as f32) * self.telemetry_period;
 
-        if period > u32::MAX as f32 {
-            u32::MAX
+        // Elapsed cycles must always be less than half of the container size because of the
+        // wrapping nature of cycle counting. Specifically, cycles > MAX/2 in the future are
+        // indistinguishable from cycles in the past due to integer wrap. Because of this, we cap
+        // the cycle period to less than half an integer wrap.
+        if period >= (u32::MAX / 2) as f32 {
+            u32::MAX / 2 - 1
         } else {
             period as u32
         }

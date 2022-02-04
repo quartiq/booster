@@ -182,14 +182,10 @@ const APP: () = {
             .unwrap();
     }
 
-    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, net_devices, watchdog])]
+    #[task(priority = 1, schedule = [telemetry], resources=[main_bus, net_devices])]
     fn telemetry(mut c: telemetry::Context) {
-        // Check in with the watchdog.
-        c.resources
-            .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::Telemetry));
-
         let control = &mut c.resources.net_devices.control;
+
         // Gather telemetry for all of the channels.
         // And broadcast the measured data over the telemetry interface.
         for idx in Channel::into_enum_iter() {
