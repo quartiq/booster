@@ -273,10 +273,25 @@ const APP: () = {
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::Idle));
 
             // Handle the Miniconf settings interface.
-            match c.resources.net_devices.lock(|net| net.settings.update()) {
+            let mut republish = false;
+            match c.resources.net_devices.lock(|net| {
+                net.settings.handled_update(|path, old, new| {
+                    let result = RuntimeSettings::handle_update(path, old, new);
+                    if result.is_err() {
+                        republish = true;
+                    }
+                    result
+                })
+            }) {
                 Ok(true) => c.spawn.update_settings().unwrap(),
                 Ok(false) => {}
                 other => log::warn!("Miniconf update failure: {:?}", other),
+            }
+
+            if republish {
+                c.resources
+                    .net_devices
+                    .lock(|net| net.settings.force_republish());
             }
 
             // Handle the MQTT control interface.
