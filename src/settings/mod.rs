@@ -7,6 +7,7 @@
 
 pub mod channel_settings;
 pub mod global_settings;
+pub mod runtime_settings;
 mod sinara;
 
 use sinara::{BoardId as SinaraBoardId, SinaraConfiguration};

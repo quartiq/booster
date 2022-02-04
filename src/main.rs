@@ -19,7 +19,6 @@ compile_error!("Cannot enable multiple ethernet PHY devices.");
 compile_error!("ENC424J600 is not currently implemented");
 
 use enum_iterator::IntoEnumIterator;
-use miniconf::Miniconf;
 use stm32f4xx_hal as hal;
 
 #[macro_use]
@@ -45,7 +44,7 @@ use hardware::{
     Channel, CPU_FREQ,
 };
 
-use settings::channel_settings::ChannelSettings;
+use settings::runtime_settings::RuntimeSettings;
 
 use watchdog::{WatchdogClient, WatchdogManager};
 
@@ -60,21 +59,6 @@ pub enum Error {
     Foldback,
     Bounds,
     Fault,
-}
-
-#[derive(Miniconf)]
-pub struct Settings {
-    pub channel: [Option<ChannelSettings>; 8],
-    fan_speed: f32,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            channel: [None; 8],
-            fan_speed: 0.2,
-        }
-    }
 }
 
 static LOGGER: BufferedLog = BufferedLog::new();
@@ -95,7 +79,7 @@ const APP: () = {
         // Configure booster hardware.
         let mut booster = hardware::setup::setup(c.core, c.device);
 
-        let mut settings = Settings::default();
+        let mut settings = RuntimeSettings::default();
 
         for idx in Channel::into_enum_iter() {
             settings.channel[idx as usize] = booster
@@ -293,10 +277,25 @@ const APP: () = {
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::Idle));
 
             // Handle the Miniconf settings interface.
-            match c.resources.net_devices.lock(|net| net.settings.update()) {
+            let mut republish = false;
+            match c.resources.net_devices.lock(|net| {
+                net.settings.handled_update(|path, old, new| {
+                    let result = RuntimeSettings::handle_update(path, old, new);
+                    if result.is_err() {
+                        republish = true;
+                    }
+                    result
+                })
+            }) {
                 Ok(true) => c.spawn.update_settings().unwrap(),
                 Ok(false) => {}
                 other => log::warn!("Miniconf update failure: {:?}", other),
+            }
+
+            if republish {
+                c.resources
+                    .net_devices
+                    .lock(|net| net.settings.force_republish());
             }
 
             // Handle the MQTT control interface.
