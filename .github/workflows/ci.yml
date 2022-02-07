@@ -43,10 +43,6 @@ jobs:
           - '1.56.0'
         features:
           - phy_w5500
-          - phy_enc424j600
-        include:
-          - toolchain: nightly
-            features: phy_w5500
     steps:
       - uses: actions/checkout@v2
 
@@ -59,6 +55,7 @@ jobs:
           components: llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v1
+        if: ${{ matrix.toolchain != 'nightly' }}
 
       - name: Install Binutils
         uses: actions-rs/cargo@v1
