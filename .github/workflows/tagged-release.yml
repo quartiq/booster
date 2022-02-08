@@ -28,22 +28,11 @@ jobs:
           command: install
           args: cargo-binutils
 
-      - name: Build Debug
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-
       - name: Build Release
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release
-
-      - name: Dump Debug Binary
-        uses: actions-rs/cargo@v1
-        with:
-          command: objcopy
-          args: -- -O binary booster-debug.bin
 
       - name: Dump Release Binary
         uses: actions-rs/cargo@v1
@@ -56,4 +45,4 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
           VERSION_TAG: ${GITHUB_REF##*/}
         run: |
-          hub release create --draft -a "target/thumbv7em-none-eabihf/debug/booster#booster-debug" -a "target/thumbv7em-none-eabihf/release/booster#booster-release" -a "booster-debug.bin" -a "booster-release.bin" -m "Release ${{env.VERSION_TAG}}" ${{env.VERSION_TAG}}
+          hub release create --draft -a "target/thumbv7em-none-eabihf/release/booster#booster-release" -a "booster-release.bin" -m "Release ${{env.VERSION_TAG}}" ${{env.VERSION_TAG}}
