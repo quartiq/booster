@@ -153,7 +153,7 @@ impl ControlClient {
                 minimq::Retain::NotRetained,
                 &[],
             )
-            .unwrap();
+            .ok();
     }
 
     /// Handle the MQTT-based control interface.
@@ -180,22 +180,27 @@ impl ControlClient {
                 Response::error_msg("Unexpected topic")
             };
 
-            if let Property::ResponseTopic(topic) = properties
+            let topic = properties
                 .iter()
-                .find(|&prop| matches!(*prop, Property::ResponseTopic(_)))
-                .or(Some(&Property::ResponseTopic(response_topic)))
-                .unwrap()
-            {
-                client
-                    .publish(
-                        topic,
-                        &response.into_bytes(),
-                        QoS::AtMostOnce,
-                        minimq::Retain::NotRetained,
-                        &[],
-                    )
-                    .unwrap();
-            }
+                .find_map(|&prop| {
+                    if let Property::ResponseTopic(topic) = prop {
+                        Some(topic)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(response_topic);
+
+            // Responses are transmitted in a best-effort manner.
+            client
+                .publish(
+                    topic,
+                    &response.into_bytes(),
+                    QoS::AtMostOnce,
+                    minimq::Retain::NotRetained,
+                    &[],
+                )
+                .ok();
         }) {
             Ok(_) => {}
 
