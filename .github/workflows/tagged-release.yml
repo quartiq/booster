@@ -3,8 +3,8 @@ name: tagged-release
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    #    tags:
+    #      - "v*"
 
 jobs:
   tagged-release:
@@ -56,4 +56,5 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
           VERSION_TAG: ${GITHUB_REF##*/}
         run: |
-          hub release create -a target/thumbv7em/debug/booster -a target/thumbv7em/release/booster -a booster-debug.bin -a booster-release.bin -m "Release ${{env.VERSION_TAG}}"
+          echo "${{env.VERSION_TAG}}"
+          #hub release create -a target/thumbv7em/debug/booster -a target/thumbv7em/release/booster -a booster-debug.bin -a booster-release.bin -m "Release ${{env.VERSION_TAG}}"
