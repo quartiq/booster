@@ -56,4 +56,4 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
           VERSION_TAG: ${GITHUB_REF##*/}
         run: |
-          hub release create --draft -a "target/thumbv7em/debug/booster" -a "target/thumbv7em/release/booster" -a "booster-debug.bin" -a "booster-release.bin" -m "Release ${{env.VERSION_TAG}}" ${{env.VERSION_TAG}
+          hub release create --draft -a "target/thumbv7em/debug/booster" -a "target/thumbv7em/release/booster" -a "booster-debug.bin" -a "booster-release.bin" -m "Release ${{env.VERSION_TAG}}" ${{env.VERSION_TAG}}
