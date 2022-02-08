@@ -186,7 +186,7 @@ Bootloader USB interface.
 1. Generate the binary file for your firmware build: `cargo objcopy -- -O binary booster.bin`
     - Note: If you built with `--release`, use the commmand: `cargo objcopy --release -- -O binary booster.bin`
 
-1. Reset Booster into DFU mode:
+1. Reset Booster into DFU mode. This can be done via the USB serial port or by doing the following:
     - Insert a pin into the DFU Bootloader hole to press the DFU button
     - While the DFU button is pressed, power cycle booster by turning off the power switch for at
     least 10 seconds and then turn the power switch on.
