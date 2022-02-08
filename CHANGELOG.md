@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 * Code reorganized to move hardware configuration into a module
-* Added runtime settings control via Miniconf, removed "Properties" API
+* Added runtime settings control via Miniconf, removed "Properties" API. This has changed the MQTT topic layout and API.
 * Telemetry period is now configurable between 0.5 and 13 seconds
 * Fans now operate at a constant, configurable duty cycle whenever an RF channel is enabled
 * Device now uses a proper USB VID/PID pair

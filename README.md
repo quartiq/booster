@@ -102,8 +102,8 @@ The USB port allows for configuration of:
 
 Additionally, the USB port allows the user to:
 * Read the MAC address
-* Reset the device
-* Enter DFU mode for upgrading firmware
+* Reboot the device
+* Enter DFU mode remotely for upgrading firmware over USB
 
 ## Booster Units
 
@@ -135,7 +135,7 @@ Booster supports RF channel bias tuning and saving active channel settings confi
 via the `booster.py` python script located in the root of the repository. Refer to `python
 booster.py --help` for information on usage.
 
-When settings are saved in booster, the current channel configuration will be the default state of
+When settings are saved in booster, the saved channel configuration will be applied to
 the channel when Booster boots. Note that saving channel settings overwrites any existing channel
 configuration and calibrations including those from the old legacy firmware. The legacy firmware
 settings are incompatible.
