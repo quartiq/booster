@@ -332,6 +332,18 @@ pub fn setup(
     };
 
     let mut fans = {
+        let main_board_leds = {
+            let mut led1 = gpioc.pc8.into_push_pull_output();
+            let mut led2 = gpioc.pc9.into_push_pull_output();
+            let mut led3 = gpioc.pc10.into_push_pull_output();
+
+            led1.set_low().unwrap();
+            led2.set_low().unwrap();
+            led3.set_low().unwrap();
+
+            (led1, led2, led3)
+        };
+
         let fan1 =
             max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pulldown)
                 .unwrap();
@@ -341,7 +353,7 @@ pub fn setup(
             max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pullup)
                 .unwrap();
 
-        ChassisFans::new([fan1, fan2, fan3])
+        ChassisFans::new([fan1, fan2, fan3], main_board_leds)
     };
 
     assert!(fans.self_test(&mut delay));
