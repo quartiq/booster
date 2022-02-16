@@ -4,7 +4,8 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use super::{I2cError, I2cProxy};
+use super::{I2cError, I2cProxy, MainboardLeds};
+use embedded_hal::digital::v2::OutputPin;
 use max6639::Max6639;
 
 /// The default fan speed on power-up.
@@ -14,6 +15,7 @@ pub const DEFAULT_FAN_SPEED: f32 = 0.2;
 pub struct ChassisFans {
     fans: [Max6639<I2cProxy>; 3],
     duty_cycle: f32,
+    leds: MainboardLeds,
 }
 
 impl ChassisFans {
@@ -25,10 +27,11 @@ impl ChassisFans {
     ///
     /// # Returns
     /// A new fan controller.
-    pub fn new(fans: [Max6639<I2cProxy>; 3]) -> Self {
+    pub fn new(fans: [Max6639<I2cProxy>; 3], leds: MainboardLeds) -> Self {
         ChassisFans {
             fans,
             duty_cycle: DEFAULT_FAN_SPEED,
+            leds,
         }
     }
 
@@ -58,14 +61,24 @@ impl ChassisFans {
         // Bound the duty cycle to a normalized range.
         let duty_cycle = duty_cycle.clamp(0.0, 1.0);
 
+        let leds = &mut self.leds;
+
         // Keep retrying until the configuration succeeds or the maximum number of retry
         // attempts is exhausted.
-        let retry_set = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| {
+        let mut retry_set = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| {
             for _ in 0..2 {
                 match fan.set_duty_cycle(subfan, duty_cycle) {
-                    Err(max6639::Error::Interface(I2cError::NACK)) => {}
+                    Err(max6639::Error::Interface(I2cError::NACK)) => {
+                        leds.0.set_high().unwrap();
+                        leds.1.set_high().unwrap();
+                        leds.2.set_high().unwrap();
+                    }
                     Err(e) => Err(e).unwrap(),
-                    Ok(_) => break,
+                    Ok(_) => {
+                        leds.0.set_low().unwrap();
+                        leds.1.set_low().unwrap();
+                        leds.2.set_low().unwrap();
+                    }
                 }
             }
         };

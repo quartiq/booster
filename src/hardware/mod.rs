@@ -50,6 +50,11 @@ pub type Spi = hal::spi::Spi<
     ),
 >;
 
+pub type Led1 = hal::gpio::gpioc::PC8<hal::gpio::Output<hal::gpio::PushPull>>;
+pub type Led2 = hal::gpio::gpioc::PC9<hal::gpio::Output<hal::gpio::PushPull>>;
+pub type Led3 = hal::gpio::gpioc::PC10<hal::gpio::Output<hal::gpio::PushPull>>;
+pub type MainboardLeds = (Led1, Led2, Led3);
+
 #[cfg(feature = "phy_enc424j600")]
 pub type NetworkStack = smoltcp_nal::NetworkStack<
     'static,
