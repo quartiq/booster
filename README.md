@@ -81,10 +81,10 @@ ethernet traffic detected.
 ## USB Port
 
 The USB port on booster enumerates as a serial port and can be opened with any terminal emulation
-program (e.g. Pyserial's miniterm, TeraTerm, picoterm, putty, or your desired serial port reader). The USB
-port serves two purposes:
-* Logs are generated out the USB port
-* Basic network and MQTT configuration can be completed
+program (e.g. Pyserial's miniterm, TeraTerm, picoterm, putty, or your desired serial port reader).
+The USB port serves two purposes:
+* Human-readable logging
+* Basic network and MQTT configuration
 
 No control of the RF channels is exposed over the USB serial port. Channels may only be controlled
 over MQTT or through the front-panel buttons.
@@ -101,9 +101,9 @@ The USB port allows for configuration of:
 * The IP address of booster
 
 Additionally, the USB port allows the user to:
-* Read the MAC address of Booster
-* Reset booster
-* Enter DFU mode for upgrading firmware (only available with the `unstable` feature and the `nightly` rust toolchain)
+* Read the MAC address
+* Reboot the device
+* Enter DFU mode remotely for upgrading firmware over USB
 
 ## Booster Units
 
@@ -111,52 +111,37 @@ Booster uses SI units (Volt, Ampere, Celsius) for telemetry messages and propert
 
 ## Ethernet Telemetry and Control
 
+Refer to [Appendix: Ethernet Configuration](#appendix-ethernet-configuration) for information on
+configuring Booster's ethernet interface.
+
+Please refer to [Stabilizer's documentation](https://quartiq.de/stabilizer/setup.html#mqtt-broker)
+for instructions on getting MQTT configured.
+
 Booster uses MQTT for telemetry and control of RF channels. All booster MQTT topics are prefixed
-with the booster ID, which defaults to a combination of `booster` and the MAC address of the device.
-Telemetry is generated on the `<ID>/ch<N>` topics, where N is an integer from 0 to 7. Telemetry is
-only reported for connected channels and is nominally transmitted at a rate of 2Hz. Telemetry is
+with `dt/sinara/booster/<ID>`, where <ID> is the MAC address of the device (e.g.
+`12-34-56-78-90-ab`). Telemetry is generated on the `<prefix>/telemetry/ch<N>` topics, where
+N is an integer from 0 to 7. Telemetry is only reported for connected channels. Telemetry is
 transmitted in human-readable JSON format for logging purposes.
 
-Booster also supports a control interface over MQTT using the following topics:
-* `<ID>/channel/state` - Used to configure the power state of an RF channel
-* `<ID>/channel/bias` - Used to set the gate bias voltage of an RF channel
-* `<ID>/channel/read` - Used to read Booster properties, such as the interlock thresholds or the
-  power transforms
-* `<ID>/channel/write` - Used to write Booster properties, such as the interlock thresholds or the
-  power transforms
+We recommend using [`mqtt-explorer`](http://mqtt-explorer.com/) to view telemetry and run-time
+settings.
 
-When a valid message is received on any of these channels, Booster will process the message and
-respond to the `ResponseTopic` property provided with the MQTT message. If no `ResponseTopic`
-property is provided, Booster will respond by default to `<ID>/log`.
+Booster leverages [`miniconf`](https://crates.io/crates/miniconf) to manage run-time settings and
+configuration identical to Stabilizer. Please refer to [Stabilizer's Miniconf
+Documentation](https://quartiq.de/stabilizer/usage.html#miniconf-run-time-settings) to get
+started.
 
-For a reference implementation of the API to control booster over MQTT, refer to `booster.py`
+Booster supports RF channel bias tuning and saving active channel settings configuration to EEPROM
+via the `booster.py` python script located in the root of the repository. Refer to `python
+booster.py --help` for information on usage.
 
-**Note**: When using mosquitto, the channel telemetry can be read using:
-```
-mosquitto_sub -h mqtt -v -t <ID>/ch<N>
-```
-Note in the above that <N> is an integer between 0 and 7 (inclusive). <ID> is as specified above.
-
-### Booster Properties
-
-Throughout the code, any reference to a "Property" refers to a value that is configurable by the
-user. Telemetry outputs, such as temperature or power measurements, are not considered to be
-properties of Booster.
-
-### Special Note on Booster properties
-
-When reading or writing Booster properties of `<ID>/channel/read` or `<ID>/channel/write`, the
-serialized property is encoded in JSON format, but all double quotes (") are replaced with a single
-quote (').
+When settings are saved in booster, the saved channel configuration will be applied to
+the channel when Booster boots. Note that saving channel settings overwrites any existing channel
+configuration and calibrations including those from the old legacy firmware. The legacy firmware
+settings are incompatible.
 
 
-## Configuring MQTT
-
-Booster utilizes MQTT for much of the configuration, control, and telemetry functionality. In order
-to use MQTT, a broker must be run on a central machine for Booster to connect to. The broker must accept connections without authentication and must support MQTT version 5.
-
-The recommended MQTT broker to work with booster is the Mosquitto broker. This can be installed in
-Ubuntu by running: `sudo apt-get install mosquitto`. Note that `mosquitto` in Debian stable/buster does not yet support MQTT version 5.
+### Appendix: Ethernet Configuration
 
 Because Booster currently works with static IP addresses, it is recommended to operate Booster on a
 closed, internal network. As such, it is likely that you may need to configure IP routing on the
@@ -180,27 +165,6 @@ bind_interface <ETHERNET_INTERFACE>
 Mosquitto would then be started by calling `moqsuitto -c mosquitto.conf` to run mosquitto on the
 provided ethernet interface.
 
-## Configuring Booster
-
-Once an MQTT broker is connected and communicating with Booster, the `booster.py` Python script can
-be used to configure Booster RF channels.
-
-To use `booster.py`, first install the prerequisites:
-```
-python -m pip install gmqtt
-```
-
-`booster.py` contains built-in help information on usage:
-```
-python booster.py --help
-```
-
-When settings are saved in booster, the current channel configuration will be the default state of
-the channel when Booster boots. Note that saving channel settings overwrites any existing channel
-configuration and calibrations including those from the old legacy firmware. The legacy firmware
-settings are incompatible.
-
-
 # DFU Instructions
 
 **Prerequisites**
@@ -222,7 +186,7 @@ Bootloader USB interface.
 1. Generate the binary file for your firmware build: `cargo objcopy -- -O binary booster.bin`
     - Note: If you built with `--release`, use the commmand: `cargo objcopy --release -- -O binary booster.bin`
 
-1. Reset Booster into DFU mode:
+1. Reset Booster into DFU mode. This can be done via the USB serial port or by doing the following:
     - Insert a pin into the DFU Bootloader hole to press the DFU button
     - While the DFU button is pressed, power cycle booster by turning off the power switch for at
     least 10 seconds and then turn the power switch on.
