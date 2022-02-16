@@ -83,7 +83,9 @@ jobs:
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v2
-        if: ${{ matrix.toolchain == 'stable' }}
+        if: ${{ matrix.toolchain == 'stable'
+          && (github.ref == 'refs/heads/master'
+          || github.ref == 'refs/heads/develop') }}
         with:
           name: Firmware Images (features=${{ matrix.features }})
           path: |
