@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 * Output interlock threshold is now limited to a maximum of 47 dBm
 
-[Unreleased]: https://github.com/quartiq/stabilizer/compare/v0.3.0...HEAD
-[v0.3.0]: https://github.com/quartiq/stabilizer/compare/v0.2.0...v0.3.0
-[v0.2.0]: https://github.com/quartiq/stabilizer/compare/v0.1.0...v0.2.0
-[v0.1.0]: https://github.com/quartiq/stabilizer/compare/v0.0.1...v0.1.0
+[Unreleased]: https://github.com/quartiq/booster/compare/v0.3.0...HEAD
+[v0.3.0]: https://github.com/quartiq/booster/compare/v0.2.0...v0.3.0
+[v0.2.0]: https://github.com/quartiq/booster/compare/v0.1.0...v0.2.0
+[v0.1.0]: https://github.com/quartiq/booster/compare/v0.0.1...v0.1.0
