@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+## [0.3.0]
+
 ### Fixed
 * Fixed an issue with spurious resets by ignoring bus error detections on I2C (Refer to [issue
   #128](https://github.com/quartiq/booster/issues/128) for more information.
@@ -27,3 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 * Output interlock threshold is now limited to a maximum of 47 dBm
+
+[Unreleased]: https://github.com/quartiq/stabilizer/compare/v0.3.0...HEAD
+[v0.3.0]: https://github.com/quartiq/stabilizer/compare/v0.2.0...v0.3.0
+[v0.2.0]: https://github.com/quartiq/stabilizer/compare/v0.1.0...v0.2.0
+[v0.1.0]: https://github.com/quartiq/stabilizer/compare/v0.0.1...v0.1.0
