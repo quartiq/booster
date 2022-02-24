@@ -48,6 +48,9 @@ rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
 features = [ "smoltcp-phy", "cortex-m-cpu" ]
 optional = true
 
+[dependencies.minireq]
+git = "https://github.com/quartiq/minireq"
+
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf"
 rev = "140b6f3"

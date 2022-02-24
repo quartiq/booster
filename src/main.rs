@@ -165,7 +165,7 @@ const APP: () = {
 
     #[task(priority = 1, schedule = [telemetry], resources=[main_bus, net_devices])]
     fn telemetry(mut c: telemetry::Context) {
-        let control = &mut c.resources.net_devices.control;
+        let telemetry = &mut c.resources.net_devices.telemetry;
 
         // Gather telemetry for all of the channels.
         // And broadcast the measured data over the telemetry interface.
@@ -174,12 +174,12 @@ const APP: () = {
                 main_bus
                     .channels
                     .channel_mut(idx)
-                    .map(|(ch, adc)| control.report_telemetry(idx, &ch.get_status(adc)))
+                    .map(|(ch, adc)| telemetry.report_telemetry(idx, &ch.get_status(adc)))
             });
         }
 
         c.schedule
-            .telemetry(c.scheduled + Duration::from_cycles(control.telemetry_period_cycles()))
+            .telemetry(c.scheduled + Duration::from_cycles(telemetry.telemetry_period_cycles()))
             .unwrap();
     }
 
@@ -241,7 +241,7 @@ const APP: () = {
         // Update the telemetry rate.
         c.resources
             .net_devices
-            .control
+            .telemetry
             .set_telemetry_period(all_settings.telemetry_period);
     }
 
@@ -298,7 +298,11 @@ const APP: () = {
             let main_bus = &mut c.resources.main_bus;
             c.resources
                 .net_devices
-                .lock(|net| net.control.update(main_bus));
+                .lock(|net| {
+                    net.control
+                        .poll(|handler, topic, data| main_bus.lock(|bus| handler(bus, topic, data)))
+                })
+                .unwrap();
 
             // Handle the network stack processing if needed.
             c.resources.net_devices.lock(|net| net.process());
