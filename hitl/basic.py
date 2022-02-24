@@ -16,7 +16,7 @@ from gmqtt import Client as MqttClient
 from booster import BoosterApi
 
 # The default bias current to tune to.
-DEFAULT_BIAS_CURRENT = 0.005
+DEFAULT_BIAS_CURRENT = 0.05
 
 
 class TelemetryReader:
@@ -30,12 +30,12 @@ class TelemetryReader:
         return cls(client, f'{prefix}/telemetry/ch{channel}', queue)
 
 
-    def __init__(self, client, prefix, queue):
+    def __init__(self, client, topic, queue):
         """ Constructor. """
         self.client = client
         self._telemetry = []
         self.client.on_message = self.handle_telemetry
-        self._telemetry_topic = f'{prefix}/telemetry'
+        self._telemetry_topic = topic
         self.client.subscribe(self._telemetry_topic)
         self.queue = queue
 
@@ -94,13 +94,15 @@ async def test_channel(booster, channel, prefix, broker):
     telemetry_queue = asyncio.LifoQueue()
     telemetry_task = asyncio.create_task(telemetry(prefix, broker, channel, telemetry_queue))
 
-    # Tune the bias current on the channel
-    # TODO: Check that ids is close to the requested bias current.
-    async with channel_on(booster, channel, 'Powered'):
-        vgs, ids = await booster.tune_bias(channel, DEFAULT_BIAS_CURRENT)
-        logging.info('Channel %d bias tuning: Vgs = %f, Ids = %f', channel, vgs, ids)
+    # TODO Tune the bias current on the channel
+    # Note: The bias tuning algorithm needs some help and doesn't seem robust.
+
+    #async with channel_on(booster, channel, 'Powered'):
+    #    vgs, ids = await booster.tune_bias(channel, DEFAULT_BIAS_CURRENT)
+    #    logging.info('Channel %d bias tuning: Vgs = %f, Ids = %f', channel, vgs, ids)
 
     # Disable the channel.
+    logging.info('Disabling channel %d', channel)
     await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
 
     # Check that telemetry indicates channel is powered off.
@@ -120,7 +122,7 @@ async def test_channel(booster, channel, prefix, broker):
 
         # Lower the interlock threshold so it trips.
         await booster.settings_interface.command(f'channel/{channel}/output_interlock_threshold',
-                                                 -10, retain=False)
+                                                 -5, retain=False)
 
         # Verify the channel is now tripped.
         await asyncio.sleep(2)

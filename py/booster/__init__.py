@@ -131,7 +131,7 @@ class BoosterApi:
             await self.settings_interface.command(f'channel/{channel}/bias_voltage',
                                                   voltage, retain=False)
             # Sleep 100 ms for bias current to settle and for ADC to take current measurement.
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)
             response = await self.perform_action(Action.ReadBiasCurrent, channel)
             response = json.loads(response['msg'])
             vgs, ids = response['vgs'], response['ids']
@@ -162,7 +162,7 @@ class BoosterApi:
         # scan downwards in steps of 1 mV to just below target
         while True:
             voltage -= .001
-            if not vgs_max - .03 <= voltage <= vgs_max:
+            if not vgs_max - .05 <= voltage <= vgs_max:
                 raise ValueError(f'Voltage out of bounds')
             vgs, ids = await set_bias(voltage)
             if ids > ids_max:
