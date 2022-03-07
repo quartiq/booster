@@ -6,10 +6,12 @@
 # Enable shell operating mode flags.
 set -eux
 
-# Stabilizer device prefix for HITL
-PREFIX=dt/sinara/booster/+
+# Booster IP and broker addresses as programmed into the DUT via the USB interface.
 BOOSTER_IP=10.35.20.200
 BROKER=10.35.20.1
+
+# When only one booster is connected, we can use the discovery prefix for all activities.
+PREFIX=dt/sinara/booster/+
 
 # Set up python for testing
 python3 -m venv --system-site-packages vpy

@@ -73,10 +73,12 @@ async def channel_on(booster, channel, initial_state='Enabled'):
         initial_state: The state to configure the channel into.
     """
     try:
+        logging.info('Commanding channel %d into %s', channel, initial_state)
         await booster.settings_interface.command(f'channel/{channel}/state', initial_state,
                                                  retain=False)
         yield
     finally:
+        logging.info('Commanding channel %d off', channel)
         await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
 
 
@@ -89,13 +91,15 @@ async def test_channel(booster, channel, prefix, broker):
         prefix: Booster's miniconf prefix.
         broker: The broker IP address.
     """
+    logging.info('Conducting self-test on channel %d', channel)
 
     # Start receiving telemetry for the channel under test.
     telemetry_queue = asyncio.LifoQueue()
     telemetry_task = asyncio.create_task(telemetry(prefix, broker, channel, telemetry_queue))
 
     # TODO Tune the bias current on the channel
-    # Note: The bias tuning algorithm needs some help and doesn't seem robust.
+    # Note: The bias tuning algorithm needs some help and doesn't seem robust. Temporarily disabling
+    # this test for now.
 
     #async with channel_on(booster, channel, 'Powered'):
     #    vgs, ids = await booster.tune_bias(channel, DEFAULT_BIAS_CURRENT)
@@ -111,6 +115,7 @@ async def test_channel(booster, channel, prefix, broker):
     assert tlm['state'] == 'Off', 'Channel did not power off'
 
     # Set the interlock threshold so that it won't trip.
+    logging.info('Setting output interlock threshold to 30 dB')
     await booster.settings_interface.command(f'channel/{channel}/output_interlock_threshold', 30,
                                              retain=False)
 
@@ -121,6 +126,7 @@ async def test_channel(booster, channel, prefix, broker):
         assert tlm['state'] == 'Enabled', 'Channel did not enable'
 
         # Lower the interlock threshold so it trips.
+        logging.info('Setting output interlock threshold to -5 dB, verifying interlock trips')
         await booster.settings_interface.command(f'channel/{channel}/output_interlock_threshold',
                                                  -5, retain=False)
 
