@@ -6,10 +6,6 @@
 # Enable shell operating mode flags.
 set -eux
 
-# Booster IP and broker addresses as programmed into the DUT via the USB interface.
-BOOSTER_IP=10.35.20.200
-BROKER=10.35.20.1
-
 # When only one booster is connected, we can use the discovery prefix for all activities.
 PREFIX=dt/sinara/booster/+
 
@@ -20,18 +16,18 @@ python3 -m venv --system-site-packages vpy
 # Install Miniconf utilities for configuring stabilizer.
 python3 -m pip install -e py
 
-cargo embed --release
+#cargo embed --release
 
 # Sleep to allow flashing, booting, DHCP, MQTT
-sleep 30
+#sleep 30
 
 # Test pinging Booster. This exercises that:
 # * Booster's network is functioning as intended
 # * The Booster application is operational
-ping -c 5 -w 20 $BOOSTER_IP
+ping -c 5 -w 20 booster-hitl
 
 # Test the MQTT interface.
-python3 -m miniconf --broker $BROKER --discover $PREFIX telemetry_period=5
+python3 -m miniconf --discover $PREFIX telemetry_period=5
 
 # Test basic operation
-python3 hitl/basic.py -b $BROKER
+python3 hitl/basic.py

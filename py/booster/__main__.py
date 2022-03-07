@@ -54,7 +54,7 @@ def main():
     parser.add_argument('--prefix', type=str, help='The prefix of the booster to configure')
     parser.add_argument('--channel', required=True, type=int, choices=range(8),
                         help='The RF channel index to control')
-    parser.add_argument('--broker', default='10.0.0.2', type=str, help='The MQTT broker address')
+    parser.add_argument('--broker', default='mqtt', type=str, help='The MQTT broker address')
 
     command_help = 'Individual commands. Options:\n'
     for cmd, info in CMDS.items():

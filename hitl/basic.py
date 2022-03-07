@@ -22,44 +22,41 @@ class TelemetryReader:
     """ Helper utility to read Stabilizer telemetry. """
 
     @classmethod
-    async def create(cls, prefix, broker, channel, queue):
+    async def create(cls, prefix, broker, channel):
         """Create a connection to the broker and an MQTT device using it."""
         client = MqttClient(client_id='')
         await client.connect(broker)
-        return cls(client, f'{prefix}/telemetry/ch{channel}', queue)
+        return cls(client, f'{prefix}/telemetry/ch{channel}')
 
 
-    def __init__(self, client, topic, queue):
+    def __init__(self, client, topic):
         """ Constructor. """
         self.client = client
-        self._telemetry = []
+        self._last_telemetry = None
         self.client.on_message = self.handle_telemetry
         self._telemetry_topic = topic
         self.client.subscribe(self._telemetry_topic)
-        self.queue = queue
 
 
     def handle_telemetry(self, _client, topic, payload, _qos, _properties):
         """ Handle incoming telemetry messages over MQTT. """
         assert topic == self._telemetry_topic
-        self.queue.put_nowait(json.loads(payload))
+        self._last_telemetry = json.loads(payload)
+
+    async def take_latest(self):
+        """ Get the latest telemetry from the device. """
+        while self._last_telemetry is None:
+            await asyncio.sleep(0.1)
+
+        telemetry = self._last_telemetry
+        self._last_telemetry = None
+        return telemetry
 
 
-async def telemetry(prefix, broker, channel, queue):
-    """ Receive telemetry on a topic and push it into the provided queue.
-
-    Args
-        prefix: The prefix of Booster.
-        broker: The broker IP address.
-        channel: The channel to receive telemetry from.
-        queue: The location to put telemetry into.
-    """
-    await TelemetryReader.create(prefix, broker, channel, queue)
-    try:
-        while True:
-            await asyncio.sleep(1)
-    except asyncio.CancelledError:
-        pass
+    async def take_next(self):
+        """ Get the next occurring telemetry packet, discarding any cached value. """
+        self._last_telemetry = None
+        return await self.take_latest()
 
 
 @contextlib.asynccontextmanager
@@ -93,8 +90,7 @@ async def test_channel(booster, channel, prefix, broker):
     print(f'-> Conducting self-test on channel {channel}')
 
     # Start receiving telemetry for the channel under test.
-    telemetry_queue = asyncio.LifoQueue()
-    telemetry_task = asyncio.create_task(telemetry(prefix, broker, channel, telemetry_queue))
+    telemetry = await TelemetryReader.create(prefix, broker, channel)
 
     # TODO Tune the bias current on the channel
     # Note: The bias tuning algorithm needs some help and doesn't seem robust. Temporarily disabling
@@ -108,8 +104,7 @@ async def test_channel(booster, channel, prefix, broker):
     await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
 
     # Check that telemetry indicates channel is powered off.
-    await asyncio.sleep(2)
-    tlm = await telemetry_queue.get()
+    tlm = await telemetry.take_next()
     assert tlm['state'] == 'Off', 'Channel did not power off'
 
     # Set the interlock threshold so that it won't trip.
@@ -119,8 +114,7 @@ async def test_channel(booster, channel, prefix, broker):
 
     # Enable the channel, verify telemetry indicates it is now enabled.
     async with channel_on(booster, channel):
-        await asyncio.sleep(2)
-        tlm = await telemetry_queue.get()
+        tlm = await telemetry.take_next()
         assert tlm['state'] == 'Enabled', 'Channel did not enable'
 
         # Lower the interlock threshold so it trips.
@@ -129,11 +123,8 @@ async def test_channel(booster, channel, prefix, broker):
                                                  -5, retain=False)
 
         # Verify the channel is now tripped.
-        await asyncio.sleep(2)
-        tlm = await telemetry_queue.get()
+        tlm = await telemetry.take_next()
         assert tlm['state'] == 'Tripped(Output)', 'Channel did not trip'
-
-    telemetry_task.cancel()
 
     print(f'Channel {channel}: PASS')
     print('')
