@@ -7,7 +7,6 @@ Description: Basic functional testing of Booster hardware
 import argparse
 import asyncio
 import contextlib
-import logging
 import json
 import sys
 
@@ -73,12 +72,12 @@ async def channel_on(booster, channel, initial_state='Enabled'):
         initial_state: The state to configure the channel into.
     """
     try:
-        logging.info('Commanding channel %d into %s', channel, initial_state)
+        print(f'Commanding channel {channel} into {initial_state}')
         await booster.settings_interface.command(f'channel/{channel}/state', initial_state,
                                                  retain=False)
         yield
     finally:
-        logging.info('Commanding channel %d off', channel)
+        print(f'Commanding channel {channel} off')
         await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
 
 
@@ -91,7 +90,7 @@ async def test_channel(booster, channel, prefix, broker):
         prefix: Booster's miniconf prefix.
         broker: The broker IP address.
     """
-    logging.info('Conducting self-test on channel %d', channel)
+    print(f'-> Conducting self-test on channel {channel}')
 
     # Start receiving telemetry for the channel under test.
     telemetry_queue = asyncio.LifoQueue()
@@ -103,10 +102,9 @@ async def test_channel(booster, channel, prefix, broker):
 
     #async with channel_on(booster, channel, 'Powered'):
     #    vgs, ids = await booster.tune_bias(channel, DEFAULT_BIAS_CURRENT)
-    #    logging.info('Channel %d bias tuning: Vgs = %f, Ids = %f', channel, vgs, ids)
+    #    print(f'Channel {channel} bias tuning: Vgs = {vgs}, Ids = {ids}')
 
     # Disable the channel.
-    logging.info('Disabling channel %d', channel)
     await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
 
     # Check that telemetry indicates channel is powered off.
@@ -115,7 +113,7 @@ async def test_channel(booster, channel, prefix, broker):
     assert tlm['state'] == 'Off', 'Channel did not power off'
 
     # Set the interlock threshold so that it won't trip.
-    logging.info('Setting output interlock threshold to 30 dB')
+    print('Setting output interlock threshold to 30 dB')
     await booster.settings_interface.command(f'channel/{channel}/output_interlock_threshold', 30,
                                              retain=False)
 
@@ -126,7 +124,7 @@ async def test_channel(booster, channel, prefix, broker):
         assert tlm['state'] == 'Enabled', 'Channel did not enable'
 
         # Lower the interlock threshold so it trips.
-        logging.info('Setting output interlock threshold to -5 dB, verifying interlock trips')
+        print('Setting output interlock threshold to -5 dB, verifying interlock trips')
         await booster.settings_interface.command(f'channel/{channel}/output_interlock_threshold',
                                                  -5, retain=False)
 
@@ -136,6 +134,9 @@ async def test_channel(booster, channel, prefix, broker):
         assert tlm['state'] == 'Tripped(Output)', 'Channel did not trip'
 
     telemetry_task.cancel()
+
+    print(f'Channel {channel}: PASS')
+    print('')
 
 
 def main():
