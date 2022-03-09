@@ -7,56 +7,34 @@ Description: Basic functional testing of Booster hardware
 import argparse
 import asyncio
 import contextlib
-import json
 import sys
+import time
 
-from gmqtt import Client as MqttClient
-
-from booster import BoosterApi
+from booster import BoosterApi, TelemetryReader
 
 # The default bias current to tune to.
 DEFAULT_BIAS_CURRENT = 0.05
 
 
-class TelemetryReader:
-    """ Helper utility to read Stabilizer telemetry. """
+async def get_next_telemetry_message(reader):
+    """ Get the next (future) inbound telemetry message.
 
-    @classmethod
-    async def create(cls, prefix, broker, channel):
-        """Create a connection to the broker and an MQTT device using it."""
-        client = MqttClient(client_id='')
-        await client.connect(broker)
-        return cls(client, f'{prefix}/telemetry/ch{channel}')
+    Args:
+        reader: The telemetry receiver.
 
+    Returns:
+        A telemetry message received after this function is called.
+    """
+    start = time.time()
 
-    def __init__(self, client, topic):
-        """ Constructor. """
-        self.client = client
-        self._last_telemetry = None
-        self.client.on_message = self.handle_telemetry
-        self._telemetry_topic = topic
-        self.client.subscribe(self._telemetry_topic)
+    tlm, tlm_timestamp = reader.get_latest_telemetry()
 
+    # Wait until new telemetry is received.
+    while tlm_timestamp < start:
+        await asyncio.sleep(0.1)
+        tlm, tlm_timestamp = reader.get_latest_telemetry()
 
-    def handle_telemetry(self, _client, topic, payload, _qos, _properties):
-        """ Handle incoming telemetry messages over MQTT. """
-        assert topic == self._telemetry_topic
-        self._last_telemetry = json.loads(payload)
-
-    async def take_latest(self):
-        """ Get the latest telemetry from the device. """
-        while self._last_telemetry is None:
-            await asyncio.sleep(0.1)
-
-        telemetry = self._last_telemetry
-        self._last_telemetry = None
-        return telemetry
-
-
-    async def take_next(self):
-        """ Get the next occurring telemetry packet, discarding any cached value. """
-        self._last_telemetry = None
-        return await self.take_latest()
+    return tlm
 
 
 @contextlib.asynccontextmanager
@@ -104,7 +82,7 @@ async def test_channel(booster, channel, prefix, broker):
     await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
 
     # Check that telemetry indicates channel is powered off.
-    tlm = await telemetry.take_next()
+    tlm = await get_next_telemetry_message(telemetry)
     assert tlm['state'] == 'Off', 'Channel did not power off'
 
     # Set the interlock threshold so that it won't trip.
@@ -114,7 +92,7 @@ async def test_channel(booster, channel, prefix, broker):
 
     # Enable the channel, verify telemetry indicates it is now enabled.
     async with channel_on(booster, channel):
-        tlm = await telemetry.take_next()
+        tlm = await get_next_telemetry_message(telemetry)
         assert tlm['state'] == 'Enabled', 'Channel did not enable'
 
         # Lower the interlock threshold so it trips.
@@ -123,7 +101,7 @@ async def test_channel(booster, channel, prefix, broker):
                                                  -5, retain=False)
 
         # Verify the channel is now tripped.
-        tlm = await telemetry.take_next()
+        tlm = await get_next_telemetry_message(telemetry)
         assert tlm['state'] == 'Tripped(Output)', 'Channel did not trip'
 
     print(f'Channel {channel}: PASS')

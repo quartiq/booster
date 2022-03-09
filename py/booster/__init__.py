@@ -5,6 +5,7 @@ Author: Vertigo Designs, Ryan Summers
 Description: Provides an API for controlling Booster NGFW over MQTT.
 """
 import asyncio
+import time
 import json
 import enum
 
@@ -29,6 +30,39 @@ class Action(enum.Enum):
     Save = 'Save'
 
 
+class TelemetryReader:
+    """ Helper utility to read telemetry. """
+
+    @classmethod
+    async def create(cls, prefix, broker, channel):
+        """Create a connection to the broker and an MQTT device using it."""
+        client = MqttClient(client_id='')
+        await client.connect(broker)
+        return cls(client, f'{prefix}/telemetry/ch{channel}')
+
+
+    def __init__(self, client, topic):
+        """ Constructor. """
+        self.client = client
+        self._last_telemetry = None
+        self._last_telemetry_timestamp = None
+        self.client.on_message = self._handle_telemetry
+        self._telemetry_topic = topic
+        self.client.subscribe(self._telemetry_topic)
+
+
+    def _handle_telemetry(self, _client, topic, payload, _qos, _properties):
+        """ Handle incoming telemetry messages over MQTT. """
+        assert topic == self._telemetry_topic
+        self._last_telemetry = json.loads(payload)
+        self._last_telemetry_timestamp = time.time()
+
+
+    def get_latest_telemetry(self):
+        """ Get the latest telemetry and the time at which it arrived. """
+        return self._last_telemetry_timestamp, self._last_telemetry
+
+
 class BoosterApi:
     """ An asynchronous API for controlling booster using the MQTT control interface. """
 
@@ -42,7 +76,8 @@ class BoosterApi:
             if not devices:
                 raise Exception('No Boosters found')
 
-            assert len(devices) == 1, 'Multiple Boosters found: {devices}. Please specify one with --prefix'
+            assert len(devices) == 1, \
+                    'Multiple Boosters found: {devices}. Please specify one with --prefix'
 
             prefix = devices[0]
 
