@@ -87,7 +87,7 @@ class BoosterApi:
                 raise Exception('No Boosters found')
 
             assert len(devices) == 1, \
-                    'Multiple Boosters found: {devices}. Please specify one with --prefix'
+                    f'Multiple Boosters found: {devices}. Please specify one with --prefix'
 
             prefix = devices[0]
 
