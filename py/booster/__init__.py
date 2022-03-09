@@ -44,6 +44,7 @@ class TelemetryReader:
     def __init__(self, client, topic):
         """ Constructor. """
         self.client = client
+        self._telemetry_event = None
         self._last_telemetry = None
         self._last_telemetry_timestamp = None
         self.client.on_message = self._handle_telemetry
@@ -56,11 +57,20 @@ class TelemetryReader:
         assert topic == self._telemetry_topic
         self._last_telemetry = json.loads(payload)
         self._last_telemetry_timestamp = time.time()
+        if self._telemetry_event:
+            self._telemetry_event.set()
 
 
     def get_latest_telemetry(self):
         """ Get the latest telemetry and the time at which it arrived. """
         return self._last_telemetry_timestamp, self._last_telemetry
+
+
+    async def get_next_telemetry(self):
+        """ Get the next telemetry message that arrives. """
+        self._telemetry_event = asyncio.Event()
+        await self._telemetry_event.wait()
+        return self.get_latest_telemetry()
 
 
 class BoosterApi:

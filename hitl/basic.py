@@ -8,33 +8,11 @@ import argparse
 import asyncio
 import contextlib
 import sys
-import time
 
 from booster import BoosterApi, TelemetryReader
 
 # The default bias current to tune to.
 DEFAULT_BIAS_CURRENT = 0.05
-
-
-async def get_next_telemetry_message(reader):
-    """ Get the next (future) inbound telemetry message.
-
-    Args:
-        reader: The telemetry receiver.
-
-    Returns:
-        A telemetry message received after this function is called.
-    """
-    start = time.time()
-
-    tlm, tlm_timestamp = reader.get_latest_telemetry()
-
-    # Wait until new telemetry is received.
-    while tlm_timestamp < start:
-        await asyncio.sleep(0.1)
-        tlm, tlm_timestamp = reader.get_latest_telemetry()
-
-    return tlm
 
 
 @contextlib.asynccontextmanager
@@ -82,7 +60,7 @@ async def test_channel(booster, channel, prefix, broker):
     await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
 
     # Check that telemetry indicates channel is powered off.
-    tlm = await get_next_telemetry_message(telemetry)
+    tlm = await telemetry.get_next_telemetry()
     assert tlm['state'] == 'Off', 'Channel did not power off'
 
     # Set the interlock threshold so that it won't trip.
@@ -92,7 +70,7 @@ async def test_channel(booster, channel, prefix, broker):
 
     # Enable the channel, verify telemetry indicates it is now enabled.
     async with channel_on(booster, channel):
-        tlm = await get_next_telemetry_message(telemetry)
+        tlm = await telemetry.get_next_telemetry()
         assert tlm['state'] == 'Enabled', 'Channel did not enable'
 
         # Lower the interlock threshold so it trips.
@@ -101,7 +79,7 @@ async def test_channel(booster, channel, prefix, broker):
                                                  -5, retain=False)
 
         # Verify the channel is now tripped.
-        tlm = await get_next_telemetry_message(telemetry)
+        tlm = await telemetry.get_next_telemetry()
         assert tlm['state'] == 'Tripped(Output)', 'Channel did not trip'
 
     print(f'Channel {channel}: PASS')
