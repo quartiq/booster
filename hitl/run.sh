@@ -16,10 +16,10 @@ python3 -m venv --system-site-packages vpy
 # Install Miniconf utilities for configuring stabilizer.
 python3 -m pip install -e py
 
-#cargo embed --release
+cargo embed --release
 
 # Sleep to allow flashing, booting, DHCP, MQTT
-#sleep 30
+sleep 30
 
 # Test pinging Booster. This exercises that:
 # * Booster's network is functioning as intended
