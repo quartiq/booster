@@ -4,15 +4,13 @@ Author: Vertigo Designs, Ryan Summers
 
 Description: Provides an API for controlling Booster NGFW over MQTT.
 """
-import argparse
 import asyncio
-import enum
-import json
 import time
+import json
+import enum
 
-from gmqtt  import Client as MqttClient
-
-from miniconf import Miniconf
+from gmqtt import Client as MqttClient
+import miniconf
 
 # A list of channel enumeration names. The index in the list corresponds with the channel name.
 CHANNEL = [
@@ -26,77 +24,89 @@ CHANNEL = [
     "Seven",
 ]
 
-
 class Action(enum.Enum):
     """ Represents an action that can be taken on channel state. """
     ReadBiasCurrent = 'ReadBiasCurrent'
     Save = 'Save'
 
 
-def generate_request(**kwargs):
-    """ Generate an serialized request for Booster.
+class TelemetryReader:
+    """ Helper utility to read telemetry. """
 
-    Args:
-        kwargs: A list of keyword-value argument pairs to construct the message from.
-    """
-    return json.dumps(kwargs)
+    @classmethod
+    async def create(cls, prefix, broker, channel):
+        """Create a connection to the broker and an MQTT device using it."""
+        client = MqttClient(client_id='')
+        await client.connect(broker)
+        return cls(client, f'{prefix}/telemetry/ch{channel}')
 
 
-# A dictionary of all the available commands, their number of arguments, argument type, and help
-# information about the command.
-CMDS = {
-    'save': {
-        'nargs': 0,
-        'help': 'Save channel configuration',
-    },
-    'tune': {
-        'nargs': 1,
-        'type': float,
-        'help': 'Tune the channel RF drain current to the specified amps',
-    },
-}
+    def __init__(self, client, topic):
+        """ Constructor. """
+        self.client = client
+        self._telemetry_event = None
+        self._last_telemetry = None
+        self._last_telemetry_timestamp = None
+        self.client.on_message = self._handle_telemetry
+        self._telemetry_topic = topic
+        self.client.subscribe(self._telemetry_topic)
 
-def parse_command(entry):
-    """ Parse a command string into a command and arguments. """
-    try:
-        pieces = entry.split('=')
-        assert 1 <= len(pieces) <= 2, 'Invalid command format'
 
-        cmd = pieces[0]
-        tail = pieces[1] if len(pieces) > 1 else None
-        args = tail.split(',') if tail else []
+    def _handle_telemetry(self, _client, topic, payload, _qos, _properties):
+        """ Handle incoming telemetry messages over MQTT. """
+        assert topic == self._telemetry_topic
+        self._last_telemetry = json.loads(payload)
+        self._last_telemetry_timestamp = time.time()
+        if self._telemetry_event:
+            self._telemetry_event.set()
 
-        assert cmd in CMDS, f'Unknown command specified: {cmd}'
-        assert CMDS[cmd]['nargs'] == len(args), \
-            f'Invalid args specified. Expected {CMDS[cmd]["nargs"]}, but found {len(args)}'
-        return (cmd, [CMDS[cmd]['type'](x) for x in args])
 
-    except Exception as exception:
-        raise Exception(f'Failed to parse command "{entry}": {exception}')
+    def get_latest_telemetry(self):
+        """ Get the latest telemetry and the time at which it arrived. """
+        return self._last_telemetry_timestamp, self._last_telemetry
+
+
+    async def get_next_telemetry(self):
+        """ Get the next telemetry message that arrives. """
+        self._telemetry_event = asyncio.Event()
+        await self._telemetry_event.wait()
+        return self.get_latest_telemetry()
 
 
 class BoosterApi:
     """ An asynchronous API for controlling booster using the MQTT control interface. """
 
     @classmethod
-    async def create(cls, booster_id, broker):
+    async def create(cls, prefix, broker):
         """ Create a connection to MQTT for communication with booster. """
-        settings_interface = await Miniconf.create(f'dt/sinara/booster/{booster_id}', broker)
+        # If the user did not provide a prefix, try to find one.
+        if not prefix:
+            devices = await miniconf.discover(broker, 'dt/sinara/booster/+')
+
+            if not devices:
+                raise Exception('No Boosters found')
+
+            assert len(devices) == 1, \
+                    f'Multiple Boosters found: {devices}. Please specify one with --prefix'
+
+            prefix = devices[0]
+
+        settings_interface = await miniconf.Miniconf.create(prefix, broker)
         client = MqttClient(client_id='')
         await client.connect(broker)
-        client.subscribe(f"dt/sinara/booster/{booster_id}/control/response")
-        return cls(client, booster_id, settings_interface)
+        client.subscribe(f"{prefix}/control/response")
+        return cls(client, prefix, settings_interface)
 
 
-    def __init__(self, client, booster_id, settings_interface):
+    def __init__(self, client, prefix, settings_interface):
         """ Consructor.
 
         Args:
             client: A connected MQTT5 client.
-            booster_id: The ID of the booster to control.
+            prefix: The prefix of the booster to control.
         """
         self.client = client
-        self.booster_id = booster_id
+        self.prefix = prefix
         self.command_complete = asyncio.Event()
         self.client.on_message = self._handle_response
         self.response = None
@@ -113,7 +123,7 @@ class BoosterApi:
             qos: The quality-of-service of the message.
             properties: Any properties associated with the message.
         """
-        if topic != f'dt/sinara/booster/{self.booster_id}/control/response':
+        if topic != f'{self.prefix}/control/response':
             raise Exception(f'Unknown topic: {topic}')
 
         # Indicate a response was received.
@@ -132,10 +142,13 @@ class BoosterApi:
             The received response to the action.
         """
         self.command_complete.clear()
-        message = generate_request(channel=CHANNEL[channel], action=action.value)
+        message = json.dumps({
+            'channel': CHANNEL[channel],
+            'action': action.value,
+        })
         self.client.publish(
-            f'dt/sinara/booster/{self.booster_id}/control', payload=message, qos=0, retain=False,
-            response_topic=f'dt/sinara/booster/{self.booster_id}/control/response')
+            f'{self.prefix}/control', payload=message, qos=0, retain=False,
+            response_topic=f'{self.prefix}/control/response')
         await self.command_complete.wait()
 
         # Check the response code.
@@ -204,49 +217,3 @@ class BoosterApi:
                 break
 
         return vgs, ids
-
-
-def main():
-    """ Main program entry point. """
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.RawTextHelpFormatter,
-        description='Modify booster RF channel configuration')
-    parser.add_argument('--booster-id', required=True, type=str,
-                        help='The identifier of the booster to configure')
-    parser.add_argument('--channel', required=True, type=int, choices=range(8),
-                        help='The RF channel index to control')
-    parser.add_argument('--broker', default='10.0.0.2', type=str, help='The MQTT broker address')
-
-    command_help = 'Individual commands. Options:\n'
-    for cmd, info in CMDS.items():
-        line = f'{cmd}'
-        if info['nargs'] == 1:
-            line += '=x'
-        if info['nargs'] == 2:
-            line += '=x,y'
-
-        command_help += f'{line:<30} | {info["help"]}\n'
-
-    parser.add_argument('commands', nargs='+', help=command_help)
-
-    async def channel_configuration(args):
-        """ Configure an RF channel. """
-
-        # Establish a communication interface with Booster.
-        interface = await BoosterApi.create(args.booster_id, args.broker)
-
-        for command in args.commands:
-            command, cmd_args = parse_command(command)
-            if command == 'save':
-                await interface.perform_action(Action.Save, args.channel)
-                print(f'Channel {args.channel} configuration saved')
-            elif command == 'tune':
-                vgs, ids = await interface.tune_bias(args.channel, cmd_args[0])
-                print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
-
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(channel_configuration(parser.parse_args()))
-
-
-if __name__ == '__main__':
-    main()

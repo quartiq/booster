@@ -132,8 +132,12 @@ Documentation](https://quartiq.de/stabilizer/usage.html#miniconf-run-time-settin
 started.
 
 Booster supports RF channel bias tuning and saving active channel settings configuration to EEPROM
-via the `booster.py` python script located in the root of the repository. Refer to `python
-booster.py --help` for information on usage.
+via the Booster python package located in the `py` folder of the repository. Execute the
+following to install the package and see how to use it:
+```sh
+pip install py
+python -m booster --help
+```
 
 When settings are saved in booster, the saved channel configuration will be applied to
 the channel when Booster boots. Note that saving channel settings overwrites any existing channel
