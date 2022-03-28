@@ -26,8 +26,8 @@ CHANNEL = [
 
 class Action(enum.Enum):
     """ Represents an action that can be taken on channel state. """
-    ReadBiasCurrent = 'ReadBiasCurrent'
-    Save = 'Save'
+    ReadBiasCurrent = 'read-bias'
+    Save = 'save'
 
 
 class TelemetryReader:
@@ -109,11 +109,12 @@ class BoosterApi:
         self.prefix = prefix
         self.command_complete = asyncio.Event()
         self.client.on_message = self._handle_response
-        self.response = None
         self.settings_interface = settings_interface
+        self.request_id = 0
+        self.inflight = {}
 
 
-    def _handle_response(self, client, topic, payload, *_args, **_kwargs):
+    def _handle_response(self, client, topic, payload, properties):
         """ Callback function for when messages are received over MQTT.
 
         Args:
@@ -127,8 +128,9 @@ class BoosterApi:
             raise Exception(f'Unknown topic: {topic}')
 
         # Indicate a response was received.
-        self.response = json.loads(payload)
-        self.command_complete.set()
+        request_id = int.from_bytes(properties['correlation_data'][0], 'big')
+        self.inflight[request_id].set_result(json.loads(payload))
+        del self.inflight[request_id]
 
 
     async def perform_action(self, action: Action, channel: str):
@@ -141,20 +143,25 @@ class BoosterApi:
         Returns:
             The received response to the action.
         """
-        self.command_complete.clear()
+        assert self.request_id not in self.inflight
+        request_id = self.request_id
+        self.request_id += 1
+
         message = json.dumps({
             'channel': CHANNEL[channel],
-            'action': action.value,
         })
+
+        result = asyncio.get_running_loop().create_future()
+        self.inflight[request_id] = result
+
         self.client.publish(
-            f'{self.prefix}/control', payload=message, qos=0, retain=False,
-            response_topic=f'{self.prefix}/control/response')
-        await self.command_complete.wait()
+            f'{self.prefix}/control/{action.value}', payload=message, qos=0, retain=False,
+            response_topic=f'{self.prefix}/control/response',
+            correlation_data=request_id.to_bytes(4, 'big'))
 
         # Check the response code.
-        assert self.response['code'] == 200, f'Request failed: {self.response}'
-        response = self.response
-        self.response = None
+        response = await result
+        assert response['code'] == 0, f'Request failed: {response}'
         return response
 
 

@@ -121,6 +121,18 @@ impl TelemetryClient {
     }
 }
 
+/// Read bias transistor parameters.
+///
+/// # Note
+/// This is a handler function for the control interface.
+///
+/// # Args
+/// * `main_bus` - The main I2C bus to communicate with RF channels.
+/// * `_topic` - Unused, but reserved for the incoming topic of the request.
+/// * `request` - The serialized [ChannelRequest] to process.
+///
+/// # Returns
+/// A [minireq::Response] containing a serialized [ChannelBiasResponse].
 pub fn read_bias(main_bus: &mut MainBus, _topic: &str, request: &[u8]) -> MinireqResponse {
     let request: ChannelRequest = serde_json_core::from_slice(request)?.0;
 
@@ -133,11 +145,24 @@ pub fn read_bias(main_bus: &mut MainBus, _topic: &str, request: &[u8]) -> Minire
                 ids: channel.context_mut().get_p28v_current(),
             })
         })
-        .unwrap_or(minireq::Response::error("Channel not found"));
+        .unwrap_or_else(|| minireq::Response::error("Channel not found"));
 
     Ok(response)
 }
 
+/// Persist channel settings to EEPROM.
+///
+/// # Note
+/// This is a handler function for the control interface.
+///
+/// # Args
+/// * `main_bus` - The main I2C bus to communicate with RF channels.
+/// * `_topic` - Unused, but reserved for the incoming topic of the request.
+/// * `request` - The serialized [ChannelRequest] to process.
+///
+/// # Returns
+/// A [minireq::Response] containing no data, which indicates the success of the command
+/// processing.
 pub fn save_settings(main_bus: &mut MainBus, _topic: &str, request: &[u8]) -> MinireqResponse {
     let request: ChannelRequest = serde_json_core::from_slice(request)?.0;
 
@@ -148,7 +173,7 @@ pub fn save_settings(main_bus: &mut MainBus, _topic: &str, request: &[u8]) -> Mi
             channel.context_mut().save_configuration();
             minireq::Response::ok()
         })
-        .unwrap_or(minireq::Response::error("Channel not found"));
+        .unwrap_or_else(|| minireq::Response::error("Channel not found"));
 
     Ok(response)
 }
