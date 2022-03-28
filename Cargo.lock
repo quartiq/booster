@@ -750,7 +750,8 @@ dependencies = [
 [[package]]
 name = "minireq"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/minireq#957c8874d8d5b47671ad198da534263595f4e5b7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2c139b480321893c5469d4ae854feb5de7a99b3cd4c97bbf2309791701b5654"
 dependencies = [
  "heapless 0.7.9",
  "log",
