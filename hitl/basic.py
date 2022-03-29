@@ -60,7 +60,7 @@ async def test_channel(booster, channel, prefix, broker):
     await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
 
     # Check that telemetry indicates channel is powered off.
-    tlm = await telemetry.get_next_telemetry()
+    _, tlm = await telemetry.get_next_telemetry()
     assert tlm['state'] == 'Off', 'Channel did not power off'
 
     # Set the interlock threshold so that it won't trip.
@@ -70,7 +70,7 @@ async def test_channel(booster, channel, prefix, broker):
 
     # Enable the channel, verify telemetry indicates it is now enabled.
     async with channel_on(booster, channel):
-        tlm = await telemetry.get_next_telemetry()
+        _, tlm = await telemetry.get_next_telemetry()
         assert tlm['state'] == 'Enabled', 'Channel did not enable'
 
         # Lower the interlock threshold so it trips.
@@ -79,7 +79,7 @@ async def test_channel(booster, channel, prefix, broker):
                                                  -5, retain=False)
 
         # Verify the channel is now tripped.
-        tlm = await telemetry.get_next_telemetry()
+        _, tlm = await telemetry.get_next_telemetry()
         assert tlm['state'] == 'Tripped(Output)', 'Channel did not trip'
 
     print(f'Channel {channel}: PASS')

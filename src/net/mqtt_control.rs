@@ -18,7 +18,7 @@ use heapless::String;
 use serde::Serialize;
 
 type MinireqResponse = Result<
-    minireq::Response<128>,
+    minireq::Response<256>,
     minireq::Error<<super::NetworkStack as embedded_nal::TcpClientStack>::Error>,
 >;
 

@@ -94,7 +94,7 @@ class BoosterApi:
         settings_interface = await miniconf.Miniconf.create(prefix, broker)
         client = MqttClient(client_id='')
         await client.connect(broker)
-        client.subscribe(f"{prefix}/control/response")
+        client.subscribe(f"{prefix}/command/response")
         return cls(client, prefix, settings_interface)
 
 
@@ -114,7 +114,7 @@ class BoosterApi:
         self.inflight = {}
 
 
-    def _handle_response(self, client, topic, payload, properties):
+    def _handle_response(self, client, topic, payload, _qos, properties):
         """ Callback function for when messages are received over MQTT.
 
         Args:
@@ -124,7 +124,7 @@ class BoosterApi:
             qos: The quality-of-service of the message.
             properties: Any properties associated with the message.
         """
-        if topic != f'{self.prefix}/control/response':
+        if topic != f'{self.prefix}/command/response':
             raise Exception(f'Unknown topic: {topic}')
 
         # Indicate a response was received.
@@ -155,8 +155,8 @@ class BoosterApi:
         self.inflight[request_id] = result
 
         self.client.publish(
-            f'{self.prefix}/control/{action.value}', payload=message, qos=0, retain=False,
-            response_topic=f'{self.prefix}/control/response',
+            f'{self.prefix}/command/{action.value}', payload=message, qos=0, retain=False,
+            response_topic=f'{self.prefix}/command/response',
             correlation_data=request_id.to_bytes(4, 'big'))
 
         # Check the response code.
@@ -186,7 +186,7 @@ class BoosterApi:
             # Sleep 100 ms for bias current to settle and for ADC to take current measurement.
             await asyncio.sleep(0.1)
             response = await self.perform_action(Action.ReadBiasCurrent, channel)
-            response = json.loads(response['msg'])
+            response = json.loads(response['data'])
             vgs, ids = response['vgs'], response['ids']
             print(f'Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
             return vgs, ids

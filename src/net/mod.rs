@@ -24,7 +24,7 @@ type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
 pub struct NetworkDevices {
     pub telemetry: mqtt_control::TelemetryClient,
     pub settings: miniconf::MqttClient<crate::RuntimeSettings, NetworkStackProxy, SystemTimer, 256>,
-    pub control: minireq::Minireq<MainBus, NetworkStackProxy, SystemTimer, 128, 5>,
+    pub control: minireq::Minireq<MainBus, NetworkStackProxy, SystemTimer, 256, 5>,
 
     // The stack reference is only used if the ENC424J600 PHY is used.
     #[allow(dead_code)]
@@ -67,10 +67,10 @@ impl NetworkDevices {
         .unwrap();
 
         control
-            .register("/save", mqtt_control::save_settings)
+            .register("save", mqtt_control::save_settings)
             .unwrap();
         control
-            .register("/read-bias", mqtt_control::read_bias)
+            .register("read-bias", mqtt_control::read_bias)
             .unwrap();
 
         Self {
@@ -99,6 +99,8 @@ impl NetworkDevices {
     /// This function must be called periodically to handle ingress/egress of packets and update
     /// state management.
     pub fn process(&mut self) -> bool {
+        self.telemetry.update();
+
         #[cfg(feature = "phy_enc424j600")]
         return self
             .stack
