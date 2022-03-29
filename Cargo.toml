@@ -43,6 +43,11 @@ built = { version = "0.5", features = ["git2", "chrono"], default-features = fal
 git = "https://github.com/stm32-rs/stm32f4xx-hal"
 features = ["stm32f407", "rt", "usb_fs"]
 
+[patch.crates-io.minireq]
+git = "https://github.com/quartiq/minireq"
+# Patch to serialize responses as a string instead of vector
+rev = "786bc8845819a26a3669d6e0c81d64b71f510573"
+
 [dependencies.enc424j600]
 git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
 rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
