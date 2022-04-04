@@ -12,7 +12,7 @@ use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
 use minimq::embedded_time::{duration::Extensions, Clock, Instant};
 
-use super::{clock::SystemTimer, platform, I2cBusManager, I2cProxy};
+use super::{platform, I2cBusManager, I2cProxy, SystemTimer};
 use crate::{
     settings::{
         channel_settings::ChannelSettings, channel_settings::ChannelState, BoosterChannelSettings,
@@ -299,6 +299,7 @@ impl RfChannel {
     pub fn new(
         manager: &'static I2cBusManager,
         pins: ChannelPins,
+        clock: SystemTimer,
         delay: &mut impl DelayUs<u16>,
     ) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
@@ -307,7 +308,7 @@ impl RfChannel {
                 devices,
                 pins,
                 settings: BoosterChannelSettings::new(eeprom),
-                clock: SystemTimer::default(),
+                clock,
             };
 
             channel.apply_output_interlock_threshold().unwrap();
@@ -584,7 +585,7 @@ impl RfChannel {
 
 mod sm {
     use super::{ChannelFault, Interlock};
-    use crate::hardware::clock::SystemTimer;
+    use crate::hardware::SystemTimer;
     use minimq::embedded_time::Instant;
     use smlang::statemachine;
 

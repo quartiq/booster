@@ -5,7 +5,7 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 use crate::{
-    hardware::{clock::SystemTimer, setup::MainBus},
+    hardware::{setup::MainBus, SystemTimer},
     Channel,
 };
 
@@ -50,6 +50,7 @@ impl TelemetryClient {
     pub fn new(
         broker: minimq::embedded_nal::IpAddr,
         stack: super::NetworkStackProxy,
+        clock: SystemTimer,
         id: &str,
     ) -> Self {
         let mut client_id: String<64> = String::new();
@@ -59,7 +60,7 @@ impl TelemetryClient {
         write!(&mut telemetry_prefix, "dt/sinara/booster/{}/telemetry", id).unwrap();
 
         Self {
-            mqtt: minimq::Minimq::new(broker, &client_id, stack, SystemTimer::default()).unwrap(),
+            mqtt: minimq::Minimq::new(broker, &client_id, stack, clock).unwrap(),
             telemetry_prefix,
             telemetry_period: DEFAULT_TELEMETRY_PERIOD_SECS,
         }

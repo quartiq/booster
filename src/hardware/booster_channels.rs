@@ -5,13 +5,12 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
-use super::Channel;
 use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal as hal;
 use tca9548::{self, Tca9548};
 
 use super::rf_channel::{ChannelPins as RfChannelPins, RfChannel, RfChannelMachine};
-use super::{I2cBusManager, I2cProxy};
+use super::{Channel, I2cBusManager, I2cProxy, SystemTimer};
 use embedded_hal::blocking::delay::DelayUs;
 
 /// Represents a control structure for interfacing to booster RF channels.
@@ -56,6 +55,7 @@ impl BoosterChannels {
         adc: hal::adc::Adc<hal::stm32::ADC3>,
         manager: &'static I2cBusManager,
         pins: [RfChannelPins; 8],
+        clock: SystemTimer,
         delay: &mut impl DelayUs<u16>,
     ) -> Self {
         let mut channels: [Option<RfChannelMachine>; 8] =
@@ -66,7 +66,7 @@ impl BoosterChannels {
             mux.select_bus(Some(idx.into()))
                 .expect("Failed to select channel");
 
-            if let Some(channel) = RfChannel::new(manager, pins, delay) {
+            if let Some(channel) = RfChannel::new(manager, pins, clock, delay) {
                 let mut machine = RfChannelMachine::new(channel);
                 machine.handle_startup();
                 channels[idx as usize].replace(machine);

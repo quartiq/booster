@@ -144,6 +144,7 @@ dependencies = [
  "miniconf",
  "minimq",
  "minireq",
+ "mono-clock",
  "panic-persist",
  "postcard",
  "serde",
@@ -414,9 +415,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-time"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86fbafcea0dea120d8ed8af67ddbf82afc031f1d3b064920645db8d061781e2c"
+checksum = "d7a4b4d10ac48d08bfe3db7688c402baadb244721f30a77ce360bd24c3dffe58"
 dependencies = [
  "num",
 ]
@@ -779,6 +780,15 @@ dependencies = [
  "serde",
  "serde-json-core",
  "smlang 0.5.0",
+]
+
+[[package]]
+name = "mono-clock"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1f9d58e3308e8a9fec7a9d96c6ddf7b079c95af9a9ce8dca236c1d8a64166a8"
+dependencies = [
+ "embedded-time",
 ]
 
 [[package]]

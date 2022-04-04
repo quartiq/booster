@@ -42,7 +42,7 @@ use systick_monotonic::fugit::ExtU64;
 use hardware::{
     setup::MainBus,
     user_interface::{ButtonEvent, Color, UserButtons, UserLeds},
-    Channel,
+    Channel, SystemTimer,
 };
 
 use settings::runtime_settings::RuntimeSettings;
@@ -85,7 +85,8 @@ mod app {
     #[init]
     fn init(c: init::Context) -> (SharedResources, LocalResources, init::Monotonics) {
         // Configure booster hardware.
-        let mut booster = hardware::setup::setup(c.core, c.device);
+        let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
+        let mut booster = hardware::setup::setup(c.core, c.device, clock);
 
         let mut settings = RuntimeSettings::default();
 
@@ -113,6 +114,7 @@ mod app {
                     booster.network_stack,
                     booster.settings.id(),
                     settings,
+                    clock,
                 ),
                 watchdog: watchdog_manager,
             },

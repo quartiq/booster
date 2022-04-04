@@ -11,7 +11,6 @@ use stm32f4xx_hal as hal;
 
 pub mod booster_channels;
 pub mod chassis_fans;
-pub mod clock;
 pub mod delay;
 mod mutex;
 pub mod platform;
@@ -21,6 +20,7 @@ pub mod user_interface;
 
 pub const MONOTONIC_FREQUENCY: u32 = 1_000;
 pub type Systick = systick_monotonic::Systick<MONOTONIC_FREQUENCY>;
+pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 
 pub const CPU_FREQ: u32 = 168_000_000;
 
