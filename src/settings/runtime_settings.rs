@@ -20,11 +20,8 @@ pub struct RuntimeSettings {
     /// off.
     pub fan_speed: f32,
 
-    /// The configured telemetry period.
-    ///
-    /// # Note
-    /// Currently, this can only be configured to values within [0.5, 13).
-    pub telemetry_period: f32,
+    /// The configured telemetry period in seconds.
+    pub telemetry_period: u64,
 }
 
 impl Default for RuntimeSettings {

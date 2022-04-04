@@ -4,7 +4,7 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use crate::hardware::{clock::SystemTimer, setup::MainBus, NetworkStack};
+use crate::hardware::{setup::MainBus, NetworkStack, SystemTimer};
 
 use core::fmt::Write;
 use heapless::String;
@@ -43,6 +43,7 @@ impl NetworkDevices {
         stack: NetworkStack,
         identifier: &str,
         settings: crate::RuntimeSettings,
+        clock: SystemTimer,
     ) -> Self {
         let shared =
             cortex_m::singleton!(: NetworkManager<NetworkStack> = NetworkManager::new(stack))
@@ -62,7 +63,7 @@ impl NetworkDevices {
             &minireq_client,
             &prefix,
             broker,
-            SystemTimer::default(),
+            clock,
         )
         .unwrap();
 
@@ -77,6 +78,7 @@ impl NetworkDevices {
             telemetry: mqtt_control::TelemetryClient::new(
                 broker,
                 shared.acquire_stack(),
+                clock,
                 identifier,
             ),
             settings: miniconf::MqttClient::new(
@@ -84,7 +86,7 @@ impl NetworkDevices {
                 &miniconf_client,
                 &prefix,
                 broker,
-                SystemTimer::default(),
+                clock,
                 settings,
             )
             .unwrap(),
