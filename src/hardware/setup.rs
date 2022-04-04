@@ -12,7 +12,7 @@ use super::{
     platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
-    HardwareVersion, NetworkStack, UsbBus, CPU_FREQ, I2C,
+    HardwareVersion, NetworkStack, Systick, UsbBus, CPU_FREQ, I2C,
 };
 
 #[cfg(feature = "phy_enc424j600")]
@@ -88,6 +88,7 @@ pub struct BoosterDevices {
     pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
     pub settings: BoosterSettings,
     pub hardware_version: HardwareVersion,
+    pub systick: Systick,
 }
 
 /// Configure Booster hardware peripherals and RF channels.
@@ -102,7 +103,7 @@ pub struct BoosterDevices {
 /// # Returns
 /// The configured [BoosterDevices].
 pub fn setup(
-    mut core: rtic::Peripherals,
+    mut core: rtic::export::Peripherals,
     device: stm32f4xx_hal::stm32::Peripherals,
 ) -> BoosterDevices {
     // Install the logger
@@ -126,6 +127,8 @@ pub fn setup(
         .pclk1(42.mhz())
         .require_pll48clk()
         .freeze();
+
+    let systick = Systick::new(core.SYST, clocks.sysclk().0);
 
     // Set up the system timer.
     super::clock::SystemTimer::initialize(device.TIM2, &clocks);
@@ -429,5 +432,6 @@ pub fn setup(
         usb_serial,
         watchdog,
         hardware_version,
+        systick,
     }
 }

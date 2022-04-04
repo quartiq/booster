@@ -19,6 +19,9 @@ pub mod rf_channel;
 pub mod setup;
 pub mod user_interface;
 
+pub const MONOTONIC_FREQUENCY: u32 = 1_000;
+pub type Systick = systick_monotonic::Systick<MONOTONIC_FREQUENCY>;
+
 pub const CPU_FREQ: u32 = 168_000_000;
 
 #[cfg(feature = "phy_enc424j600")]

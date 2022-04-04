@@ -23,7 +23,7 @@ type MinireqResponse = Result<
 >;
 
 /// The default telemetry period.
-pub const DEFAULT_TELEMETRY_PERIOD_SECS: f32 = 10.0;
+pub const DEFAULT_TELEMETRY_PERIOD_SECS: u64 = 10;
 
 /// Specifies a generic request for a specific channel.
 #[derive(serde::Deserialize, Debug)]
@@ -42,7 +42,7 @@ struct ChannelBiasResponse {
 pub struct TelemetryClient {
     mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 512, 1>,
     telemetry_prefix: String<128>,
-    telemetry_period: f32,
+    telemetry_period: u64,
 }
 
 impl TelemetryClient {
@@ -95,29 +95,19 @@ impl TelemetryClient {
     }
 
     /// Get the period between telemetry updates in CPU cycles.
-    pub fn telemetry_period_cycles(&self) -> u32 {
-        let period = (crate::CPU_FREQ as f32) * self.telemetry_period;
-
-        // Elapsed cycles must always be less than half of the container size because of the
-        // wrapping nature of cycle counting. Specifically, cycles > MAX/2 in the future are
-        // indistinguishable from cycles in the past due to integer wrap. Because of this, we cap
-        // the cycle period to less than half an integer wrap.
-        if period >= (u32::MAX / 2) as f32 {
-            u32::MAX / 2 - 1
-        } else {
-            period as u32
-        }
+    pub fn telemetry_period_secs(&self) -> u64 {
+        self.telemetry_period
     }
 
     /// Set the telemetry period.
     ///
     /// # Note
-    /// The telemetry period has a minimum period of 0.5 seconds
+    /// The telemetry period has a minimum period of 1 seconds
     ///
     /// # Args
     /// * `period` - The telemetry period in seconds.
-    pub fn set_telemetry_period(&mut self, period: f32) {
-        self.telemetry_period = period.clamp(0.5, period);
+    pub fn set_telemetry_period(&mut self, period: u64) {
+        self.telemetry_period = period.clamp(1, period);
     }
 }
 
