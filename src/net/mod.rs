@@ -4,7 +4,7 @@
 //! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
-use crate::hardware::{clock::SystemTimer, NetworkStack};
+use crate::hardware::{clock::SystemTimer, setup::MainBus, NetworkStack};
 
 use core::fmt::Write;
 use heapless::String;
@@ -22,8 +22,9 @@ type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
 /// All devices accessing the shared stack must be contained within a single structure to prevent
 /// potential pre-emption when using the `shared` network stack.
 pub struct NetworkDevices {
-    pub control: mqtt_control::ControlClient,
+    pub telemetry: mqtt_control::TelemetryClient,
     pub settings: miniconf::MqttClient<crate::RuntimeSettings, NetworkStackProxy, SystemTimer, 256>,
+    pub control: minireq::Minireq<MainBus, NetworkStackProxy, SystemTimer, 256, 5>,
 
     // The stack reference is only used if the ENC424J600 PHY is used.
     #[allow(dead_code)]
@@ -50,20 +51,44 @@ impl NetworkDevices {
         let mut miniconf_client: String<128> = String::new();
         write!(&mut miniconf_client, "booster-{}-settings", identifier).unwrap();
 
-        let mut miniconf_prefix: String<128> = String::new();
-        write!(&mut miniconf_prefix, "dt/sinara/booster/{}", identifier).unwrap();
+        let mut minireq_client: String<128> = String::new();
+        write!(&mut minireq_client, "booster-{}-req", identifier).unwrap();
+
+        let mut prefix: String<128> = String::new();
+        write!(&mut prefix, "dt/sinara/booster/{}", identifier).unwrap();
+
+        let mut control = minireq::Minireq::new(
+            shared.acquire_stack(),
+            &minireq_client,
+            &prefix,
+            broker,
+            SystemTimer::default(),
+        )
+        .unwrap();
+
+        control
+            .register("save", mqtt_control::save_settings)
+            .unwrap();
+        control
+            .register("read-bias", mqtt_control::read_bias)
+            .unwrap();
 
         Self {
-            control: mqtt_control::ControlClient::new(broker, shared.acquire_stack(), identifier),
+            telemetry: mqtt_control::TelemetryClient::new(
+                broker,
+                shared.acquire_stack(),
+                identifier,
+            ),
             settings: miniconf::MqttClient::new(
                 shared.acquire_stack(),
                 &miniconf_client,
-                &miniconf_prefix,
+                &prefix,
                 broker,
                 SystemTimer::default(),
                 settings,
             )
             .unwrap(),
+            control,
             stack: shared.acquire_stack(),
         }
     }
@@ -74,6 +99,8 @@ impl NetworkDevices {
     /// This function must be called periodically to handle ingress/egress of packets and update
     /// state management.
     pub fn process(&mut self) -> bool {
+        self.telemetry.update();
+
         #[cfg(feature = "phy_enc424j600")]
         return self
             .stack
