@@ -1,51 +1,77 @@
-use crate::{
-    EthPhy, RAW_FRAME_LENGTH_MAX,
-    rx::RxPacket, tx::TxPacket,
-    Enc424j600,
-};
+use core::mem::MaybeUninit;
+use heapless::pool::Box;
+/// Smoltcp device implementation for external ethernet MACs.
+///
+/// # Design
+/// TODO
+use smoltcp_nal::smoltcp;
 
-struct PooledPacket<'a> {
-    packet: Box<Packet>,
-    packet_pool: &'a heapless::pool::Pool<Packet>,
+pub const MAX_MTU_SIZE: usize = 1024;
+pub const NUM_PACKETS: usize = 20;
+pub const RX_SIZE: usize = NUM_PACKETS;
+pub const TX_SIZE: usize = NUM_PACKETS;
+
+pub const POOL_SIZE_BYTES: usize = core::mem::size_of::<Packet>() * NUM_PACKETS;
+
+pub struct Packet {
+    payload: [u8; MAX_MTU_SIZE],
+    length: usize,
 }
 
-impl<'a> PooledPacket<'a> {
-    pub fn new(packet_pool: &'a heapless::pool::Pool<Packet>) -> Self {
-        let packet = packet_pool.alloc().unwrap();
-
-        Self { packet, packet_pool }
+impl Packet {
+    pub fn new() -> Self {
+        Self {
+            payload: [0; MAX_MTU_SIZE],
+            length: 0,
+        }
     }
 }
 
-impl<'a> Drop for PooledPacket<'a> {
-    fn drop(&self) {
-        self.packet_pool.free(self.packet)
+struct PooledPacket {
+    packet: Option<Box<Packet>>,
+    packet_pool: &'static heapless::pool::Pool<Packet>,
+}
+
+impl PooledPacket {
+    pub fn alloc(packet_pool: &'static heapless::pool::Pool<Packet>) -> Option<Self> {
+        packet_pool.alloc().map(|packet| Self {
+            packet: Some(packet.init(Packet::new())),
+            packet_pool,
+        })
+    }
+}
+
+impl Drop for PooledPacket {
+    fn drop(&mut self) {
+        if let Some(packet) = self.packet.take() {
+            self.packet_pool.free(packet)
+        }
     }
 }
 
 pub trait ExternalMac {
-    type Error;
+    type Error: core::fmt::Debug;
     fn receive_packet(&mut self, packet: &mut Packet) -> Result<bool, Self::Error>;
     fn send_packet(&mut self, packet: &Packet) -> Result<(), Self::Error>;
 }
 
 /// Smoltcp phy::Device implementation to provide to the network stack.
-pub struct SmoltcpDevice<'a, const TX_N: usize, const RX_N: usize> {
-    tx: &'a heapless::mpmc::MpMcQueue<PooledPacket<'a>, TX_N>,
-    rx: heapless::spsc::Consumer<'a , PooledPacket<'a>, RX_N>,
-    packet_pool: &'a heapless::pool::Pool<Packet>,
+pub struct SmoltcpDevice<'a> {
+    tx: &'a heapless::mpmc::MpMcQueue<PooledPacket, TX_SIZE>,
+    rx: heapless::spsc::Consumer<'static, PooledPacket, RX_SIZE>,
+    packet_pool: &'static heapless::pool::Pool<Packet>,
 }
 
 /// ENC424J600 PHY management interface to handle packet ingress/egress manually.
-pub struct Manager<'a, Mac: ExternalMac, const TX_N: usize, const RX_N: usize> {
+pub struct Manager<'a, Mac: ExternalMac> {
     mac: Mac,
     pending_transmission: Option<PooledPacket>,
-    packet_pool: &'a heapless::pool::Pool<PooledPacket<'a>>,
-    tx: &'a heapless::mpmc::MpMcQueue<PooledPacket<'a>, TX_N>,
-    rx: heapless::spsc::MpMcQueue<PooledPacket<'a>, RX_N>,
+    packet_pool: &'static heapless::pool::Pool<Packet>,
+    tx: &'a heapless::mpmc::MpMcQueue<PooledPacket, TX_SIZE>,
+    rx: heapless::spsc::Producer<'a, PooledPacket, RX_SIZE>,
 }
 
-impl<'a, Mac: ExternalMac, const TX_N: usize, const RX_N: usize> Manager<'a, Mac, TX_N, RX_N> {
+impl<'a, Mac: ExternalMac> Manager<'a, Mac> {
     /// Construct a new smoltcp device and MAC management interface.
     ///
     /// # Args
@@ -54,15 +80,17 @@ impl<'a, Mac: ExternalMac, const TX_N: usize, const RX_N: usize> Manager<'a, Mac
     /// # Returns
     /// A tuple of (smoltcp_device, manager) to both handle transmission/reception and generate
     /// data within the network stack.
-    pub fn new(mac: Mac) -> (Manager<'a, TX_N, RX_N>) {
-
-        let rx_queue = cortex_m::singleton!(: heapless::spsc::Queue<Box<Packet>, RX_N> = heapless::spsc::Queue::new()).unwrap();
-        let tx_queue = cortex_m::singleton!(: heapless::mpmc::MpmcQueue<Box<Packet>, TX_N> = heapless::mpmc::MpmcQueue::new()).unwrap();
-        let (rx_consumer, rx_producer) = rx_queue.split();
+    pub fn new(mac: Mac) -> (SmoltcpDevice<'a>, Manager<'a, Mac>) {
+        let rx_queue = cortex_m::singleton!(: heapless::spsc::Queue<PooledPacket, RX_SIZE> = heapless::spsc::Queue::new()).unwrap();
+        let tx_queue = cortex_m::singleton!(: heapless::mpmc::MpMcQueue<PooledPacket, TX_SIZE> = heapless::mpmc::MpMcQueue::new()).unwrap();
+        let (rx_producer, rx_consumer) = rx_queue.split();
 
         // Create a static packet pool to allocate buffer space for ethernet frames into.
-        let packet_pool = cortex_m::singleton!(: heapless::pool::Pool<Packet> = heapless::pool::Pool::new()).unwrap();
-        let pool_storage = cortex_m::singleton!(: [u8; {core::mem::size_of<Packet>() * (RX_N + TX_N)}] = [0; _] ).unwrap();
+        let packet_pool =
+            cortex_m::singleton!(: heapless::pool::Pool<Packet> = heapless::pool::Pool::new())
+                .unwrap();
+        let pool_storage =
+            cortex_m::singleton!(: [u8; POOL_SIZE_BYTES] = [0; POOL_SIZE_BYTES] ).unwrap();
         packet_pool.grow(pool_storage);
 
         (
@@ -93,13 +121,19 @@ impl<'a, Mac: ExternalMac, const TX_N: usize, const RX_N: usize> Manager<'a, Mac
             return;
         }
 
-        let mut packet = PooledPacket::new(self.packet_pool);
-
-        // Note(unwrap): Packet reception should never fail.
-        if self.mac.receive_packet(&mut packet.packet).unwrap() {
-            // Note(unwrap): We checked that there was sufficient queue space already, so this
-            // should never fail.
-            self.rx.enqueue(packet).unwrap();
+        if let Some(mut packet) = PooledPacket::alloc(&self.packet_pool) {
+            // Note(unwrap): Packet reception should never fail.
+            if self
+                .mac
+                .receive_packet(packet.packet.as_mut().unwrap())
+                .unwrap()
+            {
+                // Note(unsafe): We checked that there was sufficient queue space already, so this
+                // should never fail.
+                unsafe {
+                    self.rx.enqueue_unchecked(packet);
+                }
+            }
         }
     }
 
@@ -119,9 +153,12 @@ impl<'a, Mac: ExternalMac, const TX_N: usize, const RX_N: usize> Manager<'a, Mac
         }
     }
 
-    fn egress_packet(&mut self, packet: PooledPacket<'a>) -> Result<(), ()> {
-        if self.mac.send_packet(&packet.packet).is_err() {
-
+    fn egress_packet(&mut self, packet: PooledPacket) -> Result<(), ()> {
+        if self
+            .mac
+            .send_packet(packet.packet.as_ref().unwrap())
+            .is_err()
+        {
             // If we can't send the current packet, we have to store it until we can in the future.
             self.pending_transmission.replace(packet);
             return Err(());
@@ -131,48 +168,63 @@ impl<'a, Mac: ExternalMac, const TX_N: usize, const RX_N: usize> Manager<'a, Mac
     }
 }
 
-impl<'a, 'b: 'a, const TX_N: usize, const RX_N: usize> smoltcp::phy::Device<'a> for SmoltcpDevice<'b, TX_N, RX_N> {
+impl<'a, 'b: 'a> smoltcp::phy::Device<'a> for SmoltcpDevice<'b> {
     type RxToken = RxToken;
-    type TxToken = TxToken<'a, TX_N>;
+    type TxToken = TxToken<'a>;
 
     fn capabilities(&self) -> smoltcp::phy::DeviceCapabilities {
         let mut caps = smoltcp::phy::DeviceCapabilities::default();
-        caps.max_transmission_unit = RAW_FRAME_LENGTH_MAX;
+        caps.max_transmission_unit = MAX_MTU_SIZE;
         caps
     }
 
     fn receive(&mut self) -> Option<(Self::RxToken, Self::TxToken)> {
-        match self.rx.dequeue() {
-            Some(rx_packet) => Some((RxToken(rx_packet), TxToken(&self.tx))),
-            _ => None,
+        if let Some(tx_packet) = PooledPacket::alloc(self.packet_pool) {
+            self.rx.dequeue().map(|rx_packet| {
+                (
+                    RxToken(rx_packet),
+                    TxToken {
+                        packet: tx_packet,
+                        queue: &self.tx,
+                    },
+                )
+            })
+        } else {
+            None
         }
     }
 
     fn transmit(&mut self) -> Option<Self::TxToken> {
-        Some(TxToken(&self.tx))
+        PooledPacket::alloc(self.packet_pool).map(|packet| TxToken {
+            queue: self.tx,
+            packet,
+        })
     }
 }
 
-pub struct RxToken<'a>(PooledPacket<'a>);
+pub struct RxToken(PooledPacket);
 
-impl<'a> smoltcp::phy::RxToken for RxToken<'a> {
-    fn consume<R, F>(mut self, _timestamp: smoltcp::time::Instant, f: F) -> Result<R, smoltcp::Error>
+impl smoltcp::phy::RxToken for RxToken {
+    fn consume<R, F>(
+        mut self,
+        _timestamp: smoltcp::time::Instant,
+        f: F,
+    ) -> Result<R, smoltcp::Error>
     where
         F: FnOnce(&mut [u8]) -> Result<R, smoltcp::Error>,
     {
-        // TODO: Implement
-        let len = self.0.get_frame_length();
-        let frame = self.0.get_mut_frame();
-        f(&mut frame[..len])
+        let packet = self.0.packet.as_mut().unwrap();
+        let len = packet.length;
+        f(&mut packet.payload[..len])
     }
 }
 
-pub struct TxToken<'a, const N: usize> {
-    queue: &'a heapless::mpmc::MpMcQueue<PooledPacket<'a>, N>,
-    pool: &'a heapless::pool::Pool<PooledPacket<'a>>,
+pub struct TxToken<'a> {
+    packet: PooledPacket,
+    queue: &'a heapless::mpmc::MpMcQueue<PooledPacket, TX_SIZE>,
 }
 
-impl<'a, const N: usize> smoltcp::phy::TxToken for TxToken<'a, N> {
+impl<'a> smoltcp::phy::TxToken for TxToken<'a> {
     fn consume<R, F>(
         self,
         _timestamp: smoltcp::time::Instant,
@@ -182,13 +234,17 @@ impl<'a, const N: usize> smoltcp::phy::TxToken for TxToken<'a, N> {
     where
         F: FnOnce(&mut [u8]) -> Result<R, smoltcp::Error>,
     {
-        // TODO: Implement
-        let mut tx_packet = TxPacket::new();
-        let frame = tx_packet.get_mut_frame();
-        assert!(len <= frame.len());
-        let result = f(frame);
+        let TxToken {
+            packet: mut pooled_packet,
+            queue,
+        } = self;
 
-        match self.0.enqueue(tx_packet) {
+        let packet = pooled_packet.packet.as_mut().unwrap();
+        assert!(len <= packet.length);
+        packet.length = len;
+        let result = f(&mut packet.payload[..len]);
+
+        match queue.enqueue(pooled_packet) {
             Ok(_) => result,
 
             // We couldn't enqueue the packet.

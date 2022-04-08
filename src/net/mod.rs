@@ -9,6 +9,7 @@ use crate::hardware::{clock::SystemTimer, setup::MainBus, NetworkStack};
 use core::fmt::Write;
 use heapless::String;
 
+pub mod external_mac;
 pub mod mqtt_control;
 mod shared;
 
