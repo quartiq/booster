@@ -1,9 +1,9 @@
+//! Smoltcp device implementation for external ethernet MACs.
+//!
+//! # Design
+//! TODO
 use core::mem::MaybeUninit;
 use heapless::pool::Box;
-/// Smoltcp device implementation for external ethernet MACs.
-///
-/// # Design
-/// TODO
 use smoltcp_nal::smoltcp;
 
 pub const MAX_MTU_SIZE: usize = 1024;
