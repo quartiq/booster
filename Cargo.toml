@@ -30,8 +30,7 @@ usb-device = "0.2.8"
 postcard = "0.5.1"
 crc-any = { version = "2.3.5", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler"] }
-smoltcp-nal = { version = "0.2.0" }
-embedded-time = { version = "0.12.0", optional = true }
+smoltcp-nal = { version = "0.2" }
 miniconf = { version = "0.3", features = ["mqtt-client"]}
 minimq = "0.5.3"
 w5500 = { version = "0.4", optional = true }
@@ -40,6 +39,9 @@ minireq = "0.1"
 
 [build-dependencies]
 built = { version = "0.5", features = ["git2", "chrono"], default-features = false }
+
+[patch.crates-io.w5500]
+path = "../w5500"
 
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/stm32-rs/stm32f4xx-hal"
@@ -89,7 +91,6 @@ path = "microchip-24aa02e48"
 path = "tca9548"
 
 [features]
-phy_enc424j600 = [ "enc424j600", "embedded-time" ]
 phy_w5500 = [ "w5500" ]
 default = [ "phy_w5500" ]
 

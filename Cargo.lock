@@ -131,7 +131,6 @@ dependencies = [
  "dac7571",
  "debounced-pin",
  "embedded-hal",
- "embedded-time",
  "enc424j600",
  "enum-iterator",
  "heapless 0.7.9",
@@ -1445,8 +1444,6 @@ dependencies = [
 [[package]]
 name = "w5500"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6872a9784fd7c84387b0fde6716b5987a9f2d4d62fac03324f7ef8a532f3cf68"
 dependencies = [
  "bit_field",
  "byteorder",
