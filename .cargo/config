@@ -1,5 +1,6 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "gdb-multiarch -q -x probers.gdb"
+# runner = "gdb-multiarch -q -x probers.gdb"
+runner = "probe-run --chip STM32F407ZGTx"
 
 rustflags = [
   # LLD (shipped with the Rust toolchain) is used as the default linker

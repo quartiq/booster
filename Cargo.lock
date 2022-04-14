@@ -1472,13 +1472,13 @@ dependencies = [
 [[package]]
 name = "w5500"
 version = "0.4.0"
+source = "git+https://github.com/quartiq/w5500?branch=feature/macraw-support#a412e54d35dbdbf46eec95babdbc353a752af349"
 dependencies = [
  "bit_field",
  "byteorder",
  "derive-try-from-primitive",
  "embedded-hal",
  "embedded-nal",
- "log",
  "nb 1.0.0",
 ]
 

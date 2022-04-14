@@ -5,13 +5,16 @@
 use heapless::pool::Box;
 use smoltcp_nal::smoltcp;
 
-pub const MAX_MTU_SIZE: usize = 1024;
+// TODO: Set this to ethernet's default MTU.
+pub const MAX_MTU_SIZE: usize = 1500;
 pub const NUM_PACKETS: usize = 16;
-pub const RX_SIZE: usize = NUM_PACKETS;
+pub const RX_SIZE: usize = NUM_PACKETS / 3;
 pub const TX_SIZE: usize = NUM_PACKETS;
 
 pub const POOL_SIZE_BYTES: usize = core::mem::size_of::<Packet>() * NUM_PACKETS;
+static mut POOL_STORAGE: [u8; POOL_SIZE_BYTES] = [0; POOL_SIZE_BYTES];
 
+#[derive(Debug)]
 pub struct Packet {
     payload: [u8; MAX_MTU_SIZE],
     length: usize,
@@ -23,6 +26,12 @@ impl Default for Packet {
             payload: [0; MAX_MTU_SIZE],
             length: 0,
         }
+    }
+}
+
+impl core::fmt::Display for Packet {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "({}) {:02x?}", self.length, &self.payload[..self.length])
     }
 }
 
@@ -99,9 +108,11 @@ impl<'a, Mac: ExternalMac> Manager<'a, Mac> {
         let packet_pool =
             cortex_m::singleton!(: heapless::pool::Pool<Packet> = heapless::pool::Pool::new())
                 .unwrap();
-        let pool_storage =
-            cortex_m::singleton!(: [u8; POOL_SIZE_BYTES] = [0; POOL_SIZE_BYTES] ).unwrap();
-        packet_pool.grow(pool_storage);
+
+        // Note(unsafe): This function is only called once to access the packet pool, so the static
+        // storage is only accessible once. It is intentionally not placed in a singleton to avoid
+        // allocating initial state on the stack.
+        packet_pool.grow(unsafe { &mut POOL_STORAGE });
 
         (
             SmoltcpDevice {
@@ -120,39 +131,51 @@ impl<'a, Mac: ExternalMac> Manager<'a, Mac> {
 
     /// Must be called periodically to handle sending and receiving frames with the PHY.
     pub fn process(&mut self) {
-        self.ingress();
-        self.egress();
+        // Ingress all available packets.
+        while self.ingress_packet() {}
+
+        // Egress all pending packets.
+        while self.egress_packet() {}
     }
 
-    fn ingress(&mut self) {
+    fn ingress_packet(&mut self) -> bool {
         // If there's no space to enqueue read packets, don't try to receive at all.
         if !self.rx.ready() {
-            return;
+            log::warn!("RX queue full");
+            return false;
         }
 
-        if let Some(mut packet) = PooledPacket::alloc(&self.packet_pool) {
-            // Note(unwrap): Packet reception should never fail.
-            if self.mac.receive_packet(packet.packet.as_mut().unwrap()) {
-                // Note(unsafe): We checked that there was sufficient queue space already, so this
-                // should never fail.
+        match PooledPacket::alloc(self.packet_pool) {
+            Some(mut packet) => {
+                // Note(unwrap): Packet reception should never fail.
+                if !self.mac.receive_packet(packet.packet.as_mut().unwrap()) {
+                    return false;
+                }
+
+                // Note(unsafe): We checked that there was sufficient queue space already,
+                // so this should never fail.
                 unsafe {
                     self.rx.enqueue_unchecked(packet);
                 }
+
+                true
+            }
+            None => {
+                log::warn!("RX alloc failed");
+                false
             }
         }
     }
 
-    fn egress(&mut self) {
+    fn egress_packet(&mut self) -> bool {
         // Egress as many packets from the queue as possible.
-        while let Some(packet) = self.tx.dequeue() {
-            if self.egress_packet(packet).is_err() {
-                return;
+        match self.tx.dequeue() {
+            Some(packet) => {
+                self.mac.send_packet(packet.packet.as_ref().unwrap());
+                true
             }
+            None => false,
         }
-    }
-
-    fn egress_packet(&mut self, packet: PooledPacket) -> Result<(), ()> {
-        Ok(self.mac.send_packet(packet.packet.as_ref().unwrap()))
     }
 }
 
@@ -173,20 +196,26 @@ impl<'a, 'b: 'a> smoltcp::phy::Device<'a> for SmoltcpDevice<'b> {
                     RxToken(rx_packet),
                     TxToken {
                         packet: tx_packet,
-                        queue: &self.tx,
+                        queue: self.tx,
                     },
                 )
             })
         } else {
+            log::warn!("Failed to alloc RxTxToken");
             None
         }
     }
 
     fn transmit(&mut self) -> Option<Self::TxToken> {
-        PooledPacket::alloc(self.packet_pool).map(|packet| TxToken {
-            queue: self.tx,
-            packet,
-        })
+        if let Some(packet) = PooledPacket::alloc(self.packet_pool) {
+            Some(TxToken {
+                queue: self.tx,
+                packet,
+            })
+        } else {
+            log::warn!("Failed to alloc TxToken");
+            None
+        }
     }
 }
 
@@ -228,7 +257,7 @@ impl<'a> smoltcp::phy::TxToken for TxToken<'a> {
         } = self;
 
         let packet = pooled_packet.packet.as_mut().unwrap();
-        assert!(len <= packet.length);
+        assert!(len <= packet.payload.len());
         packet.length = len;
         let result = f(&mut packet.payload[..len]);
 

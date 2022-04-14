@@ -3,10 +3,14 @@ use smoltcp_nal::smoltcp;
 
 use super::external_mac::SmoltcpDevice;
 
+/// The number of TCP sockets supported in the network stack.
 const NUM_TCP_SOCKETS: usize = 4;
 
+/// Static storage for Smoltcp sockets and network state.
+static mut NETWORK_STORAGE: NetStorage = NetStorage::new();
+
 /// Containers for smoltcp-related network configurations
-pub struct NetStorage {
+struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
 
     // Note: There is an additional socket set item required for the DHCP socket.
@@ -16,8 +20,8 @@ pub struct NetStorage {
     pub routes_cache: [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 8],
 }
 
-impl Default for NetStorage {
-    fn default() -> Self {
+impl NetStorage {
+    const fn new() -> Self {
         NetStorage {
             // Placeholder for the real IP address, which is initialized at runtime.
             ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
@@ -32,25 +36,37 @@ impl Default for NetStorage {
 }
 
 #[derive(Copy, Clone)]
-pub struct TcpSocketStorage {
+struct TcpSocketStorage {
     rx_storage: [u8; 1024],
-    tx_storage: [u8; 1024],
+
+    // Note that TX storage is set to 4096 to ensure that it is sufficient to contain full
+    // telemetry messages for all 8 RF channels.
+    tx_storage: [u8; 4096],
 }
 
 impl TcpSocketStorage {
     const fn new() -> Self {
         Self {
+            tx_storage: [0; 4096],
             rx_storage: [0; 1024],
-            tx_storage: [0; 1024],
         }
     }
 }
 
+/// Set up the network interface.
+///
+/// # Note
+/// This function may only be called exactly once.
+///
+/// # Args
+/// * `device` - The smoltcp interface device.
+/// * `settings` - The device settings to use.
 pub fn setup(
     device: SmoltcpDevice<'static>,
     settings: &BoosterSettings,
 ) -> smoltcp::iface::Interface<'static, SmoltcpDevice<'static>> {
-    let net_store = cortex_m::singleton!(: NetStorage = NetStorage::default()).unwrap();
+    // Note(unsafe): This function may only be called once to initialize the network storage.
+    let net_store = unsafe { &mut NETWORK_STORAGE };
 
     let mut interface = {
         net_store.ip_addrs[0] = {

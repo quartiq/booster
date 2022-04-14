@@ -21,10 +21,18 @@ pub const BIAS_DAC_VCC: f32 = 3.2;
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
+    use core::fmt::Write;
+    use rtt_target::{ChannelMode, UpChannel};
+
     cortex_m::interrupt::disable();
 
     // Shutdown all of the RF channels.
     shutdown_channels();
+
+    if let Some(mut channel) = unsafe { UpChannel::conjure(0) } {
+        channel.set_mode(ChannelMode::BlockIfFull);
+        writeln!(channel, "{}", info).ok();
+    }
 
     // Write panic info to RAM.
     panic_persist::report_panic_info(info);
