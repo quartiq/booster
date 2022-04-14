@@ -109,10 +109,16 @@ pub fn setup(
     device: stm32f4xx_hal::stm32::Peripherals,
     clock: SystemTimer,
 ) -> BoosterDevices {
+    // Configure RTT logging.
+    device.DBGMCU.cr.modify(|_, w| w.dbg_sleep().set_bit());
+    rtt_target::rtt_init_print!(BlockIfFull);
+
     // Install the logger
     log::set_logger(&crate::LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Info))
         .unwrap();
+
+    log::info!("Starting initialization");
 
     core.DWT.enable_cycle_counter();
     core.DCB.enable_trace();
@@ -307,6 +313,17 @@ pub fn setup(
 
         #[cfg(feature = "phy_w5500")]
         let mac = {
+            // Reset the W5500.
+            let mut mac_reset_n = gpiog.pg5.into_push_pull_output();
+
+            // Ensure the reset is registered.
+            mac_reset_n.set_low().unwrap();
+            delay.delay_ms(1u32);
+            mac_reset_n.set_high().unwrap();
+
+            // Wait for the W5500 to achieve PLL lock.
+            delay.delay_ms(1u32);
+
             w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
                 .initialize_macraw(settings.mac())
                 .unwrap()

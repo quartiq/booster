@@ -23,6 +23,7 @@ debounced-pin = "0.3.0"
 serde = {version = "1.0", features = ["derive"], default-features = false }
 serde-json-core = "0.4"
 logos = { version = "0.11.4", default-features = false, features = ["export_derive"] }
+rtt-logger = "0.2"
 bbqueue = "0.5"
 usbd-serial = "0.1.0"
 shared-bus = { version = "0.2", features = ["cortex-m"] }
@@ -36,6 +37,7 @@ minimq = "0.5.3"
 w5500 = { version = "0.4", optional = true }
 smlang= "0.5"
 minireq = "0.1"
+rtt-target = {version = "0.3", features=["cortex-m"]}
 
 [build-dependencies]
 built = { version = "0.5", features = ["git2", "chrono"], default-features = false }
@@ -94,6 +96,9 @@ path = "tca9548"
 [features]
 phy_w5500 = [ "w5500" ]
 default = [ "phy_w5500" ]
+
+[profile.dev]
+opt-level = 1
 
 [profile.release]
 codegen-units = 1 # better optimizations

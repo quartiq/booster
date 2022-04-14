@@ -17,6 +17,7 @@ use core::fmt::Write;
 /// USB task.
 pub struct BufferedLog {
     logs: heapless::mpmc::Q16<heapless::String<256>>,
+    rtt_logger: rtt_logger::RTTLogger,
 }
 
 impl BufferedLog {
@@ -24,6 +25,7 @@ impl BufferedLog {
     pub const fn new() -> Self {
         Self {
             logs: heapless::mpmc::Q16::new(),
+            rtt_logger: rtt_logger::RTTLogger::new(log::LevelFilter::Info),
         }
     }
 
@@ -44,6 +46,7 @@ impl log::Log for BufferedLog {
     }
 
     fn log(&self, record: &log::Record) {
+        self.rtt_logger.log(record);
         let source_file = record.file().unwrap_or("Unknown");
         let source_line = record.line().unwrap_or(u32::MAX);
 
