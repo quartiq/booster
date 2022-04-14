@@ -42,9 +42,10 @@ rtt-target = {version = "0.3", features=["cortex-m"]}
 [build-dependencies]
 built = { version = "0.5", features = ["git2", "chrono"], default-features = false }
 
+# Add RawDevice support for the W5500 to operate as an external MAC
 [patch.crates-io.w5500]
 git = "https://github.com/quartiq/w5500"
-branch = "feature/macraw-support"
+rev = "5a03d6d720a642841523309170b038baa98229eb"
 
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/stm32-rs/stm32f4xx-hal"
@@ -98,6 +99,7 @@ phy_w5500 = [ "w5500" ]
 default = [ "phy_w5500" ]
 
 [profile.dev]
+# Note: Opt-level 1 is required to avoid issues with stack overflow during hardware configuration.
 opt-level = 1
 
 [profile.release]
