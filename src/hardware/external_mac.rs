@@ -1,29 +1,72 @@
 //! Smoltcp device implementation for external ethernet MACs.
 //!
 //! # Design
-//! TODO
+//!
+//! ## Ownership Issues
+//!
+//! Smoltcp must own a means to communicate with the PHY. However, smoltcp may have multiple RX/TX
+//! tokens in flight. Because of this, when Smoltcp tries to consume an RX/TX token, it would have
+//! to also own the means to transmit or review via the MAC.
+//!
+//! Because the `receive()` API of [smoltcp::phy::Device] requires provisioning two tokens, it's
+//! not possible for each token to own a mutable reference to the underlying MAC. To get around
+//! this, the MAC is not owned by smoltp at all, but rather Smoltcp is given a software device with
+//! RX and TX FIFOs to the driver that handles ingress and egress on the MAC. With this design,
+//! Smoltcp can allocate a packet buffer for a TX packet and populate it. When ready to transmit,
+//! it then enqueues the prepared packet in the FIFO.
+//!
+//! Periodically, the driver for the MAC then checks the TX FIFO for any outbound packets and
+//! transmits them if they are available. Similarly, it checks the MAC for any received ethernet
+//! frames and enqueues them to an RX FIFO for ingression into Smoltcp.
+//!
+//! In this file, the [Manager] is the owner of the hardware interface to the MAC and reads and
+//! writes frames to the device over SPI. It then enqueues/dequeues frames from the RX/TX FIFOs
+//! respectively as packets become available.
+//!
+//! Similarly, the [SmoltcpDevice] is the software construct with the RX/TX FIFO endpoints that can
+//! be passed to Smoltcp's interface and implements [smoltcp::phy::Device].
+//!
+//!
+//! ## Ethernet Frame Buffers
+//!
+//! In order to avoid large copying of ethernet frames between [SmoltcpDevice] and [Manager], the
+//! ethernet frames are allocated from a global [heapless::pool::Pool]. Because of the operation of
+//! the pool, buffers are not actually copied when the frames are enqueued/dequeued from the FIFOs.
+//! Instead, a [heapless::pool::Box] is used, which is a proxy to the underlying `static mut`
+//! buffer. This ensures that the ethernet frames are not copied when transferring data between the
+//! [SmoltcpDevice] and the [Manager]
 use heapless::pool::Box;
 use smoltcp_nal::smoltcp;
 
-// TODO: Set this to ethernet's default MTU.
-pub const MAX_MTU_SIZE: usize = 1500;
-pub const NUM_PACKETS: usize = 16;
-pub const RX_SIZE: usize = NUM_PACKETS / 3;
-pub const TX_SIZE: usize = NUM_PACKETS;
+// The maximum size of each ethernet frame.
+const DEFAULT_MTU_SIZE: usize = 1500;
 
-pub const POOL_SIZE_BYTES: usize = core::mem::size_of::<Packet>() * NUM_PACKETS;
+// The number of ethernet frame buffers to maintain in RAM.
+const NUM_PACKETS: usize = 16;
+
+// The size of the RX FIFO. Note that it is intentionally smaller than the number of packets to
+// ensure that packet reception does not start packet transmission.
+const RX_SIZE: usize = NUM_PACKETS / 2;
+
+// The size of the TX transmit queue. Note that it is intentionally smaller than the number of
+// packets to ensure that packet transmission does not start reception.
+const TX_SIZE: usize = NUM_PACKETS / 2;
+
+const POOL_SIZE_BYTES: usize = core::mem::size_of::<Packet>() * NUM_PACKETS;
+
+/// Static storage for staged ethernet frames.
 static mut POOL_STORAGE: [u8; POOL_SIZE_BYTES] = [0; POOL_SIZE_BYTES];
 
 #[derive(Debug)]
 pub struct Packet {
-    payload: [u8; MAX_MTU_SIZE],
+    payload: [u8; DEFAULT_MTU_SIZE],
     length: usize,
 }
 
-impl Default for Packet {
-    fn default() -> Self {
+impl Packet {
+    const fn new() -> Self {
         Self {
-            payload: [0; MAX_MTU_SIZE],
+            payload: [0; DEFAULT_MTU_SIZE],
             length: 0,
         }
     }
@@ -35,15 +78,29 @@ impl core::fmt::Display for Packet {
     }
 }
 
+/// A convenience type for a pointed-to packet.
+///
+/// # Note
+/// This type can be cheaply copied among FIFOs to ensure that the underlying Packet isn't copied.
 struct PooledPacket {
     packet: Option<Box<Packet>>,
     packet_pool: &'static heapless::pool::Pool<Packet>,
 }
 
 impl PooledPacket {
+    /// Allocate a packet from the packet pool.
+    ///
+    /// # Note
+    /// Packets will automatically be returned to their pool when dropped.
+    ///
+    /// # Args
+    /// * `packet_pool` - The pool to allocate from.
+    ///
+    /// # Returns
+    /// Some(packet) if a packet was available.
     pub fn alloc(packet_pool: &'static heapless::pool::Pool<Packet>) -> Option<Self> {
         packet_pool.alloc().map(|packet| Self {
-            packet: Some(packet.init(Packet::default())),
+            packet: Some(packet.init(Packet::new())),
             packet_pool,
         })
     }
@@ -51,6 +108,7 @@ impl PooledPacket {
 
 impl Drop for PooledPacket {
     fn drop(&mut self) {
+        // Automatically deallocate pooled packets when they go out of scope.
         if let Some(packet) = self.packet.take() {
             self.packet_pool.free(packet)
         }
@@ -58,10 +116,23 @@ impl Drop for PooledPacket {
 }
 
 pub trait ExternalMac {
+    /// Receive a single ethernet frame.
+    ///
+    /// # Args
+    /// * `packet` - The packet storage to receive the frame into.
+    ///
+    /// # Returns
+    /// True if a frame was received.
     fn receive_packet(&mut self, packet: &mut Packet) -> bool;
+
+    /// Send a single ethernet frame to the MAC and transmit it.
+    ///
+    /// # Args
+    /// * `packet` - The ethernet frame to send.
     fn send_packet(&mut self, packet: &Packet);
 }
 
+#[cfg(feature = "phy_w5500")]
 impl ExternalMac for w5500::raw_device::RawDevice<w5500::bus::FourWire<super::Spi, super::SpiCs>> {
     fn receive_packet(&mut self, packet: &mut Packet) -> bool {
         let len = self.read_frame(&mut packet.payload[..]).unwrap();
@@ -138,6 +209,10 @@ impl<'a, Mac: ExternalMac> Manager<'a, Mac> {
         while self.egress_packet() {}
     }
 
+    /// Ingress a single frame from the MAC.
+    ///
+    /// # Returns
+    /// True if a frame was received and enqueued. False otherwise.
     fn ingress_packet(&mut self) -> bool {
         // If there's no space to enqueue read packets, don't try to receive at all.
         if !self.rx.ready() {
@@ -167,6 +242,10 @@ impl<'a, Mac: ExternalMac> Manager<'a, Mac> {
         }
     }
 
+    /// Egress a single ethernet frame to the MAC.
+    ///
+    /// # Returns
+    /// True if a frame was egressed. False otherwise.
     fn egress_packet(&mut self) -> bool {
         // Egress as many packets from the queue as possible.
         match self.tx.dequeue() {
@@ -185,7 +264,8 @@ impl<'a, 'b: 'a> smoltcp::phy::Device<'a> for SmoltcpDevice<'b> {
 
     fn capabilities(&self) -> smoltcp::phy::DeviceCapabilities {
         let mut caps = smoltcp::phy::DeviceCapabilities::default();
-        caps.max_transmission_unit = MAX_MTU_SIZE;
+        caps.max_transmission_unit = DEFAULT_MTU_SIZE;
+        caps.medium = smoltcp::phy::Medium::Ethernet;
         caps
     }
 
