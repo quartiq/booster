@@ -31,9 +31,10 @@ impl NetStorage {
     const fn new() -> Self {
         NetStorage {
             // Placeholder for the real IP address, which is initialized at runtime.
-            ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
-                smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
-            )],
+            ip_addrs: [smoltcp::wire::IpCidr::Ipv4(smoltcp::wire::Ipv4Cidr::new(
+                smoltcp::wire::Ipv4Address::UNSPECIFIED,
+                24,
+            ))],
             neighbor_cache: [None; 8],
             routes_cache: [None; 8],
             sockets: [smoltcp::iface::SocketStorage::EMPTY; NUM_TCP_SOCKETS + 1],

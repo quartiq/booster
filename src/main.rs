@@ -303,6 +303,7 @@ mod app {
             }) {
                 Ok(true) => update_settings::spawn().unwrap(),
                 Ok(false) => {}
+                Err(miniconf::minimq::Error::Network(smoltcp_nal::NetworkError::NoIpAddress)) => {}
                 other => log::warn!("Miniconf update failure: {:?}", other),
             }
 
@@ -317,8 +318,15 @@ mod app {
             c.shared
                 .net_devices
                 .lock(|net| {
-                    net.control
+                    match net
+                        .control
                         .poll(|handler, topic, data| main_bus.lock(|bus| handler(bus, topic, data)))
+                    {
+                        Err(minireq::Error::Mqtt(minimq::Error::Network(
+                            smoltcp_nal::NetworkError::NoIpAddress,
+                        ))) => Ok(()),
+                        other => other,
+                    }
                 })
                 .unwrap();
 
