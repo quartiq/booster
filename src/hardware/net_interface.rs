@@ -76,23 +76,7 @@ pub fn setup(
     let net_store = unsafe { &mut NETWORK_STORAGE };
 
     let mut interface = {
-        net_store.ip_addrs[0] = {
-            let ip = settings.ip().octets();
-            let subnet = settings.subnet().octets();
-            smoltcp::wire::IpCidr::new(
-                smoltcp::wire::IpAddress::from(smoltcp::wire::Ipv4Address::from_bytes(&ip)),
-                smoltcp::wire::IpAddress::from(smoltcp::wire::Ipv4Address::from_bytes(&subnet))
-                    .prefix_len()
-                    .unwrap(),
-            )
-        };
-
-        let routes = {
-            let gateway = smoltcp::wire::Ipv4Address::from_bytes(&settings.gateway().octets());
-            let mut routes = smoltcp::iface::Routes::new(&mut net_store.routes_cache[..]);
-            routes.add_default_ipv4_route(gateway).unwrap();
-            routes
-        };
+        let routes = smoltcp::iface::Routes::new(&mut net_store.routes_cache[..]);
 
         let neighbor_cache = smoltcp::iface::NeighborCache::new(&mut net_store.neighbor_cache[..]);
 
@@ -117,8 +101,7 @@ pub fn setup(
         interface.add_socket(tcp_socket);
     }
 
-    // TODO: Enable after we remove static IP configurations.
-    //interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
+    interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
 
     interface
 }

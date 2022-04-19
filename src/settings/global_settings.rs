@@ -39,10 +39,10 @@ fn identifier_is_valid(id: &str) -> bool {
 #[derive(Serialize, Deserialize)]
 struct BoosterMainBoardData {
     version: SemVersion,
-    ip_address: [u8; 4],
+    _unused_ip_address: [u8; 4],
     broker_address: [u8; 4],
-    gateway_address: [u8; 4],
-    netmask: [u8; 4],
+    _unused_gateway_address: [u8; 4],
+    _unused_netmask: [u8; 4],
     identifier: [u8; 23],
     id_size: usize,
 }
@@ -66,10 +66,10 @@ impl BoosterMainBoardData {
 
         Self {
             version: EXPECTED_VERSION,
-            ip_address: [10, 0, 0, 1],
+            _unused_ip_address: [10, 0, 0, 1],
             broker_address: [10, 0, 0, 2],
-            gateway_address: [10, 0, 0, 0],
-            netmask: [255, 255, 255, 0],
+            _unused_gateway_address: [10, 0, 0, 0],
+            _unused_netmask: [255, 255, 255, 0],
             identifier: id,
             id_size: name.len(),
         }
@@ -110,24 +110,9 @@ impl BoosterMainBoardData {
         config.board_data[..serialized.len()].copy_from_slice(serialized);
     }
 
-    /// Get the IP address of the Booster.
-    pub fn ip(&self) -> Ipv4Addr {
-        array_to_addr(&self.ip_address)
-    }
-
     /// Get the MQTT broker address of Booster.
     pub fn broker(&self) -> Ipv4Addr {
         array_to_addr(&self.broker_address)
-    }
-
-    /// Get the gateway address of Booster.
-    pub fn gateway(&self) -> Ipv4Addr {
-        array_to_addr(&self.gateway_address)
-    }
-
-    /// Get the subnet mask of Booster.
-    pub fn subnet(&self) -> Ipv4Addr {
-        array_to_addr(&self.netmask)
     }
 
     /// Get the MQTT identifier of Booster.
@@ -159,21 +144,6 @@ impl BoosterMainBoardData {
     /// Update the MQTT broker IP address of Booster.
     pub fn set_broker(&mut self, addr: Ipv4Addr) {
         self.broker_address = addr.octets();
-    }
-
-    /// Update the IP address of Booster.
-    pub fn set_ip_address(&mut self, addr: Ipv4Addr) {
-        self.ip_address = addr.octets();
-    }
-
-    /// Update the IP address of the gateway.
-    pub fn set_gateway(&mut self, addr: Ipv4Addr) {
-        self.gateway_address = addr.octets();
-    }
-
-    /// Update the subnet mask of Booster.
-    pub fn set_netmask(&mut self, addr: Ipv4Addr) {
-        self.netmask = addr.octets();
     }
 }
 
@@ -261,33 +231,12 @@ impl BoosterSettings {
 
     /// Get the Booster MAC address.
     pub fn mac(&self) -> MacAddress {
-        #[cfg(feature = "phy_w5500")]
-        {
-            MacAddress { octets: self.eui48 }
-        }
-
-        #[cfg(feature = "phy_enc424j600")]
-        MacAddress::from_bytes(&self.eui48)
-    }
-
-    /// Get the Booster IP address.
-    pub fn ip(&self) -> Ipv4Addr {
-        self.board_data.ip()
+        MacAddress { octets: self.eui48 }
     }
 
     /// Get the MQTT broker IP address.
     pub fn broker(&self) -> Ipv4Addr {
         self.board_data.broker()
-    }
-
-    /// Get the network gateway.
-    pub fn gateway(&self) -> Ipv4Addr {
-        self.board_data.gateway()
-    }
-
-    /// Get the network subnet.
-    pub fn subnet(&self) -> Ipv4Addr {
-        self.board_data.subnet()
     }
 
     /// Check if current settings differ from active (executing) settings.
@@ -299,27 +248,6 @@ impl BoosterSettings {
     pub fn set_broker(&mut self, addr: Ipv4Addr) {
         self.dirty = true;
         self.board_data.set_broker(addr);
-        self.save();
-    }
-
-    /// Update the Booster IP address.
-    pub fn set_ip_address(&mut self, addr: Ipv4Addr) {
-        self.dirty = true;
-        self.board_data.set_ip_address(addr);
-        self.save();
-    }
-
-    /// Update the booster gateway.
-    pub fn set_gateway(&mut self, addr: Ipv4Addr) {
-        self.dirty = true;
-        self.board_data.set_gateway(addr);
-        self.save();
-    }
-
-    /// Update the booster net mask.
-    pub fn set_netmask(&mut self, addr: Ipv4Addr) {
-        self.dirty = true;
-        self.board_data.set_netmask(addr);
         self.save();
     }
 
