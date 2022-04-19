@@ -39,6 +39,9 @@ fn identifier_is_valid(id: &str) -> bool {
 #[derive(Serialize, Deserialize)]
 struct BoosterMainBoardData {
     version: SemVersion,
+
+    // Note: The IP address, gateway, and netmask are unused, but left here to maintain backwards compatibility with
+    // settings version v1.0.0
     _unused_ip_address: [u8; 4],
     broker_address: [u8; 4],
     _unused_gateway_address: [u8; 4],
