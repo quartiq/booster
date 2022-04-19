@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+* The W5500 now operates as an external MAC, and smoltcp is used as the network stack.
+* DHCP support has been added, `netmask`, `ip-address`, and `gateway` settings have been removed.
+  Settings are backwards compatible with previous Booster releases.
 
 ## [0.3.0]
 

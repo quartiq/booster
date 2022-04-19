@@ -47,15 +47,6 @@ enum Token {
     #[token("id")]
     Identifier,
 
-    #[token("netmask")]
-    Netmask,
-
-    #[token("gateway")]
-    Gateway,
-
-    #[token("ip-address")]
-    SelfAddress,
-
     #[token("broker-address")]
     BrokerAddress,
 
@@ -72,10 +63,7 @@ enum Token {
 #[derive(PartialEq)]
 pub enum Property {
     Mac,
-    SelfAddress,
     BrokerAddress,
-    Netmask,
-    Gateway,
     Identifier,
 }
 
@@ -94,10 +82,7 @@ fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<128
     match prop {
         Property::Identifier => writeln!(&mut msg, "{}", settings.id()).unwrap(),
         Property::Mac => writeln!(&mut msg, "{}", settings.mac()).unwrap(),
-        Property::SelfAddress => writeln!(&mut msg, "{}", settings.ip()).unwrap(),
         Property::BrokerAddress => writeln!(&mut msg, "{}", settings.broker()).unwrap(),
-        Property::Netmask => writeln!(&mut msg, "{}", settings.subnet()).unwrap(),
-        Property::Gateway => writeln!(&mut msg, "{}", settings.gateway()).unwrap(),
     };
     msg
 }
@@ -253,10 +238,7 @@ impl SerialTerminal {
                 }
 
                 Request::WriteIpAddress(prop, addr) => match prop {
-                    Property::SelfAddress => self.settings.set_ip_address(addr),
                     Property::BrokerAddress => self.settings.set_broker(addr),
-                    Property::Gateway => self.settings.set_gateway(addr),
-                    Property::Netmask => self.settings.set_netmask(addr),
                     _ => self.write("Invalid property write\n".as_bytes()),
                 },
 
@@ -399,20 +381,20 @@ impl SerialTerminal {
 
     fn print_help(&mut self) {
         self.write(
-"\n
+            "\n
 +----------------------+
 | Booster Command Help :
 +----------------------+
 * `reset` - Resets the device
 * `dfu` - Resets the device to DFU mode
-* `read <PROP>` - Reads the value of PROP. PROP may be [ip-address, broker-address, mac, id, \
-gateway, netmask]
-* `write <PROP> <IP>` - Writes the value of <IP> to <PROP>. <PROP> may be [ip-address, broker-address, \
-netmask, gateway] and <IP> must be an IP address (e.g.  192.168.1.1)
+* `read <PROP>` - Reads the value of <PROP>. <PROP> may be [broker-address, mac, id]
+* `write broker-address <IP>` - Writes the value of <IP> to the broker address.
+  <IP> must be an IP address (e.g.  192.168.1.1)
 * `write id <ID>` - Write the MQTT client ID of the device. <ID> must be 23 or less ASCII \
 characters.
 * `service` - Read the service information. Service infromation clears once read.
-".as_bytes(),
+"
+            .as_bytes(),
         );
     }
 
@@ -443,10 +425,7 @@ characters.
                 // Check that the property is acceptable for a read.
                 let property = match property_token {
                     Token::Mac => Property::Mac,
-                    Token::SelfAddress => Property::SelfAddress,
                     Token::BrokerAddress => Property::BrokerAddress,
-                    Token::Gateway => Property::Gateway,
-                    Token::Netmask => Property::Netmask,
                     Token::Identifier => Property::Identifier,
                     _ => return Err("Invalid property read"),
                 };
@@ -459,10 +438,7 @@ characters.
 
                 // Check that the property is acceptable for a read.
                 let property = match property_token {
-                    Token::SelfAddress => Property::SelfAddress,
                     Token::BrokerAddress => Property::BrokerAddress,
-                    Token::Gateway => Property::Gateway,
-                    Token::Netmask => Property::Netmask,
                     Token::Identifier => Property::Identifier,
                     _ => return Err("Invalid property write"),
                 };
