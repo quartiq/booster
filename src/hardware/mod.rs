@@ -12,7 +12,9 @@ use stm32f4xx_hal as hal;
 pub mod booster_channels;
 pub mod chassis_fans;
 pub mod delay;
+pub mod external_mac;
 mod mutex;
+pub mod net_interface;
 pub mod platform;
 pub mod rf_channel;
 pub mod setup;
@@ -23,9 +25,6 @@ pub type Systick = systick_monotonic::Systick<MONOTONIC_FREQUENCY>;
 pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 
 pub const CPU_FREQ: u32 = 168_000_000;
-
-#[cfg(feature = "phy_enc424j600")]
-mod enc424j600_api;
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 pub type I2C = hal::i2c::I2c<
@@ -44,6 +43,8 @@ pub type I2C2 = hal::i2c::I2c<
     ),
 >;
 
+pub type SpiCs = hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>;
+
 pub type Spi = hal::spi::Spi<
     hal::stm32::SPI1,
     (
@@ -58,21 +59,13 @@ pub type Led2 = hal::gpio::gpioc::PC9<hal::gpio::Output<hal::gpio::PushPull>>;
 pub type Led3 = hal::gpio::gpioc::PC10<hal::gpio::Output<hal::gpio::PushPull>>;
 pub type MainboardLeds = (Led1, Led2, Led3);
 
-#[cfg(feature = "phy_enc424j600")]
-pub type NetworkStack = smoltcp_nal::NetworkStack<
-    'static,
-    'static,
-    enc424j600::smoltcp_phy::SmoltcpDevice<
-        enc424j600::Enc424j600<Spi, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
-    >,
-    enc424j600_api::EpochClock<CPU_FREQ>,
->;
-
 #[cfg(feature = "phy_w5500")]
-pub type NetworkStack = w5500::Device<
-    w5500::bus::FourWire<Spi, hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>>,
-    w5500::Manual,
->;
+pub type ExternalMac = w5500::raw_device::RawDevice<w5500::bus::FourWire<Spi, SpiCs>>;
+
+pub type NetworkManager = external_mac::Manager<'static, ExternalMac>;
+
+pub type NetworkStack =
+    smoltcp_nal::NetworkStack<'static, external_mac::SmoltcpDevice<'static>, SystemTimer>;
 
 pub type I2cBusManager = mutex::AtomicCheckManager<I2C>;
 pub type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;

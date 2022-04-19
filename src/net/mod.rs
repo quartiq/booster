@@ -25,10 +25,8 @@ pub struct NetworkDevices {
     pub telemetry: mqtt_control::TelemetryClient,
     pub settings: miniconf::MqttClient<crate::RuntimeSettings, NetworkStackProxy, SystemTimer, 256>,
     pub control: minireq::Minireq<MainBus, NetworkStackProxy, SystemTimer, 256, 5>,
-
-    // The stack reference is only used if the ENC424J600 PHY is used.
-    #[allow(dead_code)]
     stack: NetworkStackProxy,
+    manager: crate::hardware::NetworkManager,
 }
 
 impl NetworkDevices {
@@ -40,13 +38,17 @@ impl NetworkDevices {
     /// * `identifier` - The unique identifier of this device.
     pub fn new(
         broker: minimq::embedded_nal::IpAddr,
-        stack: NetworkStack,
+        devices: crate::hardware::setup::NetworkDevices,
         identifier: &str,
         settings: crate::RuntimeSettings,
         clock: SystemTimer,
     ) -> Self {
+        let crate::hardware::setup::NetworkDevices {
+            manager,
+            network_stack,
+        } = devices;
         let shared =
-            cortex_m::singleton!(: NetworkManager<NetworkStack> = NetworkManager::new(stack))
+            cortex_m::singleton!(: NetworkManager<NetworkStack> = NetworkManager::new(network_stack))
                 .unwrap();
 
         let mut miniconf_client: String<128> = String::new();
@@ -91,6 +93,7 @@ impl NetworkDevices {
             )
             .unwrap(),
             control,
+            manager,
             stack: shared.acquire_stack(),
         }
     }
@@ -103,13 +106,8 @@ impl NetworkDevices {
     pub fn process(&mut self) -> bool {
         self.telemetry.update();
 
-        #[cfg(feature = "phy_enc424j600")]
-        return self
-            .stack
-            .lock(|stack| stack.poll())
-            .map_err(|_| Ok(true))
-            .unwrap();
+        self.manager.process();
 
-        false
+        self.stack.lock(|stack| stack.poll()).unwrap_or(true)
     }
 }

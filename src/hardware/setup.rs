@@ -9,14 +9,11 @@ use super::{
     booster_channels::BoosterChannels,
     chassis_fans::ChassisFans,
     delay::AsmDelay,
-    platform,
+    external_mac, net_interface, platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
-    HardwareVersion, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ, I2C,
+    HardwareVersion, NetworkManager, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ, I2C,
 };
-
-#[cfg(feature = "phy_enc424j600")]
-use super::{enc424j600_api, Enc424j600};
 
 use crate::{new_atomic_check_manager, settings::BoosterSettings};
 
@@ -82,13 +79,18 @@ pub struct BoosterDevices {
     pub leds: UserLeds,
     pub buttons: UserButtons,
     pub main_bus: MainBus,
-    pub network_stack: NetworkStack,
+    pub network: NetworkDevices,
     pub watchdog: hal::watchdog::IndependentWatchdog,
     pub usb_device: UsbDevice<'static, UsbBus>,
     pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
     pub settings: BoosterSettings,
     pub hardware_version: HardwareVersion,
     pub systick: Systick,
+}
+
+pub struct NetworkDevices {
+    pub network_stack: NetworkStack,
+    pub manager: NetworkManager,
 }
 
 /// Configure Booster hardware peripherals and RF channels.
@@ -107,10 +109,16 @@ pub fn setup(
     device: stm32f4xx_hal::stm32::Peripherals,
     clock: SystemTimer,
 ) -> BoosterDevices {
+    // Configure RTT logging.
+    device.DBGMCU.cr.modify(|_, w| w.dbg_sleep().set_bit());
+    rtt_target::rtt_init_print!();
+
     // Install the logger
     log::set_logger(&crate::LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Info))
         .unwrap();
+
+    log::info!("Starting initialization");
 
     core.DWT.enable_cycle_counter();
     core.DCB.enable_trace();
@@ -277,7 +285,7 @@ pub fn setup(
         )
     };
 
-    let network_stack = {
+    let (manager, network_stack) = {
         let spi = {
             let sck = gpioa.pa5.into_alternate_af5();
             let miso = gpioa.pa6.into_alternate_af5();
@@ -292,9 +300,6 @@ pub fn setup(
                 device.SPI1,
                 (sck, miso, mosi),
                 mode,
-                #[cfg(feature = "phy_w5500")]
-                1.mhz().into(),
-                #[cfg(feature = "phy_enc424j600")]
                 14.mhz().into(),
                 clocks,
             )
@@ -307,29 +312,30 @@ pub fn setup(
         };
 
         #[cfg(feature = "phy_w5500")]
-        {
-            w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
-                .initialize_advanced(
-                    settings.mac(),
-                    settings.ip(),
-                    settings.gateway(),
-                    settings.subnet(),
-                    w5500::Mode {
-                        on_wake_on_lan: w5500::OnWakeOnLan::Ignore,
-                        on_ping_request: w5500::OnPingRequest::Respond,
-                        connection_type: w5500::ConnectionType::Ethernet,
-                        arp_responses: w5500::ArpResponses::Cache,
-                    },
-                )
-                .unwrap()
-        }
+        let mac = {
+            // Reset the W5500.
+            let mut mac_reset_n = gpiog.pg5.into_push_pull_output();
 
-        #[cfg(feature = "phy_enc424j600")]
-        {
-            let enc424j600 = Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
-            let interface = enc424j600_api::setup(enc424j600, &settings, &mut delay);
-            smoltcp_nal::NetworkStack::new(interface, super::clock::EpochClock::new())
-        }
+            // Ensure the reset is registered.
+            mac_reset_n.set_low().unwrap();
+            delay.delay_ms(1u32);
+            mac_reset_n.set_high().unwrap();
+
+            // Wait for the W5500 to achieve PLL lock.
+            delay.delay_ms(1u32);
+
+            w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
+                .initialize_macraw(settings.mac())
+                .unwrap()
+        };
+
+        // TODO: Support for the ENC424J600
+
+        let (interface, manager) = external_mac::Manager::new(mac);
+
+        let interface = net_interface::setup(interface, &settings);
+
+        (manager, smoltcp_nal::NetworkStack::new(interface, clock))
     };
 
     let mut fans = {
@@ -386,14 +392,7 @@ pub fn setup(
         {
             let mut serial_string: String<64> = String::new();
 
-            #[cfg(feature = "phy_w5500")]
             let octets = settings.mac().octets;
-            #[cfg(feature = "phy_enc424j600")]
-            let octets: [u8; 6] = {
-                let mut array = [0; 6];
-                array.copy_from_slice(settings.mac().as_bytes());
-                array
-            };
 
             write!(
                 &mut serial_string,
@@ -424,7 +423,10 @@ pub fn setup(
         // Note: These devices are within a containing structure because they exist on the same
         // shared I2C bus.
         main_bus: MainBus { channels, fans },
-        network_stack,
+        network: NetworkDevices {
+            network_stack,
+            manager,
+        },
         settings,
         usb_device,
         usb_serial,
