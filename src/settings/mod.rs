@@ -25,7 +25,7 @@ pub struct SemVersion {
 
 impl SemVersion {
     /// Determine if this version is compatible with `rhs`.
-    pub fn is_compatible(&self, rhs: &SemVersion) -> bool {
+    pub fn is_compatible_with(&self, rhs: &SemVersion) -> bool {
         (self.major == rhs.major) && (self.minor <= rhs.minor)
     }
 }

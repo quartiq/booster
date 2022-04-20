@@ -9,6 +9,8 @@ use heapless::String;
 use minimq::embedded_nal::Ipv4Addr;
 use serde::{Deserialize, Serialize};
 
+use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
+
 #[cfg(feature = "phy_w5500")]
 use w5500::MacAddress;
 
@@ -23,8 +25,8 @@ use core::fmt::Write;
 /// `BoosterMainBoardData` layout is updated.
 const EXPECTED_VERSION: SemVersion = SemVersion {
     major: 1,
-    minor: 0,
-    patch: 1,
+    minor: 1,
+    patch: 0,
 };
 
 fn array_to_addr(addr: &[u8; 4]) -> Ipv4Addr {
@@ -48,6 +50,7 @@ struct BoosterMainBoardData {
     _unused_netmask: [u8; 4],
     identifier: [u8; 23],
     id_size: usize,
+    fan_speed: f32,
 }
 
 impl BoosterMainBoardData {
@@ -75,6 +78,7 @@ impl BoosterMainBoardData {
             _unused_netmask: [255, 255, 255, 0],
             identifier: id,
             id_size: name.len(),
+            fan_speed: DEFAULT_FAN_SPEED,
         }
     }
 
@@ -85,13 +89,26 @@ impl BoosterMainBoardData {
     /// * `data` - The data to deserialize from.
     ///
     /// # Returns
-    /// The configuration if deserialization was successful. Otherwise, returns an error.
-    pub fn deserialize(data: &[u8; 64]) -> Result<Self, Error> {
-        let config: BoosterMainBoardData = postcard::from_bytes(data).unwrap();
+    /// The configuration if deserialization was successful along with a bool indicating if the
+    /// configuration was automatically upgraded. Otherwise, returns an error.
+    pub fn deserialize(data: &[u8; 64]) -> Result<(Self, bool), Error> {
+        let mut config: BoosterMainBoardData = postcard::from_bytes(data).unwrap();
+        let mut modified = false;
 
-        // Validate the version of the settings.
-        if !EXPECTED_VERSION.is_compatible(&config.version) {
-            return Err(Error::Invalid);
+        // Check if the stored EEPROM version is older (or incompatible)
+        if !EXPECTED_VERSION.is_compatible_with(&config.version) {
+            // If the stored config is compatible with the new version (e.g. older), we can upgrade
+            // the config version in a backward compatible manner by adding in new parameters and
+            // writing it back.
+            if config.version.is_compatible_with(&EXPECTED_VERSION) {
+                log::info!("Adding default fan speed setting");
+                config.fan_speed = DEFAULT_FAN_SPEED;
+                config.version = EXPECTED_VERSION;
+                modified = true;
+            } else {
+                // The version stored in EEPROM is some future version that we don't understand.
+                return Err(Error::Invalid);
+            }
         }
 
         // Validate configuration parameters.
@@ -100,7 +117,7 @@ impl BoosterMainBoardData {
             return Err(Error::Invalid);
         }
 
-        Ok(config)
+        Ok((config, modified))
     }
 
     /// Serialize the booster config into a sinara configuration for storage into EEPROM.
@@ -132,7 +149,6 @@ impl BoosterMainBoardData {
     /// # Returns
     /// Ok if the update was successful. Otherwise, returns an error.
     pub fn set_id(&mut self, id: &str) -> Result<(), Error> {
-        // TODO: Verify the ID is valid.
         if !identifier_is_valid(id) {
             return Err(Error::Invalid);
         }
@@ -167,37 +183,28 @@ impl BoosterSettings {
         let mut mac: [u8; 6] = [0; 6];
         eeprom.read_eui48(&mut mac).unwrap();
 
+        // Load the sinara configuration from EEPROM.
+        let (board_data, write_back) = Self::load_config(&mut eeprom)
+            .and_then(|config| BoosterMainBoardData::deserialize(&config.board_data))
+            .unwrap_or((BoosterMainBoardData::default(&mac), true));
+
         let mut settings = Self {
-            board_data: BoosterMainBoardData::default(&mac),
+            board_data,
             eui48: mac,
             dirty: false,
             eeprom,
         };
 
-        // Load the sinara configuration from EEPROM.
-        match settings.load_config() {
-            Ok(config) => match BoosterMainBoardData::deserialize(&config.board_data) {
-                Ok(data) => settings.board_data = data,
-
-                Err(_) => {
-                    settings.board_data = BoosterMainBoardData::default(&settings.eui48);
-                    settings.save();
-                }
-            },
-
-            // If we failed to load configuration, use a default config.
-            Err(_) => {
-                settings.board_data = BoosterMainBoardData::default(&settings.eui48);
-                settings.save();
-            }
-        };
+        if write_back {
+            settings.save();
+        }
 
         settings
     }
 
     /// Save the configuration settings to EEPROM for retrieval.
     pub fn save(&mut self) {
-        let mut config = match self.load_config() {
+        let mut config = match Self::load_config(&mut self.eeprom) {
             Err(_) => SinaraConfiguration::default(SinaraBoardId::Mainboard),
             Ok(config) => config,
         };
@@ -212,10 +219,10 @@ impl BoosterSettings {
     /// # Returns
     /// Ok(settings) if the settings loaded successfully. Otherwise, Err(settings), where `settings`
     /// are default values.
-    fn load_config(&mut self) -> Result<SinaraConfiguration, Error> {
+    fn load_config(eeprom: &mut Eeprom) -> Result<SinaraConfiguration, Error> {
         // Read the sinara-config from memory.
         let mut sinara_config: [u8; 256] = [0; 256];
-        self.eeprom.read(0, &mut sinara_config).unwrap();
+        eeprom.read(0, &mut sinara_config).unwrap();
 
         SinaraConfiguration::try_deserialize(sinara_config)
     }
@@ -235,6 +242,18 @@ impl BoosterSettings {
     /// Get the Booster MAC address.
     pub fn mac(&self) -> MacAddress {
         MacAddress { octets: self.eui48 }
+    }
+
+    /// Get the saved Booster fan speed.
+    pub fn fan_speed(&self) -> f32 {
+        self.board_data.fan_speed
+    }
+
+    /// Set the default fan speed of the device.
+    pub fn set_fan_speed(&mut self, fan_speed: f32) {
+        self.board_data.fan_speed = fan_speed.clamp(0.0, 1.0);
+        self.dirty = true;
+        self.save();
     }
 
     /// Get the MQTT broker IP address.
