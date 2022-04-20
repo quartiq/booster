@@ -50,6 +50,9 @@ enum Token {
     #[token("broker-address")]
     BrokerAddress,
 
+    #[token("fan")]
+    FanSpeed,
+
     #[regex(r"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", |lex| lex.slice().parse())]
     IpAddress(Ipv4Addr),
 
@@ -65,6 +68,7 @@ pub enum Property {
     Mac,
     BrokerAddress,
     Identifier,
+    FanSpeed,
 }
 
 pub enum Request {
@@ -75,6 +79,7 @@ pub enum Request {
     ServiceInfo,
     WriteIpAddress(Property, Ipv4Addr),
     WriteIdentifier(String<32>),
+    WriteFanSpeed(f32),
 }
 
 fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<128> {
@@ -83,6 +88,7 @@ fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<128
         Property::Identifier => writeln!(&mut msg, "{}", settings.id()).unwrap(),
         Property::Mac => writeln!(&mut msg, "{}", settings.mac()).unwrap(),
         Property::BrokerAddress => writeln!(&mut msg, "{}", settings.broker()).unwrap(),
+        Property::FanSpeed => writeln!(&mut msg, "{:.2} %", settings.fan_speed() * 100.0).unwrap(),
     };
     msg
 }
@@ -248,6 +254,10 @@ impl SerialTerminal {
                     }
                 }
 
+                Request::WriteFanSpeed(speed) => {
+                    self.settings.set_fan_speed(speed);
+                }
+
                 Request::Read(prop) => {
                     let msg = get_property_string(prop, &self.settings);
                     self.write(msg.as_bytes());
@@ -386,13 +396,13 @@ impl SerialTerminal {
 | Booster Command Help :
 +----------------------+
 * `reset` - Resets the device
-* `dfu` - Resets the device to DFU mode
-* `read <PROP>` - Reads the value of <PROP>. <PROP> may be [broker-address, mac, id]
-* `write broker-address <IP>` - Writes the value of <IP> to the broker address.
-  <IP> must be an IP address (e.g.  192.168.1.1)
-* `write id <ID>` - Write the MQTT client ID of the device. <ID> must be 23 or less ASCII \
-characters.
 * `service` - Read the service information. Service infromation clears once read.
+* `dfu` - Resets the device to DFU mode
+* `read <PROP>` - Reads the value of <PROP>. <PROP> may be [broker-address, mac, id, fan]
+* `write [broker-address <IP> | id <ID> | fan <DUTY>]`
+    - Writes the value of <IP> to the broker address. <IP> must be an IP address (e.g.  192.168.1.1)
+    - Write the MQTT client ID of the device. <ID> must be 23 or less ASCII characters.
+    - Write the <DUTY> default fan speed duty cycle, which is specified [0, 1.0].
 "
             .as_bytes(),
         );
@@ -427,41 +437,50 @@ characters.
                     Token::Mac => Property::Mac,
                     Token::BrokerAddress => Property::BrokerAddress,
                     Token::Identifier => Property::Identifier,
+                    Token::FanSpeed => Property::FanSpeed,
                     _ => return Err("Invalid property read"),
                 };
 
                 Request::Read(property)
             }
             Token::Write => {
-                // Validate that there are two valid token following.
-                let property_token = lex.next().ok_or("Malformed command")?;
-
-                // Check that the property is acceptable for a read.
-                let property = match property_token {
-                    Token::BrokerAddress => Property::BrokerAddress,
-                    Token::Identifier => Property::Identifier,
-                    _ => return Err("Invalid property write"),
-                };
-
-                let value_token = lex.next().ok_or("Malformed property")?;
-
-                match value_token {
-                    Token::IpAddress(addr) => Request::WriteIpAddress(property, addr),
-                    Token::DeviceIdentifier if property == Property::Identifier => {
-                        if lex.slice().len() < 23 {
-                            // The regex on this capture allow us to assume it is valid utf8, since
-                            // we know it is alphanumeric.
-                            let id: String<32> = String::from_str(
-                                core::str::from_utf8(lex.slice().as_bytes()).unwrap(),
-                            )
-                            .unwrap();
-
-                            Request::WriteIdentifier(id)
+                // Check that the property is acceptable for a write.
+                match lex.next().ok_or("Malformed command")? {
+                    Token::BrokerAddress => {
+                        if let Token::IpAddress(addr) = lex.next().ok_or("Malformed address")? {
+                            Request::WriteIpAddress(Property::BrokerAddress, addr)
                         } else {
-                            return Err("ID too long");
+                            return Err("Invalid property");
                         }
                     }
-                    _ => return Err("Invalid write request"),
+                    Token::Identifier => {
+                        if let Token::DeviceIdentifier = lex.next().ok_or("Malformed ID")? {
+                            if lex.slice().len() < 23 {
+                                // The regex on this capture allow us to assume it is valid utf8, since
+                                // we know it is alphanumeric.
+                                let id: String<32> = String::from_str(
+                                    core::str::from_utf8(lex.slice().as_bytes()).unwrap(),
+                                )
+                                .unwrap();
+
+                                Request::WriteIdentifier(id)
+                            } else {
+                                return Err("ID too long");
+                            }
+                        } else {
+                            return Err("Invalid property");
+                        }
+                    }
+                    Token::FanSpeed => {
+                        let fan_speed: f32 = lex
+                            .remainder()
+                            .trim()
+                            .parse()
+                            .map_err(|_| "Invalid float")?;
+                        lex.bump(lex.remainder().len());
+                        Request::WriteFanSpeed(fan_speed)
+                    }
+                    _ => return Err("Invalid property write"),
                 }
             }
             _ => return Err("Invalid command"),
@@ -470,7 +489,7 @@ characters.
         // Finally, verify that the lexer was consumed during parsing. Otherwise, the command
         // was malformed.
         if lex.next().is_some() {
-            Err("Malformed command\n")
+            Err("Malformed command - trailing data\n")
         } else {
             Ok(Some(request))
         }

@@ -23,14 +23,15 @@ impl ChassisFans {
     ///
     /// # Args
     /// * `fans` - The fan controllers to use.
+    /// * `leds` - The LEDs on Booster's main board.
     /// * `duty_cycle` - The default (normalized) duty cycle to use when enabling fans.
     ///
     /// # Returns
     /// A new fan controller.
-    pub fn new(fans: [Max6639<I2cProxy>; 3], leds: MainboardLeds) -> Self {
+    pub fn new(fans: [Max6639<I2cProxy>; 3], leds: MainboardLeds, default_speed: f32) -> Self {
         ChassisFans {
             fans,
-            duty_cycle: DEFAULT_FAN_SPEED,
+            duty_cycle: default_speed.clamp(0.0, 1.0),
             leds,
         }
     }

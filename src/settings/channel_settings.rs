@@ -105,7 +105,7 @@ impl VersionedChannelData {
         }
 
         // Validate the version of the settings.
-        if !EXPECTED_VERSION.is_compatible(&data.version) {
+        if !EXPECTED_VERSION.is_compatible_with(&data.version) {
             return Err(Error::Invalid);
         }
 
