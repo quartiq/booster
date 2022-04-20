@@ -470,9 +470,13 @@ impl SerialTerminal {
                         } else {
                             return Err("Invalid property");
                         }
-                    },
+                    }
                     Token::FanSpeed => {
-                        let fan_speed: f32 = lex.remainder().trim().parse().map_err(|_| "Invalid float")?;
+                        let fan_speed: f32 = lex
+                            .remainder()
+                            .trim()
+                            .parse()
+                            .map_err(|_| "Invalid float")?;
                         lex.bump(lex.remainder().len());
                         Request::WriteFanSpeed(fan_speed)
                     }
