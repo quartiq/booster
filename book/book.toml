@@ -15,7 +15,7 @@ command = "mdbook-toc"
 renderer = ["html"]
 
 [output.html]
-site-url = "/booster"
+site-url = "/booster-doc"
 git-repository-url = "https://github.com/quartiq/stabilizer"
 
 [output.linkcheck]
