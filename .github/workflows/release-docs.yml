@@ -44,4 +44,4 @@ jobs:
           enable_jekyll: true
           publish_branch: pages
           force_orphan: true
-          external_repository: quartiq/booster-docs
+          external_repository: quartiq/booster-doc
