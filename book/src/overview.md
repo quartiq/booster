@@ -21,9 +21,8 @@ The hardware is available from Creotech, QUARTIQ, Technosyste, and M-Labs.
 
 # Getting Started
 
-This section is intended to acquaint the user with the Booster NGFW application.
-
-There are three ways to interface with the Booster application:
+There are three ways to interface with the Booster application that are covered in the chapters of
+this manual:
 1. Pressing any of two the front-panel buttons
 1. Communicating with Booster over the USB port
 1. Communicating with Booster over ethernet via MQTT
