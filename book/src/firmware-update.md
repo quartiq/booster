@@ -15,7 +15,7 @@ The following instructions describe the process of uploading a new firmware imag
 Bootloader USB interface.
 
 1. Generate the firmware image: `cargo build`
-    - Note: You may append `--release` to build the firmware with more optimization and less debugging information.
+    - Note: For production usage, you should append `--release` to build the firmware with more optimization and slightly less debugging information.
     - Note: You may also use the latest [pre-built](https://github.com/quartiq/booster/releases) assets instead of building firmware.
 
 1. Generate the binary file for your firmware build: `cargo objcopy -- -O binary booster.bin`

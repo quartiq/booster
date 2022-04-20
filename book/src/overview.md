@@ -17,7 +17,7 @@ been recovered the firmware will be offered under an open source license.
 Booster is an 8 channel RF power amplifier in the Sinara open hardware ecosystem.
 The open hardware designs and hardware discussions are located at
 https://github.com/sinara-hw/Booster/wiki.
-The hardware is available from Creotech, QUARTIQ, Technosyste, and M-Labs.
+The hardware is available from Creotech, QUARTIQ, Technosystem, and M-Labs.
 
 # Getting Started
 

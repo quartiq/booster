@@ -55,7 +55,7 @@ In the example above, it can be seen that CH0 is enabled with RF power
 amplification.
 
 Channel 2 is enabled, but one of the interlocks has tripped, so no RF power amplification is
-occurring. This channl interlock can be cleared by pressing the "Interlock Reset" button after the
+occurring. This channel interlock can be cleared by pressing the "Interlock Reset" button after the
 trip source has been removed.
 
 Channels 1 and 3-7 are all powered up, but disabled, so there is no RF amplification.
