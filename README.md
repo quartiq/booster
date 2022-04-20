@@ -16,7 +16,7 @@ been recovered the firmware will be offered under an open source license.
 
 # Documentation
 
-Please see the [Online Documentation](https://quartiq.de/booster) for usage information.
+Please see the [Online Documentation](https://quartiq.de/booster-doc) for usage information.
 
 # License
 
