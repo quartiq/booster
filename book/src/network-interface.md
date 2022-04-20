@@ -2,7 +2,7 @@
 
 <-- TOC -->
 
-Booster uses MQTT for telemetry reporting, settings configuration, and control of RF channels. All
+Booster uses MQTT for telemetry reporting, settings configuration, and control of the channels. All
 booster MQTT topics are prefixed with `dt/sinara/booster/<ID>`, where <ID> is the MAC address of the
 device by default(e.g. `12-34-56-78-90-ab`). The ID is configurable via the USB port.
 
@@ -47,7 +47,7 @@ _Figure 2_: Example display of Booster settings tree reported via MQTT Explorer.
 
 ## Control
 
-Booster supports RF channel bias tuning and saving active channel settings configuration to EEPROM
+Booster supports channel bias tuning and saving active channel settings configuration to EEPROM
 via the Booster python package located in the `py` folder of the repository. Execute the
 following to install the package and see how to use it:
 ```sh
