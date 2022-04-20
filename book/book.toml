@@ -1,0 +1,21 @@
+[book]
+authors = ["Ryan Summers"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Booster Documentation"
+
+[build]
+create-missing = false
+build-dir = "booster-manual"
+
+[preprocessor.toc]
+marker = "<-- TOC -->"
+command = "mdbook-toc"
+renderer = ["html"]
+
+[output.html]
+site-url = "/booster-doc"
+git-repository-url = "https://github.com/quartiq/booster"
+
+[output.linkcheck]
