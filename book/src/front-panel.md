@@ -51,14 +51,12 @@ this state by pressing the "Interlock Reset" button.
 
 _Figure 1_: Sample Booster front-panel indications.
 
-In the example above, it can be seen that CH0 is enabled with RF power
-amplification.
+In the example above, it can be seen that CH0 is enabled.
 
-Channel 2 is enabled, but one of the interlocks has tripped, so no RF power amplification is
-occurring. This channel interlock can be cleared by pressing the "Interlock Reset" button after the
-trip source has been removed.
+Channel 2 is enabled, but one of the protection interlocks has tripped. This channel interlock can
+be cleared by pressing the "Interlock Reset" button after the trip source has been removed.
 
-Channels 1 and 3-7 are all powered up, but disabled, so there is no RF amplification.
+Channels 1 and 3-7 are all powered up, but outputs are disabled.
 
 # Ethernet Port
 
