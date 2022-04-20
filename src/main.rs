@@ -90,6 +90,9 @@ mod app {
 
         let mut settings = RuntimeSettings::default();
 
+        // Load the default fan speed
+        settings.fan_speed = booster.settings.fan_speed();
+
         for idx in Channel::into_enum_iter() {
             settings.channel[idx as usize] = booster
                 .main_bus

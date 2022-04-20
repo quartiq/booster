@@ -360,7 +360,7 @@ pub fn setup(
             max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pullup)
                 .unwrap();
 
-        ChassisFans::new([fan1, fan2, fan3], main_board_leds)
+        ChassisFans::new([fan1, fan2, fan3], main_board_leds, settings.fan_speed())
     };
 
     assert!(fans.self_test(&mut delay));
