@@ -3,8 +3,9 @@ name: Release Documentation
 on:
   workflow_dispatch:
   push:
-    branches:
-      - develop
+# TODO: Re-enable
+#    branches:
+#      - develop
 
 jobs:
   release-docs:
