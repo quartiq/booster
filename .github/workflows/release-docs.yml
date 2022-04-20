@@ -1,0 +1,45 @@
+name: Release Documentation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+
+jobs:
+  release-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+            fetch-depth: 0
+
+      - uses: Swatinem/rust-cache@v1
+
+      - name: Install Linkcheck
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: mdbook-linkcheck
+
+      - name: Install ToC
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: mdbook-toc
+
+      - uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: '0.4.12'
+
+      - name: Build Book
+        working-directory: book
+        run: mdbook build
+
+      - uses: peaceiris/actions-gh-pages@v3.8.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: book/booster-manual/html
+          enable_jekyll: true
+          publish_branch: pages
+          force_orphan: true
