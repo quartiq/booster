@@ -1,3 +1,9 @@
+//! Booster run-time application metadata
+//!
+//! # Copyright
+//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
+//! Unauthorized usage, editing, or copying is strictly prohibited.
+//! Proprietary and confidential.
 use serde::Serialize;
 
 use super::{platform, HardwareVersion};
@@ -5,19 +11,6 @@ use super::{platform, HardwareVersion};
 mod build_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
-
-static mut METADATA: ApplicationMetadata = ApplicationMetadata {
-    firmware_version: "Unspecified",
-    build_time_utc: build_info::BUILT_TIME_UTC,
-    rust_version: build_info::RUSTC_VERSION,
-    profile: build_info::PROFILE,
-    git_revision: "Unspecified",
-    git_dirty: true,
-    features: build_info::FEATURES_STR,
-    panic_info: "None",
-    watchdog: false,
-    hardware_version: HardwareVersion::Unknown(0),
-};
 
 #[derive(Serialize)]
 pub struct ApplicationMetadata {
@@ -34,10 +27,30 @@ pub struct ApplicationMetadata {
 }
 
 impl ApplicationMetadata {
+    /// Construct the global metadata.
+    ///
+    /// # Note
+    /// This may only be called once.
+    ///
+    /// # Args
+    /// * `hardware_version` - The hardware version detected.
+    ///
+    /// # Returns
+    /// A reference to the global metadata.
     pub fn new(hardware_version: HardwareVersion) -> &'static ApplicationMetadata {
-        let mut meta = unsafe { &mut METADATA };
-        meta.hardware_version = hardware_version;
-        meta.watchdog = platform::watchdog_detected();
+        let mut meta = cortex_m::singleton!(: ApplicationMetadata = ApplicationMetadata {
+            firmware_version: "Unspecified",
+            build_time_utc: build_info::BUILT_TIME_UTC,
+            rust_version: build_info::RUSTC_VERSION,
+            profile: build_info::PROFILE,
+            git_revision: "Unspecified",
+            git_dirty: true,
+            features: build_info::FEATURES_STR,
+            panic_info: "None",
+            watchdog: platform::watchdog_detected(),
+            hardware_version,
+        })
+        .unwrap();
 
         if let Some(panic_data) = panic_persist::get_panic_message_utf8() {
             meta.panic_info = panic_data;
