@@ -5,6 +5,7 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 
+use core::fmt::Write;
 use enum_iterator::IntoEnumIterator;
 use serde::{Deserialize, Serialize};
 use stm32f4xx_hal as hal;
@@ -13,6 +14,7 @@ pub mod booster_channels;
 pub mod chassis_fans;
 pub mod delay;
 pub mod external_mac;
+pub mod metadata;
 mod mutex;
 pub mod net_interface;
 pub mod platform;
@@ -113,5 +115,13 @@ impl core::fmt::Display for HardwareVersion {
             HardwareVersion::Rev1_5 => write!(f, "v1.5"),
             HardwareVersion::Unknown(other) => write!(f, "Unknown ({:#b})", other),
         }
+    }
+}
+
+impl serde::Serialize for HardwareVersion {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut version_string: heapless::String<32> = heapless::String::new();
+        write!(&mut version_string, "{}", self).unwrap();
+        serializer.serialize_str(&version_string)
     }
 }

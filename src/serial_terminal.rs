@@ -5,7 +5,7 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 use super::{
-    hardware::{platform, HardwareVersion, UsbBus},
+    hardware::{platform, UsbBus},
     BoosterSettings,
 };
 use bbqueue::BBBuffer;
@@ -15,10 +15,6 @@ use usbd_serial::UsbError;
 
 use core::{fmt::Write, str::FromStr};
 use minimq::embedded_nal::Ipv4Addr;
-
-mod build_info {
-    include!(concat!(env!("OUT_DIR"), "/built.rs"));
-}
 
 #[derive(Logos)]
 enum Token {
@@ -104,7 +100,7 @@ pub struct SerialTerminal {
     input_buffer: Vec<u8, 128>,
     output_buffer_producer: bbqueue::Producer<'static, 1024>,
     output_buffer_consumer: bbqueue::Consumer<'static, 1024>,
-    hardware_version: HardwareVersion,
+    metadata: &'static crate::hardware::metadata::ApplicationMetadata,
 }
 
 impl SerialTerminal {
@@ -113,7 +109,7 @@ impl SerialTerminal {
         usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
         usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
         settings: BoosterSettings,
-        hardware_version: HardwareVersion,
+        metadata: &'static crate::hardware::metadata::ApplicationMetadata,
     ) -> Self {
         let (producer, consumer) = OUTPUT_BUFFER.try_split().unwrap();
         Self {
@@ -123,7 +119,7 @@ impl SerialTerminal {
             input_buffer: Vec::new(),
             output_buffer_producer: producer,
             output_buffer_consumer: consumer,
-            hardware_version,
+            metadata,
         }
     }
 
@@ -154,9 +150,7 @@ impl SerialTerminal {
                     writeln!(
                         &mut msg,
                         "{:<20}: {} [{}]",
-                        "Version",
-                        build_info::GIT_VERSION.unwrap_or("Unspecified"),
-                        build_info::PROFILE
+                        "Version", self.metadata.firmware_version, self.metadata.profile,
                     )
                     .unwrap_or_else(|_| {
                         msg = String::from("Version: too long");
@@ -167,7 +161,7 @@ impl SerialTerminal {
                     writeln!(
                         &mut msg,
                         "{:<20}: {}",
-                        "Hardware Revision", self.hardware_version
+                        "Hardware Revision", self.metadata.hardware_version
                     )
                     .unwrap_or_else(|_| {
                         msg = String::from("Hardware version: too long");
@@ -178,8 +172,7 @@ impl SerialTerminal {
                     writeln!(
                         &mut msg,
                         "{:<20}: {}",
-                        "Build Time",
-                        build_info::BUILT_TIME_UTC
+                        "Build Time", self.metadata.build_time_utc,
                     )
                     .unwrap_or_else(|_| {
                         msg = String::from("Build: too long");
@@ -190,8 +183,7 @@ impl SerialTerminal {
                     writeln!(
                         &mut msg,
                         "{:<20}: {}",
-                        "Rustc Version",
-                        build_info::RUSTC_VERSION
+                        "Rustc Version", self.metadata.rust_version,
                     )
                     .unwrap_or_else(|_| {
                         msg = String::from("Rustc Version: too long");
@@ -202,9 +194,7 @@ impl SerialTerminal {
                     writeln!(
                         &mut msg,
                         "{:<20}: {} (dirty = {})",
-                        "Git revision",
-                        build_info::GIT_COMMIT_HASH.unwrap_or("Unspecified"),
-                        build_info::GIT_DIRTY.unwrap_or(false)
+                        "Git revision", self.metadata.git_revision, self.metadata.git_dirty,
                     )
                     .unwrap_or_else(|_| {
                         msg = String::from("Git revision: too long");
@@ -212,7 +202,7 @@ impl SerialTerminal {
                     self.write(msg.as_bytes());
 
                     msg.clear();
-                    writeln!(&mut msg, "{:<20}: {}", "Features", build_info::FEATURES_STR)
+                    writeln!(&mut msg, "{:<20}: {}", "Features", self.metadata.features)
                         .unwrap_or_else(|_| {
                             msg = String::from("Features: too long");
                         });
@@ -223,7 +213,7 @@ impl SerialTerminal {
                     // string.
                     write!(&mut msg, "{:<20}: ", "Panic Info").unwrap();
                     self.write(msg.as_bytes());
-                    self.write(panic_persist::get_panic_message_bytes().unwrap_or(b"None"));
+                    self.write(self.metadata.panic_info.as_bytes());
                     self.write("\n".as_bytes());
 
                     msg.clear();
@@ -232,15 +222,10 @@ impl SerialTerminal {
                     writeln!(
                         &mut msg,
                         "{:<20}: {}",
-                        "Watchdog Detected",
-                        platform::watchdog_detected()
+                        "Watchdog Detected", self.metadata.watchdog
                     )
                     .unwrap();
                     self.write(msg.as_bytes());
-
-                    // Reading the panic message above clears the panic message, so similarly, we
-                    // should also clear the watchdog once read.
-                    platform::clear_reset_flags();
                 }
 
                 Request::WriteIpAddress(prop, addr) => match prop {

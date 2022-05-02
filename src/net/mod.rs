@@ -42,6 +42,7 @@ impl NetworkDevices {
         identifier: &str,
         settings: crate::RuntimeSettings,
         clock: SystemTimer,
+        metadata: &'static crate::hardware::metadata::ApplicationMetadata,
     ) -> Self {
         let crate::hardware::setup::NetworkDevices {
             manager,
@@ -82,6 +83,7 @@ impl NetworkDevices {
                 shared.acquire_stack(),
                 clock,
                 identifier,
+                metadata,
             ),
             settings: miniconf::MqttClient::new(
                 shared.acquire_stack(),

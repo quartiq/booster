@@ -30,7 +30,7 @@ shared-bus = { version = "0.2", features = ["cortex-m"] }
 usb-device = "0.2.8"
 postcard = "0.5.1"
 crc-any = { version = "2.3.5", default-features = false }
-panic-persist = { version = "0.3", features = ["custom-panic-handler"] }
+panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
 smoltcp-nal = { version = "0.2" }
 miniconf = { version = "0.3", features = ["mqtt-client"]}
 minimq = "0.5.3"

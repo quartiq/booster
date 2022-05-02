@@ -5,7 +5,7 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 use crate::{
-    hardware::{setup::MainBus, SystemTimer},
+    hardware::{metadata::ApplicationMetadata, setup::MainBus, SystemTimer},
     Channel,
 };
 
@@ -41,8 +41,10 @@ struct ChannelBiasResponse {
 /// Represents a means of handling MQTT-based control interface.
 pub struct TelemetryClient {
     mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 512, 1>,
-    telemetry_prefix: String<128>,
+    prefix: String<128>,
     telemetry_period: u64,
+    meta_published: bool,
+    metadata: &'static ApplicationMetadata,
 }
 
 impl TelemetryClient {
@@ -52,17 +54,34 @@ impl TelemetryClient {
         stack: super::NetworkStackProxy,
         clock: SystemTimer,
         id: &str,
+        metadata: &'static ApplicationMetadata,
     ) -> Self {
         let mut client_id: String<64> = String::new();
         write!(&mut client_id, "booster-{}-tlm", id).unwrap();
 
-        let mut telemetry_prefix: String<128> = String::new();
-        write!(&mut telemetry_prefix, "dt/sinara/booster/{}/telemetry", id).unwrap();
+        let mut prefix: String<128> = String::new();
+        write!(&mut prefix, "dt/sinara/booster/{}", id).unwrap();
+
+        let mut mqtt = minimq::Minimq::new(broker, &client_id, stack, clock).unwrap();
+
+        let mut topic: String<64> = String::new();
+        write!(&mut topic, "{}/alive/meta", prefix).unwrap();
+        mqtt.client
+            .set_will(
+                &topic,
+                "".as_bytes(),
+                minimq::QoS::AtMostOnce,
+                minimq::Retain::NotRetained,
+                &[],
+            )
+            .unwrap();
 
         Self {
-            mqtt: minimq::Minimq::new(broker, &client_id, stack, clock).unwrap(),
-            telemetry_prefix,
+            mqtt,
+            prefix,
             telemetry_period: DEFAULT_TELEMETRY_PERIOD_SECS,
+            meta_published: false,
+            metadata,
         }
     }
 
@@ -73,7 +92,7 @@ impl TelemetryClient {
     /// * `telemetry` - The associated telemetry of the channel to report.
     pub fn report_telemetry(&mut self, channel: Channel, telemetry: &impl Serialize) {
         let mut topic: String<64> = String::new();
-        write!(&mut topic, "{}/ch{}", self.telemetry_prefix, channel as u8).unwrap();
+        write!(&mut topic, "{}/telemetry/ch{}", self.prefix, channel as u8).unwrap();
 
         let message: String<1024> = serde_json_core::to_string(telemetry).unwrap();
 
@@ -93,6 +112,30 @@ impl TelemetryClient {
     /// Handle the MQTT-based telemetry interface.
     pub fn update(&mut self) {
         self.mqtt.poll(|_, _, _, _| {}).ok();
+
+        if self.mqtt.client.is_connected() {
+            if !self.meta_published {
+                let mut topic: String<64> = String::new();
+                write!(&mut topic, "{}/alive/meta", self.prefix).unwrap();
+                let message: String<1024> = serde_json_core::to_string(&self.metadata).unwrap();
+                if self
+                    .mqtt
+                    .client
+                    .publish(
+                        &topic,
+                        &message.into_bytes(),
+                        minimq::QoS::AtMostOnce,
+                        minimq::Retain::Retained,
+                        &[],
+                    )
+                    .is_ok()
+                {
+                    self.meta_published = true;
+                }
+            }
+        } else {
+            self.meta_published = false
+        }
     }
 
     /// Get the period between telemetry updates in CPU cycles.
