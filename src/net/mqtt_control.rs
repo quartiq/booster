@@ -61,23 +61,8 @@ impl TelemetryClient {
 
         let mut prefix: String<128> = String::new();
         write!(&mut prefix, "dt/sinara/booster/{}", id).unwrap();
-
-        let mut mqtt = minimq::Minimq::new(broker, &client_id, stack, clock).unwrap();
-
-        let mut topic: String<64> = String::new();
-        write!(&mut topic, "{}/alive/meta", prefix).unwrap();
-        mqtt.client
-            .set_will(
-                &topic,
-                "".as_bytes(),
-                minimq::QoS::AtMostOnce,
-                minimq::Retain::NotRetained,
-                &[],
-            )
-            .unwrap();
-
         Self {
-            mqtt,
+            mqtt: minimq::Minimq::new(broker, &client_id, stack, clock).unwrap(),
             prefix,
             telemetry_period: DEFAULT_TELEMETRY_PERIOD_SECS,
             meta_published: false,
@@ -125,7 +110,7 @@ impl TelemetryClient {
                         &topic,
                         &message.into_bytes(),
                         minimq::QoS::AtMostOnce,
-                        minimq::Retain::Retained,
+                        minimq::Retain::NotRetained,
                         &[],
                     )
                     .is_ok()
