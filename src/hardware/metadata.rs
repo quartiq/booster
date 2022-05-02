@@ -55,8 +55,6 @@ impl ApplicationMetadata {
             meta.firmware_version = version;
         }
 
-        platform::clear_reset_flags();
-
         meta
     }
 }

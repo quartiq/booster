@@ -226,6 +226,10 @@ impl SerialTerminal {
                     )
                     .unwrap();
                     self.write(msg.as_bytes());
+
+                    // Use this as a mechanism for the user to "acknowledge" the service state of
+                    // the device. This will allow RF channels to re-enable.
+                    platform::clear_reset_flags();
                 }
 
                 Request::WriteIpAddress(prop, addr) => match prop {

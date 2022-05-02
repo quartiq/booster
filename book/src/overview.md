@@ -26,3 +26,9 @@ this manual:
 1. Pressing any of two the front-panel buttons
 1. Communicating with Booster over the USB port
 1. Communicating with Booster over ethernet via MQTT
+
+# Fault Mode
+
+When Booster encounters a software fault, it goes into a safe mode where no channels will be
+enabled. To acknowledge and clear the fault, utilize the `service` command from the front panel USB
+port.
