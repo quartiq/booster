@@ -18,7 +18,7 @@ use heapless::String;
 use serde::Serialize;
 
 /// Default metadata message if formatting errors occur.
-const DEFAULT_METADATA: &'static str = "{\"message\":\"Truncated: See USB terminal\"}";
+const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
 
 type MinireqResponse = Result<
     minireq::Response<256>,
