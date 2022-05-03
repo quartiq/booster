@@ -9,7 +9,9 @@ use super::{
     booster_channels::BoosterChannels,
     chassis_fans::ChassisFans,
     delay::AsmDelay,
-    external_mac, net_interface, platform,
+    external_mac,
+    metadata::ApplicationMetadata,
+    net_interface, platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
     HardwareVersion, NetworkManager, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ, I2C,
@@ -84,7 +86,7 @@ pub struct BoosterDevices {
     pub usb_device: UsbDevice<'static, UsbBus>,
     pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
     pub settings: BoosterSettings,
-    pub hardware_version: HardwareVersion,
+    pub metadata: &'static ApplicationMetadata,
     pub systick: Systick,
 }
 
@@ -272,17 +274,21 @@ pub fn setup(
         BoosterSettings::new(eui)
     };
 
-    // Read the hardware version pins.
-    let hardware_version = {
-        let hwrev0 = gpiof.pf0.into_pull_down_input();
-        let hwrev1 = gpiof.pf1.into_pull_down_input();
-        let hwrev2 = gpiof.pf2.into_pull_down_input();
+    let metadata = {
+        // Read the hardware version pins.
+        let hardware_version = {
+            let hwrev0 = gpiof.pf0.into_pull_down_input();
+            let hwrev1 = gpiof.pf1.into_pull_down_input();
+            let hwrev2 = gpiof.pf2.into_pull_down_input();
 
-        HardwareVersion::from(
-            *0u8.set_bit(0, hwrev0.is_high().unwrap())
-                .set_bit(1, hwrev1.is_high().unwrap())
-                .set_bit(2, hwrev2.is_high().unwrap()),
-        )
+            HardwareVersion::from(
+                *0u8.set_bit(0, hwrev0.is_high().unwrap())
+                    .set_bit(1, hwrev1.is_high().unwrap())
+                    .set_bit(2, hwrev2.is_high().unwrap()),
+            )
+        };
+
+        ApplicationMetadata::new(hardware_version)
     };
 
     let (manager, network_stack) = {
@@ -431,7 +437,7 @@ pub fn setup(
         usb_device,
         usb_serial,
         watchdog,
-        hardware_version,
+        metadata,
         systick,
     }
 }
