@@ -44,8 +44,8 @@ built = { version = "0.5", features = ["git2"], default-features = false }
 
 # Add RawDevice support for the W5500 to operate as an external MAC
 [patch.crates-io.w5500]
-git = "https://github.com/quartiq/w5500"
-rev = "5a03d6d720a642841523309170b038baa98229eb"
+git = "https://github.com/kellerkindt/w5500"
+rev = "aa5eb1d4bf29b9e3c8ce0f685081440e320f5b7e"
 
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/stm32-rs/stm32f4xx-hal"
