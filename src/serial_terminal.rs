@@ -172,32 +172,10 @@ impl SerialTerminal {
                     writeln!(
                         &mut msg,
                         "{:<20}: {}",
-                        "Build Time", self.metadata.build_time_utc,
-                    )
-                    .unwrap_or_else(|_| {
-                        msg = String::from("Build: too long");
-                    });
-                    self.write(msg.as_bytes());
-
-                    msg.clear();
-                    writeln!(
-                        &mut msg,
-                        "{:<20}: {}",
                         "Rustc Version", self.metadata.rust_version,
                     )
                     .unwrap_or_else(|_| {
                         msg = String::from("Rustc Version: too long");
-                    });
-                    self.write(msg.as_bytes());
-
-                    msg.clear();
-                    writeln!(
-                        &mut msg,
-                        "{:<20}: {} (dirty = {})",
-                        "Git revision", self.metadata.git_revision, self.metadata.git_dirty,
-                    )
-                    .unwrap_or_else(|_| {
-                        msg = String::from("Git revision: too long");
                     });
                     self.write(msg.as_bytes());
 

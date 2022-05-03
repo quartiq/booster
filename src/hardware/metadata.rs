@@ -15,9 +15,7 @@ mod build_info {
 #[derive(Serialize)]
 pub struct ApplicationMetadata {
     pub firmware_version: &'static str,
-    pub build_time_utc: &'static str,
     pub rust_version: &'static str,
-    pub git_revision: &'static str,
     pub profile: &'static str,
     pub git_dirty: bool,
     pub features: &'static str,
@@ -40,10 +38,8 @@ impl ApplicationMetadata {
     pub fn new(hardware_version: HardwareVersion) -> &'static ApplicationMetadata {
         let mut meta = cortex_m::singleton!(: ApplicationMetadata = ApplicationMetadata {
             firmware_version: "Unspecified",
-            build_time_utc: build_info::BUILT_TIME_UTC,
             rust_version: build_info::RUSTC_VERSION,
             profile: build_info::PROFILE,
-            git_revision: "Unspecified",
             git_dirty: true,
             features: build_info::FEATURES_STR,
             panic_info: "None",
@@ -54,10 +50,6 @@ impl ApplicationMetadata {
 
         if let Some(panic_data) = panic_persist::get_panic_message_utf8() {
             meta.panic_info = panic_data;
-        }
-
-        if let Some(git_revision) = build_info::GIT_COMMIT_HASH {
-            meta.git_revision = git_revision;
         }
 
         if let Some(dirty) = build_info::GIT_DIRTY {

@@ -17,6 +17,9 @@ use core::fmt::Write;
 use heapless::String;
 use serde::Serialize;
 
+/// Default metadata message if formatting errors occur.
+const DEFAULT_METADATA: &'static str = "{\"message\":\"Truncated: See USB terminal\"}";
+
 type MinireqResponse = Result<
     minireq::Response<256>,
     minireq::Error<<super::NetworkStack as embedded_nal::TcpClientStack>::Error>,
@@ -98,28 +101,45 @@ impl TelemetryClient {
     pub fn update(&mut self) {
         self.mqtt.poll(|_, _, _, _| {}).ok();
 
-        if self.mqtt.client.is_connected() {
-            if !self.meta_published {
-                let mut topic: String<64> = String::new();
-                write!(&mut topic, "{}/alive/meta", self.prefix).unwrap();
-                let message: String<1024> = serde_json_core::to_string(&self.metadata).unwrap();
-                if self
-                    .mqtt
+        if !self.mqtt.client.is_connected() {
+            self.meta_published = false;
+            return;
+        }
+
+        // If the metadata has not yet been published, but we can publish it, do so now.
+        if !self.meta_published && self.mqtt.client.can_publish(minimq::QoS::AtMostOnce) {
+            let mut topic: String<64> = String::new();
+            write!(&mut topic, "{}/alive/meta", self.prefix).unwrap();
+            let message: String<512> = serde_json_core::to_string(&self.metadata)
+                .unwrap_or_else(|_| String::from(DEFAULT_METADATA));
+
+            if self
+                .mqtt
+                .client
+                .publish(
+                    &topic,
+                    &message.into_bytes(),
+                    minimq::QoS::AtMostOnce,
+                    minimq::Retain::NotRetained,
+                    &[],
+                )
+                .is_err()
+            {
+                // Note(unwrap): We can guarantee that this message will be sent because we checked
+                // for ability to publish above.
+                self.mqtt
                     .client
                     .publish(
                         &topic,
-                        &message.into_bytes(),
+                        DEFAULT_METADATA.as_bytes(),
                         minimq::QoS::AtMostOnce,
                         minimq::Retain::NotRetained,
                         &[],
                     )
-                    .is_ok()
-                {
-                    self.meta_published = true;
-                }
+                    .unwrap();
             }
-        } else {
-            self.meta_published = false
+
+            self.meta_published = true;
         }
     }
 
