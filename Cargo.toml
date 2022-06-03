@@ -67,8 +67,7 @@ git = "https://github.com/quartiq/miniconf"
 rev = "140b6f3"
 
 [patch.crates-io.usb-device]
-git = "https://github.com/ryan-summers/usb-device"
-rev = "abdf004"
+git = "https://github.com/rust-embedded-community/usb-device"
 
 [dependencies.ad5627]
 path = "ad5627"

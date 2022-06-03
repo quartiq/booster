@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Settings are backwards compatible with previous Booster releases.
 * Fan speed is now stored in EEPROM and configurable via the serial interface.
 
+### Fixed
+* A few dependencies were deprecated because changes landed upstream. These dependencies were
+  corrected to point upstream.
+
 ## [0.3.0]
 
 ### Fixed
