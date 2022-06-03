@@ -1402,7 +1402,7 @@ dependencies = [
 [[package]]
 name = "usb-device"
 version = "0.2.8"
-source = "git+https://github.com/ryan-summers/usb-device?rev=abdf004#abdf0045e374535cf73db57bc85749470604f6c7"
+source = "git+https://github.com/rust-embedded-community/usb-device#413b77cd38d200c3b0e777dd3055cb7ef82c46a0"
 
 [[package]]
 name = "usbd-serial"
