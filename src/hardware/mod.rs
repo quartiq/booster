@@ -15,7 +15,6 @@ pub mod chassis_fans;
 pub mod delay;
 pub mod external_mac;
 pub mod metadata;
-mod mutex;
 pub mod net_interface;
 pub mod platform;
 pub mod rf_channel;
@@ -69,8 +68,8 @@ pub type NetworkManager = external_mac::Manager<'static, ExternalMac>;
 pub type NetworkStack =
     smoltcp_nal::NetworkStack<'static, external_mac::SmoltcpDevice<'static>, SystemTimer>;
 
-pub type I2cBusManager = mutex::AtomicCheckManager<I2C>;
-pub type I2cProxy = shared_bus::I2cProxy<'static, mutex::AtomicCheckMutex<I2C>>;
+pub type I2cBusManager = shared_bus::BusManagerAtomicCheck<I2C>;
+pub type I2cProxy = shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2C>>;
 pub type I2cError = hal::i2c::Error;
 
 pub type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;
