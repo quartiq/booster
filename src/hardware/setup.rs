@@ -17,7 +17,7 @@ use super::{
     HardwareVersion, NetworkManager, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ, I2C,
 };
 
-use crate::{new_atomic_check_manager, settings::BoosterSettings};
+use crate::settings::BoosterSettings;
 
 use stm32f4xx_hal as hal;
 
@@ -189,7 +189,7 @@ pub fn setup(
             hal::i2c::I2c::i2c1(i2c_peripheral, (scl, sda), 100.khz(), clocks)
         };
 
-        new_atomic_check_manager!(I2C = i2c).unwrap()
+        shared_bus::new_atomic_check!(I2C = i2c).unwrap()
     };
 
     // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
