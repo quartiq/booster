@@ -59,7 +59,7 @@ rev = "786bc8845819a26a3669d6e0c81d64b71f510573"
 [dependencies.enc424j600]
 git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
 rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
-features = [ "smoltcp-phy", "cortex-m-cpu" ]
+features = [ "cortex-m-cpu" ]
 optional = true
 
 [patch.crates-io.miniconf]
@@ -95,6 +95,7 @@ path = "tca9548"
 
 [features]
 phy_w5500 = [ "w5500" ]
+phy_enc424j600 = [ "enc424j600" ]
 default = [ "phy_w5500" ]
 
 [profile.dev]
