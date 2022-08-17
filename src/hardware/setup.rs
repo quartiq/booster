@@ -335,7 +335,14 @@ pub fn setup(
                 .unwrap()
         };
 
-        // TODO: Support for the ENC424J600
+        #[cfg(feature = "phy_enc424j600")]
+        let mac = {
+            let mut mac = enc424j600::Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
+            mac.init(&mut delay).expect("PHY initialization failed");
+            mac.write_mac_addr(settings.mac().as_bytes()).unwrap();
+
+            mac
+        };
 
         let (interface, manager) = external_mac::Manager::new(mac);
 
