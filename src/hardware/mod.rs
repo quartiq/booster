@@ -63,6 +63,9 @@ pub type MainboardLeds = (Led1, Led2, Led3);
 #[cfg(feature = "phy_w5500")]
 pub type ExternalMac = w5500::raw_device::RawDevice<w5500::bus::FourWire<Spi, SpiCs>>;
 
+#[cfg(feature = "phy_enc424j600")]
+pub type ExternalMac = enc424j600::Enc424j600<Spi, SpiCs>;
+
 pub type NetworkManager = external_mac::Manager<'static, ExternalMac>;
 
 pub type NetworkStack =
