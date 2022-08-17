@@ -82,9 +82,7 @@ pub fn setup(
         let neighbor_cache = smoltcp::iface::NeighborCache::new(&mut net_store.neighbor_cache[..]);
 
         smoltcp::iface::InterfaceBuilder::new(device, &mut net_store.sockets[..])
-            .hardware_addr(smoltcp::wire::HardwareAddress::Ethernet(
-                smoltcp::wire::EthernetAddress(settings.mac().octets),
-            ))
+            .hardware_addr(smoltcp::wire::HardwareAddress::Ethernet(settings.mac()))
             .neighbor_cache(neighbor_cache)
             .ip_addrs(&mut net_store.ip_addrs[..])
             .routes(routes)

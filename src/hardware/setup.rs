@@ -331,7 +331,9 @@ pub fn setup(
             delay.delay_ms(1u32);
 
             w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
-                .initialize_macraw(settings.mac())
+                .initialize_macraw(w5500::MacAddress {
+                    octets: settings.mac().0,
+                })
                 .unwrap()
         };
 
@@ -405,7 +407,7 @@ pub fn setup(
         {
             let mut serial_string: String<64> = String::new();
 
-            let octets = settings.mac().octets;
+            let octets = settings.mac().0;
 
             write!(
                 &mut serial_string,
