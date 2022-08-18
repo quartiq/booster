@@ -34,7 +34,7 @@ jobs:
 
   compile:
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.toolchain == 'nightly' || matrix.features == 'phy_enc424j600'}}
+    continue-on-error: ${{ matrix.toolchain == 'nightly' }}
     strategy:
       max-parallel: 2
       matrix:
@@ -43,6 +43,7 @@ jobs:
           - '1.57.0'
         features:
           - phy_w5500
+          - phy_enc424j600
     steps:
       - uses: actions/checkout@v2
 

@@ -11,10 +11,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
 
-#[cfg(feature = "phy_w5500")]
-use w5500::MacAddress;
-
-#[cfg(feature = "phy_enc424j600")]
 use smoltcp_nal::smoltcp::wire::EthernetAddress as MacAddress;
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
@@ -241,7 +237,7 @@ impl BoosterSettings {
 
     /// Get the Booster MAC address.
     pub fn mac(&self) -> MacAddress {
-        MacAddress { octets: self.eui48 }
+        MacAddress(self.eui48)
     }
 
     /// Get the saved Booster fan speed.

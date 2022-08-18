@@ -151,6 +151,34 @@ impl ExternalMac for w5500::raw_device::RawDevice<w5500::bus::FourWire<super::Sp
     }
 }
 
+#[cfg(feature = "phy_enc424j600")]
+use enc424j600::EthPhy;
+
+#[cfg(feature = "phy_enc424j600")]
+impl ExternalMac for enc424j600::Enc424j600<super::Spi, super::SpiCs> {
+    fn receive_frame(&mut self, frame: &mut Frame) -> bool {
+        match self.recv_packet(false) {
+            Ok(rx_packet) => {
+                rx_packet.write_frame_to(&mut frame.payload[..]);
+                frame.length = rx_packet.get_frame_length();
+                frame.length != 0
+            }
+
+            Err(enc424j600::Error::NoRxPacketError) => false,
+
+            Err(other) => {
+                panic!("Unexpected MAC error: {:?}", other);
+            }
+        }
+    }
+
+    fn send_frame(&mut self, frame: &Frame) {
+        let mut tx_packet = enc424j600::tx::TxPacket::new();
+        tx_packet.update_frame(&frame.payload[..], frame.length);
+        self.send_packet(&tx_packet).unwrap();
+    }
+}
+
 /// Smoltcp phy::Device implementation to provide to the network stack.
 pub struct SmoltcpDevice<'a> {
     tx: &'a heapless::mpmc::MpMcQueue<PooledFrame, TX_SIZE>,

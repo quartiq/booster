@@ -15,9 +15,6 @@ compile_error!(
 #[cfg(all(feature = "phy_enc424j600", feature = "phy_w5500"))]
 compile_error!("Cannot enable multiple ethernet PHY devices.");
 
-#[cfg(feature = "phy_enc424j600")]
-compile_error!("ENC424J600 is not currently implemented");
-
 use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal as hal;
 

@@ -331,11 +331,20 @@ pub fn setup(
             delay.delay_ms(1u32);
 
             w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
-                .initialize_macraw(settings.mac())
+                .initialize_macraw(w5500::MacAddress {
+                    octets: settings.mac().0,
+                })
                 .unwrap()
         };
 
-        // TODO: Support for the ENC424J600
+        #[cfg(feature = "phy_enc424j600")]
+        let mac = {
+            let mut mac = enc424j600::Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
+            mac.init(&mut delay).expect("PHY initialization failed");
+            mac.write_mac_addr(settings.mac().as_bytes()).unwrap();
+
+            mac
+        };
 
         let (interface, manager) = external_mac::Manager::new(mac);
 
@@ -398,7 +407,7 @@ pub fn setup(
         {
             let mut serial_string: String<64> = String::new();
 
-            let octets = settings.mac().octets;
+            let octets = settings.mac().0;
 
             write!(
                 &mut serial_string,
