@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * DHCP support has been added, `netmask`, `ip-address`, and `gateway` settings have been removed.
   Settings are backwards compatible with previous Booster releases.
 * Fan speed is now stored in EEPROM and configurable via the serial interface.
+* Support for different ethernet daughterboards using the ENC424J00 has been added.
 
 ### Changed
 * Removed custom `mutex` implementation in favor of leveraging `shared-bus`
