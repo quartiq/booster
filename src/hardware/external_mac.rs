@@ -166,9 +166,8 @@ impl ExternalMac for enc424j600::Enc424j600<super::Spi, super::SpiCs> {
 
             Err(enc424j600::Error::NoRxPacketError) => false,
 
-            e => {
-                e.unwrap();
-                unreachable!();
+            Err(other) => {
+                panic!("Unexpected MAC error: {:?}", other);
             }
         }
     }
