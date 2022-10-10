@@ -357,21 +357,12 @@ impl SerialTerminal {
                     }
                 }
 
-                match self.parse_buffer() {
-                    // If there's nothing requested yet, keep waiting for more data.
-                    Ok(None) => None,
-
-                    // If we got a request, clear the buffer and process it.
-                    Ok(Some(result)) => Some(result),
-
-                    // Otherwise, if there was an error, clear the buffer and print it.
-                    Err(msg) => {
-                        self.write(msg.as_bytes());
-                        self.print_help();
-                        self.reset();
-                        None
-                    }
-                }
+                self.parse_buffer().unwrap_or_else(|msg| {
+                    self.write(msg.as_bytes());
+                    self.print_help();
+                    self.reset();
+                    None
+                })
             }
             // If there's no data available, don't process anything.
             Err(UsbError::WouldBlock) => None,
