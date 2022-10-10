@@ -222,7 +222,7 @@ pub fn setup(
 
         let adc = hal::adc::Adc::adc3(device.ADC3, true, config);
 
-        BoosterChannels::new(mux, adc, i2c_bus_manager, pins, clock, &mut delay)
+        BoosterChannels::new(mux, adc, i2c_bus_manager, pins, clock, delay.clone())
     };
 
     let buttons = {
