@@ -676,11 +676,10 @@ impl sm::StateMachineContext for RfChannel {
         // falling edge on ON/OFF. Because the bias dac is currently in pinch-off (and the RF
         // channel is unpowered), toggling ON/OFF introduces no output transients on the RF
         // connectors.
-
         self.pins.signal_on.set_high().unwrap();
 
         // Note: The delay here are purely to accomodate potential capacitance on the ON/OFF
-        // rails.
+        // rail.
         self.delay.delay_ms(1u32);
 
         self.pins.signal_on.set_low().unwrap();
@@ -748,8 +747,6 @@ impl sm::StateMachineContext for RfChannel {
         assert!(settings.output_interlock_threshold > settings.output_power_transform.map(0.100));
 
         self.apply_bias().unwrap();
-
-        // Ensure that the final state is an enabled ON signal.
         self.pins.signal_on.set_high().unwrap();
     }
 
