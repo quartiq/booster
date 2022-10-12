@@ -402,8 +402,9 @@ impl SerialTerminal {
 * `reset` - Resets the device
 * `service` - Read the service information. Service infromation clears once read.
 * `dfu` - Resets the device to DFU mode
-* `read <PROP>` - Reads the value of <PROP>. <PROP> may be [broker-address, mac, id, fan]
-* `write [broker-address <IP> | gateway <IP> | ip-address <IP> | netmask <IP> | id <ID> | fan <DUTY>]`
+* `read <PROP>` - Reads the value of <PROP>. <PROP> may be:
+    - [broker-address, mac, id, fan, ip-address, netmask, gateway]
+* `write [broker-address <IP> | gateway <IP> | ip-address <IP> | netmask <IP> | id <ID> | fan <DUTY>]
     - Writes the value of <IP> to the broker address, static IP, or gateway.
         * An unspecified `ip-address` (0.0.0.0) will use DHCP
         * <IP> must be an IP address (e.g.  192.168.1.1)

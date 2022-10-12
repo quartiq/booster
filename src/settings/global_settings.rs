@@ -27,10 +27,6 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
     patch: 0,
 };
 
-fn array_to_addr(addr: &[u8; 4]) -> Ipv4Addr {
-    Ipv4Addr::new(addr[0], addr[1], addr[2], addr[3])
-}
-
 fn identifier_is_valid(id: &str) -> bool {
     id.len() <= 23 && id.chars().all(|x| x.is_alphanumeric() || x == '-')
 }
@@ -115,6 +111,11 @@ impl BoosterMainBoardData {
         Ok((config, modified))
     }
 
+    /// Get the MQTT identifier of Booster.
+    pub fn id(&self) -> &[u8] {
+        &self.identifier[..self.id_size]
+    }
+
     /// Serialize the booster config into a sinara configuration for storage into EEPROM.
     ///
     /// # Args
@@ -123,41 +124,6 @@ impl BoosterMainBoardData {
         let mut buffer: [u8; 64] = [0; 64];
         let serialized = postcard::to_slice(self, &mut buffer).unwrap();
         config.board_data[..serialized.len()].copy_from_slice(serialized);
-    }
-
-    /// Get the MQTT broker address of Booster.
-    pub fn broker(&self) -> Ipv4Addr {
-        array_to_addr(&self.broker_address)
-    }
-
-    /// Get the MQTT identifier of Booster.
-    pub fn id(&self) -> &[u8] {
-        &self.identifier[..self.id_size]
-    }
-
-    /// Set the MQTT ID of Booster.
-    ///
-    /// # Args
-    /// * `id` - The new MQTT id. This must conform with MQTT identifier standards. That means that
-    ///   it must be 23 characters or shorter and contain only alphanumeric values.
-    ///
-    /// # Returns
-    /// Ok if the update was successful. Otherwise, returns an error.
-    pub fn set_id(&mut self, id: &str) -> Result<(), Error> {
-        if !identifier_is_valid(id) {
-            return Err(Error::Invalid);
-        }
-
-        let len = id.as_bytes().len();
-        self.identifier[..len].copy_from_slice(id.as_bytes());
-        self.id_size = len;
-
-        Ok(())
-    }
-
-    /// Update the MQTT broker IP address of Booster.
-    pub fn set_broker(&mut self, addr: Ipv4Addr) {
-        self.broker_address = addr.octets();
     }
 }
 
@@ -253,7 +219,8 @@ impl BoosterSettings {
 
     /// Get the MQTT broker IP address.
     pub fn broker(&self) -> Ipv4Addr {
-        self.board_data.broker()
+        let addr = &self.board_data.broker_address;
+        Ipv4Addr::new(addr[0], addr[1], addr[2], addr[3])
     }
 
     /// Check if current settings differ from active (executing) settings.
@@ -264,16 +231,31 @@ impl BoosterSettings {
     /// Update the broker IP address.
     pub fn set_broker(&mut self, addr: Ipv4Addr) {
         self.dirty = true;
-        self.board_data.set_broker(addr);
+        self.board_data.broker_address = addr.octets();
         self.save();
     }
 
-    /// Update the booster MQTT client identifier.
+    /// Set the MQTT ID of Booster.
+    ///
+    /// # Args
+    /// * `id` - The new MQTT id. This must conform with MQTT identifier standards. That means that
+    ///   it must be 23 characters or shorter and contain only alphanumeric values.
+    ///
+    /// # Returns
+    /// Ok if the update was successful. Otherwise, returns an error.
     pub fn set_id(&mut self, id: &str) -> Result<(), Error> {
-        self.board_data.set_id(id).map(|_| {
-            self.dirty = true;
-            self.save()
-        })
+        if !identifier_is_valid(id) {
+            return Err(Error::Invalid);
+        }
+
+        let len = id.as_bytes().len();
+        self.board_data.identifier[..len].copy_from_slice(id.as_bytes());
+        self.board_data.id_size = len;
+
+        self.dirty = true;
+        self.save();
+
+        Ok(())
     }
 
     /// Get the IP address of the device.
@@ -304,8 +286,9 @@ impl BoosterSettings {
     /// # Args
     /// * `addr` - The address to set
     pub fn set_ip_address(&mut self, addr: Ipv4Addr) {
-        self.dirty = true;
         self.board_data.ip_address = addr.octets();
+        self.dirty = true;
+        self.save();
     }
 
     /// Get the netmask of the device.
@@ -323,8 +306,9 @@ impl BoosterSettings {
             return;
         }
 
-        self.dirty = true;
         self.board_data.netmask = mask.octets();
+        self.dirty = true;
+        self.save();
     }
 
     /// Get the default gateway IP address for the interface.
@@ -336,7 +320,8 @@ impl BoosterSettings {
     ///
     /// # Note
     pub fn set_gateway(&mut self, gateway: Ipv4Addr) {
-        self.dirty = true;
         self.board_data.gateway = gateway.octets();
+        self.dirty = true;
+        self.save();
     }
 }
