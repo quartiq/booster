@@ -9,6 +9,7 @@ use super::{
     BoosterSettings,
 };
 use bbqueue::BBBuffer;
+use core::convert::{TryFrom, TryInto};
 use heapless::{String, Vec};
 use logos::Logos;
 use usbd_serial::UsbError;
@@ -46,6 +47,15 @@ enum Token {
     #[token("broker-address")]
     BrokerAddress,
 
+    #[token("gateway")]
+    Gateway,
+
+    #[token("netmask")]
+    Netmask,
+
+    #[token("ip-address")]
+    StaticIpAddress,
+
     #[token("fan")]
     FanSpeed,
 
@@ -65,6 +75,9 @@ pub enum Property {
     BrokerAddress,
     Identifier,
     FanSpeed,
+    IpAddress,
+    Netmask,
+    Gateway,
 }
 
 pub enum Request {
@@ -78,12 +91,33 @@ pub enum Request {
     WriteFanSpeed(f32),
 }
 
+impl TryFrom<Token> for Property {
+    type Error = ();
+    fn try_from(token: Token) -> Result<Property, ()> {
+        let property = match token {
+            Token::Mac => Property::Mac,
+            Token::BrokerAddress => Property::BrokerAddress,
+            Token::Identifier => Property::Identifier,
+            Token::FanSpeed => Property::FanSpeed,
+            Token::StaticIpAddress => Property::IpAddress,
+            Token::Gateway => Property::Gateway,
+            Token::Netmask => Property::Netmask,
+            _ => return Err(()),
+        };
+
+        Ok(property)
+    }
+}
+
 fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<128> {
     let mut msg = String::<128>::new();
     match prop {
         Property::Identifier => writeln!(&mut msg, "{}", settings.id()).unwrap(),
         Property::Mac => writeln!(&mut msg, "{}", settings.mac()).unwrap(),
         Property::BrokerAddress => writeln!(&mut msg, "{}", settings.broker()).unwrap(),
+        Property::Gateway => writeln!(&mut msg, "{}", settings.gateway()).unwrap(),
+        Property::IpAddress => writeln!(&mut msg, "{}", settings.ip_address()).unwrap(),
+        Property::Netmask => writeln!(&mut msg, "{}", settings.netmask()).unwrap(),
         Property::FanSpeed => writeln!(&mut msg, "{:.2} %", settings.fan_speed() * 100.0).unwrap(),
     };
     msg
@@ -212,6 +246,9 @@ impl SerialTerminal {
 
                 Request::WriteIpAddress(prop, addr) => match prop {
                     Property::BrokerAddress => self.settings.set_broker(addr),
+                    Property::Gateway => self.settings.set_gateway(addr),
+                    Property::Netmask => self.settings.set_netmask(addr),
+                    Property::IpAddress => self.settings.set_ip_address(addr),
                     _ => self.write("Invalid property write\n".as_bytes()),
                 },
 
@@ -366,8 +403,11 @@ impl SerialTerminal {
 * `service` - Read the service information. Service infromation clears once read.
 * `dfu` - Resets the device to DFU mode
 * `read <PROP>` - Reads the value of <PROP>. <PROP> may be [broker-address, mac, id, fan]
-* `write [broker-address <IP> | id <ID> | fan <DUTY>]`
-    - Writes the value of <IP> to the broker address. <IP> must be an IP address (e.g.  192.168.1.1)
+* `write [broker-address <IP> | gateway <IP> | ip-address <IP> | netmask <IP> | id <ID> | fan <DUTY>]`
+    - Writes the value of <IP> to the broker address, static IP, or gateway.
+        * An unspecified `ip-address` (0.0.0.0) will use DHCP
+        * <IP> must be an IP address (e.g.  192.168.1.1)
+        * Netmasks must contain only leading data. E.g. 255.255.0.0
     - Write the MQTT client ID of the device. <ID> must be 23 or less ASCII characters.
     - Write the <DUTY> default fan speed duty cycle, which is specified [0, 1.0].
 "
@@ -400,11 +440,8 @@ impl SerialTerminal {
                 let property_token = lex.next().ok_or("Malformed command")?;
 
                 // Check that the property is acceptable for a read.
-                let property = match property_token {
-                    Token::Mac => Property::Mac,
-                    Token::BrokerAddress => Property::BrokerAddress,
-                    Token::Identifier => Property::Identifier,
-                    Token::FanSpeed => Property::FanSpeed,
+                let property = match property_token.try_into() {
+                    Ok(prop) => prop,
                     _ => return Err("Invalid property read"),
                 };
 
@@ -413,9 +450,12 @@ impl SerialTerminal {
             Token::Write => {
                 // Check that the property is acceptable for a write.
                 match lex.next().ok_or("Malformed command")? {
-                    Token::BrokerAddress => {
+                    token @ Token::BrokerAddress
+                    | token @ Token::StaticIpAddress
+                    | token @ Token::Gateway
+                    | token @ Token::Netmask => {
                         if let Token::IpAddress(addr) = lex.next().ok_or("Malformed address")? {
-                            Request::WriteIpAddress(Property::BrokerAddress, addr)
+                            Request::WriteIpAddress(token.try_into().unwrap(), addr)
                         } else {
                             return Err("Invalid property");
                         }

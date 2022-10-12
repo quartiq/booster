@@ -5,9 +5,11 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 use crate::{hardware::Eeprom, Error};
+use byteorder::ByteOrder;
 use heapless::String;
 use minimq::embedded_nal::Ipv4Addr;
 use serde::{Deserialize, Serialize};
+use smoltcp_nal::smoltcp;
 
 use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
 
@@ -37,13 +39,10 @@ fn identifier_is_valid(id: &str) -> bool {
 #[derive(Serialize, Deserialize)]
 struct BoosterMainBoardData {
     version: SemVersion,
-
-    // Note: The IP address, gateway, and netmask are unused, but left here to maintain backwards compatibility with
-    // settings version v1.0.0
-    _unused_ip_address: [u8; 4],
+    ip_address: [u8; 4],
     broker_address: [u8; 4],
-    _unused_gateway_address: [u8; 4],
-    _unused_netmask: [u8; 4],
+    gateway: [u8; 4],
+    netmask: [u8; 4],
     identifier: [u8; 23],
     id_size: usize,
     fan_speed: f32,
@@ -68,10 +67,10 @@ impl BoosterMainBoardData {
 
         Self {
             version: EXPECTED_VERSION,
-            _unused_ip_address: [10, 0, 0, 1],
+            ip_address: [0, 0, 0, 0],
             broker_address: [10, 0, 0, 2],
-            _unused_gateway_address: [10, 0, 0, 0],
-            _unused_netmask: [255, 255, 255, 0],
+            gateway: [0, 0, 0, 0],
+            netmask: [0, 0, 0, 0],
             identifier: id,
             id_size: name.len(),
             fan_speed: DEFAULT_FAN_SPEED,
@@ -275,5 +274,69 @@ impl BoosterSettings {
             self.dirty = true;
             self.save()
         })
+    }
+
+    /// Get the IP address of the device.
+    ///
+    /// # Note
+    /// The IP address will be unspecified if DHCP is to be used.
+    pub fn ip_address(&self) -> smoltcp::wire::IpCidr {
+        let ip_addr = smoltcp::wire::Ipv4Address::from_bytes(&self.board_data.ip_address);
+
+        let prefix = if !ip_addr.is_unspecified() {
+            let netmask = byteorder::NetworkEndian::read_u32(&self.board_data.netmask[..]);
+
+            // Net masks should only have leading 1s and no 1s after the first zero.
+            if netmask.leading_zeros() != 0 || netmask.trailing_zeros() != netmask.count_zeros() {
+                log::error!("Invalid netmask found. Using only valid portion.");
+            }
+
+            netmask.count_ones() as u8
+        } else {
+            0
+        };
+
+        smoltcp::wire::IpCidr::new(smoltcp::wire::IpAddress::Ipv4(ip_addr), prefix)
+    }
+
+    /// Set the static IP address of the device.
+    ///
+    /// # Args
+    /// * `addr` - The address to set
+    pub fn set_ip_address(&mut self, addr: Ipv4Addr) {
+        self.dirty = true;
+        self.board_data.ip_address = addr.octets();
+    }
+
+    /// Get the netmask of the device.
+    pub fn netmask(&self) -> smoltcp::wire::Ipv4Address {
+        smoltcp::wire::Ipv4Address::from_bytes(&self.board_data.netmask)
+    }
+
+    /// Set the netmask of the static IP address.
+    pub fn set_netmask(&mut self, mask: Ipv4Addr) {
+        let netmask = byteorder::NetworkEndian::read_u32(&mask.octets()[..]);
+
+        // Net masks should only have leading 1s and no 1s after the first zero.
+        if netmask.leading_zeros() != 0 || netmask.trailing_zeros() != netmask.count_zeros() {
+            log::error!("Netmask is invalid. Ignoring");
+            return;
+        }
+
+        self.dirty = true;
+        self.board_data.netmask = mask.octets();
+    }
+
+    /// Get the default gateway IP address for the interface.
+    pub fn gateway(&self) -> smoltcp::wire::Ipv4Address {
+        smoltcp::wire::Ipv4Address::from_bytes(&self.board_data.gateway)
+    }
+
+    /// Set the gateway of the device.
+    ///
+    /// # Note
+    pub fn set_gateway(&mut self, gateway: Ipv4Addr) {
+        self.dirty = true;
+        self.board_data.gateway = gateway.octets();
     }
 }
