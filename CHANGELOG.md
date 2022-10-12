@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Support for different ethernet daughterboards using the ENC424J00 has been added.
 * Serial port now supports TeraTerm + Putty
 * Serial port now supports backspacing
+* Support for static IP + netmask and gateway configuration
 
 ### Changed
 * Removed custom `mutex` implementation in favor of leveraging `shared-bus`

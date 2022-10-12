@@ -13,9 +13,6 @@ use super::external_mac::SmoltcpDevice;
 /// The number of TCP sockets supported in the network stack.
 const NUM_TCP_SOCKETS: usize = 4;
 
-/// Static storage for Smoltcp sockets and network state.
-static mut NETWORK_STORAGE: NetStorage = NetStorage::new();
-
 /// Containers for smoltcp-related network configurations
 struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
@@ -73,11 +70,14 @@ pub fn setup(
     device: SmoltcpDevice<'static>,
     settings: &BoosterSettings,
 ) -> smoltcp::iface::Interface<'static, SmoltcpDevice<'static>> {
-    // Note(unsafe): This function may only be called once to initialize the network storage.
-    let net_store = unsafe { &mut NETWORK_STORAGE };
+    let net_store = cortex_m::singleton!(: NetStorage = NetStorage::new()).unwrap();
+
+    let ip_address = settings.ip_address();
+    net_store.ip_addrs[0] = ip_address;
 
     let mut interface = {
-        let routes = smoltcp::iface::Routes::new(&mut net_store.routes_cache[..]);
+        let mut routes = smoltcp::iface::Routes::new(&mut net_store.routes_cache[..]);
+        routes.add_default_ipv4_route(settings.gateway()).unwrap();
 
         let neighbor_cache = smoltcp::iface::NeighborCache::new(&mut net_store.neighbor_cache[..]);
 
@@ -100,7 +100,9 @@ pub fn setup(
         interface.add_socket(tcp_socket);
     }
 
-    interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
+    if ip_address.address().is_unspecified() {
+        interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
+    }
 
     interface
 }
