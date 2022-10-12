@@ -406,7 +406,7 @@ impl SerialTerminal {
     - [broker-address, mac, id, fan, ip-address, netmask, gateway]
 * `write [broker-address <IP> | gateway <IP> | ip-address <IP> | netmask <IP> | id <ID> | fan <DUTY>]
     - Writes the value of <IP> to the broker address, static IP, or gateway.
-        * An unspecified `ip-address` (0.0.0.0) will use DHCP
+        * An `ip-address` of 0.0.0.0 will use DHCP
         * <IP> must be an IP address (e.g.  192.168.1.1)
         * Netmasks must contain only leading data. E.g. 255.255.0.0
     - Write the MQTT client ID of the device. <ID> must be 23 or less ASCII characters.
