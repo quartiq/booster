@@ -327,29 +327,29 @@ impl SerialTerminal {
         let mut buffer = [0u8; 64];
         match self.usb_serial.read(&mut buffer) {
             Ok(count) => {
-                for value in &buffer[..count] {
+                for &value in &buffer[..count] {
                     // Interpret the DEL and BS characters as a request to delete the most recently
                     // provided value. This supports Putty and TeraTerm defaults.
-                    if *value == b'\x08' || *value == b'\x7F' {
+                    if value == b'\x08' || value == b'\x7F' {
                         // If there was previously data in the buffer, go back one, print an empty
                         // space, and then go back again to clear out the character on the user's
                         // screen.
                         if self.input_buffer.pop().is_some() {
                             // Note: we use this sequence because not all terminal emulators
                             // support the DEL character.
-                            self.write(&[b'\x08', b' ', b'\x08']);
+                            self.write(b"\x08 \x08");
                         }
                         continue;
                     }
 
                     // If we're echoing a CR, send a linefeed as well.
-                    if *value == b'\r' {
-                        self.write(&[b'\n', b'\r']);
-                    } else {
-                        self.write(&[*value]);
+                    if value == b'\r' {
+                        self.write(b"\n");
                     }
 
-                    if self.input_buffer.push(*value).is_err() {
+                    self.write(&[value]);
+
+                    if self.input_buffer.push(value).is_err() {
                         // Make a best effort to inform the user of the overflow.
                         self.write("[!] Buffer overflow\n".as_bytes());
                         self.reset();
