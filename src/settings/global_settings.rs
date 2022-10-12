@@ -266,14 +266,14 @@ impl BoosterSettings {
         let ip_addr = smoltcp::wire::Ipv4Address::from_bytes(&self.board_data.ip_address);
 
         let prefix = if !ip_addr.is_unspecified() {
-            let netmask = byteorder::NetworkEndian::read_u32(&self.board_data.netmask[..]);
+            let netmask = smoltcp::wire::IpAddress::Ipv4(smoltcp::wire::Ipv4Address::from_bytes(
+                &self.board_data.netmask,
+            ));
 
-            // Net masks should only have leading 1s and no 1s after the first zero.
-            if netmask.leading_zeros() != 0 || netmask.trailing_zeros() != netmask.count_zeros() {
-                log::error!("Invalid netmask found. Using only valid portion.");
-            }
-
-            netmask.count_ones() as u8
+            netmask.prefix_len().unwrap_or_else(|| {
+                log::error!("Invalid netmask found. Assuming no mask.");
+                0
+            })
         } else {
             0
         };
@@ -298,10 +298,11 @@ impl BoosterSettings {
 
     /// Set the netmask of the static IP address.
     pub fn set_netmask(&mut self, mask: Ipv4Addr) {
-        let netmask = byteorder::NetworkEndian::read_u32(&mask.octets()[..]);
+        let netmask = smoltcp::wire::IpAddress::Ipv4(smoltcp::wire::Ipv4Address::from_bytes(
+            &mask.octets()[..],
+        ));
 
-        // Net masks should only have leading 1s and no 1s after the first zero.
-        if netmask.leading_zeros() != 0 || netmask.trailing_zeros() != netmask.count_zeros() {
+        if netmask.prefix_len().is_none() {
             log::error!("Netmask is invalid. Ignoring");
             return;
         }
