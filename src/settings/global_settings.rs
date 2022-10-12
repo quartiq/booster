@@ -5,7 +5,6 @@
 //! Unauthorized usage, editing, or copying is strictly prohibited.
 //! Proprietary and confidential.
 use crate::{hardware::Eeprom, Error};
-use byteorder::ByteOrder;
 use heapless::String;
 use minimq::embedded_nal::Ipv4Addr;
 use serde::{Deserialize, Serialize};

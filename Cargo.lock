@@ -123,7 +123,6 @@ dependencies = [
  "bbqueue",
  "bit_field",
  "built",
- "byteorder",
  "cortex-m 0.6.7",
  "cortex-m-log",
  "cortex-m-rt",
