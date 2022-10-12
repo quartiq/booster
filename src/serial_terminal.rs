@@ -314,13 +314,35 @@ impl SerialTerminal {
         // will likely be cleared up as data is processed.
         match self
             .output_buffer_producer
-            .grant_exact(data.len())
+            .grant_exact(data.len() + data.iter().filter(|&x| *x == b'\n').count())
             .or_else(|_| self.output_buffer_producer.grant_max_remaining(data.len()))
         {
             Ok(mut grant) => {
-                let len = grant.buf().len();
-                grant.buf().copy_from_slice(&data[..len]);
-                grant.commit(len);
+                let buf = grant.buf();
+                let mut buf_iter = buf.iter_mut();
+
+                // Copy the data into the outbound buffer. For each Newline encounteded, append a
+                // carriage return to support formating in raw terminals such as Putty.
+                for val in data.iter() {
+                    if let Some(pos) = buf_iter.next() {
+                        *pos = *val;
+                    }
+
+                    if *val == b'\n' {
+                        if let Some(pos) = buf_iter.next() {
+                            *pos = b'\r';
+                        }
+                    }
+                }
+
+                let length = {
+                    // Count returns the remaining number of positions, which is nominally zero.
+                    // The length of the amount of data we pushed into the iterator is thus the
+                    // original buffer length minus the remaining items.
+                    let remainder = buf_iter.count();
+                    buf.len() - remainder
+                };
+                grant.commit(length);
             }
             Err(_) => return,
         };
@@ -342,32 +364,42 @@ impl SerialTerminal {
         let mut buffer = [0u8; 64];
         match self.usb_serial.read(&mut buffer) {
             Ok(count) => {
-                // Echo the data back.
-                self.write(&buffer[..count]);
-
-                match self.input_buffer.extend_from_slice(&buffer[..count]) {
-                    Ok(_) => match self.parse_buffer() {
-                        // If there's nothing requested yet, keep waiting for more data.
-                        Ok(None) => None,
-
-                        // If we got a request, clear the buffer and process it.
-                        Ok(Some(result)) => Some(result),
-
-                        // Otherwise, if there was an error, clear the buffer and print it.
-                        Err(msg) => {
-                            self.write(msg.as_bytes());
-                            self.print_help();
-                            self.reset();
-                            None
+                for &value in &buffer[..count] {
+                    // Interpret the DEL and BS characters as a request to delete the most recently
+                    // provided value. This supports Putty and TeraTerm defaults.
+                    if value == b'\x08' || value == b'\x7F' {
+                        // If there was previously data in the buffer, go back one, print an empty
+                        // space, and then go back again to clear out the character on the user's
+                        // screen.
+                        if self.input_buffer.pop().is_some() {
+                            // Note: we use this sequence because not all terminal emulators
+                            // support the DEL character.
+                            self.write(b"\x08 \x08");
                         }
-                    },
-                    Err(_) => {
+                        continue;
+                    }
+
+                    // If we're echoing a CR, send a linefeed as well.
+                    if value == b'\r' {
+                        self.write(b"\n");
+                    }
+
+                    self.write(&[value]);
+
+                    if self.input_buffer.push(value).is_err() {
                         // Make a best effort to inform the user of the overflow.
                         self.write("[!] Buffer overflow\n".as_bytes());
                         self.reset();
-                        None
+                        return None;
                     }
                 }
+
+                self.parse_buffer().unwrap_or_else(|msg| {
+                    self.write(msg.as_bytes());
+                    self.print_help();
+                    self.reset();
+                    None
+                })
             }
             // If there's no data available, don't process anything.
             Err(UsbError::WouldBlock) => None,
@@ -419,7 +451,11 @@ impl SerialTerminal {
     fn parse_buffer(&self) -> Result<Option<Request>, &'static str> {
         // If there's a line available in the buffer, parse it as a command.
         let mut lex = {
-            if let Some(pos) = self.input_buffer.iter().position(|&c| c == b'\n') {
+            if let Some(pos) = self
+                .input_buffer
+                .iter()
+                .position(|&c| c == b'\n' || c == b'\r')
+            {
                 // Attempt to convert the slice to a string.
                 let line =
                     core::str::from_utf8(&self.input_buffer[..pos]).map_err(|_| "Invalid bytes")?;
