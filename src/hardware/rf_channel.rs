@@ -333,6 +333,11 @@ impl RfChannel {
         self.pins.signal_on.is_high().unwrap()
     }
 
+    /// Check if the channel is powered.
+    pub fn is_powered(&self) -> bool {
+        self.pins.enable_power.is_high().unwrap()
+    }
+
     /// Set the interlock thresholds for the channel.
     ///
     /// # Args
