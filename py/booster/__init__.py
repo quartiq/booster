@@ -77,11 +77,12 @@ class BoosterApi:
     """ An asynchronous API for controlling booster using the MQTT control interface. """
 
     @classmethod
-    async def create(cls, prefix, broker):
+    async def create(cls, prefix, broker, timeout=1):
         """ Create a connection to MQTT for communication with booster. """
         # If the user did not provide a prefix, try to find one.
         if not prefix:
-            devices = await miniconf.discover(broker, 'dt/sinara/booster/+')
+            devices = await miniconf.discover(broker, 'dt/sinara/booster/+',
+                                              discovery_timeout=timeout)
 
             if not devices:
                 raise Exception('No Boosters found')

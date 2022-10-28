@@ -99,7 +99,7 @@ def main():
 
     async def test():
         """ The actual testing being completed. """
-        booster = await BoosterApi.create(args.prefix, args.broker)
+        booster = await BoosterApi.create(args.prefix, args.broker, timeout=30)
 
         # Disable configure the telemetry rate.
         await booster.settings_interface.command('telemetry_period', 1, retain=False)
