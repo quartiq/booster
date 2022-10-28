@@ -150,7 +150,7 @@ mod app {
                     .channels
                     .channel_mut(idx)
                     .map(|(channel, _)| {
-                        if channel.context().is_enabled() {
+                        if channel.context().is_powered() {
                             fans_enabled = true;
                         }
 

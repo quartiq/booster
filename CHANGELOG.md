@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 * Removed custom `mutex` implementation in favor of leveraging `shared-bus`
+* Fans will now remain on whenever a channel is powered as opposed to actively outputting RF. This
+  addresses heating issues observed with some Booster configurations resulting in channel wedging.
 
 ### Fixed
 * A few dependencies were deprecated because changes landed upstream. These dependencies were
