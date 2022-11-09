@@ -1,9 +1,7 @@
 //! Driver for the AD5627R 2-output programmable reference generator (2-channel DAC).
 //!
 //! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
+//! Copyright (C) 2020-2022 QUARTIQ GmbH
 //!
 //! # Description
 //! This driver allows for configuring either or both DAC output voltages. It assumes that the DAC

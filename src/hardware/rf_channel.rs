@@ -1,9 +1,7 @@
 //! Definitions for Booster RF management channels.
 //!
 //! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
+///! Copyright (C) 2020-2022 QUARTIQ GmbH
 use ad5627::{self, Ad5627};
 use ads7924::Ads7924;
 use dac7571::Dac7571;

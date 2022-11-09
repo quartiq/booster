@@ -1,9 +1,7 @@
 //! Booster NGFW NVM Sinara settings
 //!
 //! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
+///! Copyright (C) 2020-2022 QUARTIQ GmbH
 
 use crate::Error;
 use core::convert::TryInto;
