@@ -1,5 +1,4 @@
 //! Smoltcp device implementation for external ethernet MACs.
-
 //!
 //! # Design
 //!

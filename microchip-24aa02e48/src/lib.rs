@@ -1,3 +1,4 @@
+//! # Description
 //! Driver for the microchip 24AA02E48 Eeprom with EUI-48.
 //! The 24AA02E48 provides a globally unique EUI-48 (or EUI-64) address as well as 256 bytes of
 //! EEPROM.
