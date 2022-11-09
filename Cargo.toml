@@ -20,8 +20,8 @@ rust-version = "1.57"
 build = "build.rs"
 exclude = [
 	".gitignore",
-	"doc/",
-	"doc/*"
+	"book/",
+	"book/*"
 ]
 
 [dependencies]
