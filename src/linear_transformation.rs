@@ -1,7 +1,4 @@
 //! Booster NGFW linear-transformation routines
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
 
 use miniconf::Miniconf;
 

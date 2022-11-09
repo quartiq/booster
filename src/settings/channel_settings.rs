@@ -1,7 +1,4 @@
 //! Booster NGFW NVM channel settings
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 use crate::{hardware::I2cProxy, linear_transformation::LinearTransformation, Error};

@@ -1,9 +1,5 @@
 //! Driver for the DAC7571 digital-to-analog converter.
 //!
-//! # Copyright
-//! Copyright (C) 2020-2022 QUARTIQ GmbH
-
-//!
 //! # Note
 //! This driver does not support any low-power operation modes.
 #![no_std]

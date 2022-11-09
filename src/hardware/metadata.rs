@@ -1,7 +1,5 @@
 //! Booster run-time application metadata
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
+
 use serde::Serialize;
 
 use super::{platform, HardwareVersion};

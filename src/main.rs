@@ -1,7 +1,4 @@
 //! Booster NGFW Application
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
 #![no_std]
 #![no_main]
 

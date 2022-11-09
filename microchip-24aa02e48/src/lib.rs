@@ -1,9 +1,4 @@
 //! Driver for the microchip 24AA02E48 Eeprom with EUI-48.
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
-//!
-//! # Description
 //! The 24AA02E48 provides a globally unique EUI-48 (or EUI-64) address as well as 256 bytes of
 //! EEPROM.
 #![no_std]

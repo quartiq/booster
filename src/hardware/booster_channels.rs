@@ -1,7 +1,4 @@
 //! Booster NGFW channel management control interface definitions.
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
 
 use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal as hal;

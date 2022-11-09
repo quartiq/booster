@@ -1,7 +1,5 @@
 //! Booster NGFW runtime settings
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
+
 use super::channel_settings::ChannelSettings;
 use crate::{
     hardware::{self, platform, Channel},

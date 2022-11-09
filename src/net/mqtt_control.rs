@@ -1,7 +1,5 @@
 //! Booster NGFW Application
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
+
 use crate::{
     hardware::{metadata::ApplicationMetadata, setup::MainBus, SystemTimer},
     Channel,

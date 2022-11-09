@@ -1,7 +1,5 @@
 //! Booster NGFW Application
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
+
 use super::hal;
 
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};

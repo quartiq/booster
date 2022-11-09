@@ -1,7 +1,4 @@
 //! Booster NGFW User Interface code
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
 
 use super::Channel;
 use bit_field::BitField;

@@ -1,7 +1,5 @@
 //! Booster NGFW Application
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
+
 use super::{I2cError, I2cProxy, MainboardLeds};
 use embedded_hal::digital::v2::OutputPin;
 use max6639::Max6639;

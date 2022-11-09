@@ -1,7 +1,5 @@
 //! Smoltcp device implementation for external ethernet MACs.
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
+
 //!
 //! # Design
 //!

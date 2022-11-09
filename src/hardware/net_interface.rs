@@ -1,7 +1,4 @@
 //! Smoltcp network storage and configuration
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
 
 use crate::BoosterSettings;
 use smoltcp_nal::smoltcp;

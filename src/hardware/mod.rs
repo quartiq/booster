@@ -1,7 +1,4 @@
 //! Booster module-level hardware definitions
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
 
 use core::fmt::Write;
 use enum_iterator::IntoEnumIterator;

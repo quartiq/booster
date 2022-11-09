@@ -1,7 +1,5 @@
 //! Booster NGFW NVM settings
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
+
 use crate::{hardware::Eeprom, Error};
 use heapless::String;
 use minimq::embedded_nal::Ipv4Addr;

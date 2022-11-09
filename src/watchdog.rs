@@ -1,7 +1,4 @@
 //! Booster NGFW watchdog manager
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
 
 use crate::hal;
 use embedded_hal::watchdog::{Watchdog, WatchdogEnable};

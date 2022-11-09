@@ -1,7 +1,4 @@
 //! Implements a driver for the MAX6642 temperature sensor.
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
 #![no_std]
 #![deny(warnings)]
 

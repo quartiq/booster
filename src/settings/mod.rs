@@ -1,7 +1,4 @@
 //! Booster NGFW NVM settings
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
 
 pub mod channel_settings;
 pub mod global_settings;

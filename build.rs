@@ -1,8 +1,5 @@
 //! Booster NGFW build script
 //!
-//! # Copyright
-//! Copyright (C) 2020-2022 QUARTIQ GmbH
-//!
 //! # Note
 //! This build script is run immediately before the build is completed and is used to inject
 //! environment variables into the build.

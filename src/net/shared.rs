@@ -3,9 +3,7 @@
 //! # Note
 //! Portions of this file are taken from the
 //! [`smoltcp-nal`](https://github.com/quartiq/smoltcp-nal/blob/main/src/shared.rs)
-//!
-//! # Copyright
-///! Copyright (C) 2020-2022 QUARTIQ GmbH
+
 use minimq::embedded_nal;
 use shared_bus::{AtomicCheckMutex, BusMutex};
 
