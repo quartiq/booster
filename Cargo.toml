@@ -1,11 +1,28 @@
 [package]
-authors = ["Ryan Summers <ryan.summers@vertigo-designs.com>"]
-edition = "2018"
-readme = "README.md"
 name = "booster"
+# Keep versions in Cargo.toml and py/setup.py synchronized.
 version = "0.3.0"
-build = "build.rs"
 resolver = "2"
+authors = [
+	"Ryan Summers <ryan.summers@vertigo-designs.com>",
+	"Robert Jördens <rj@quartiq.de>",
+]
+description = "Firmware for the Sinara Booster device (STM32F4, Ethernet, RF power amplifiers)"
+categories = ["embedded", "no-std", "hardware-support", "science"]
+license = "MIT OR Apache-2.0"
+keywords = ["ethernet", "stm32f4", "adc", "physics"]
+repository = "https://github.com/quartiq/booster"
+readme = "README.md"
+documentation = "https://quartiq.de/booster-doc/"
+edition = "2018"
+# keep MSRV in sync in ci.yaml, bors.toml, Cargo.toml, and setup.md
+rust-version = "1.63"
+build = "build.rs"
+exclude = [
+	".gitignore",
+	"doc/",
+	"doc/*"
+]
 
 [dependencies]
 cortex-m = "0.6.3"
