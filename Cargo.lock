@@ -268,11 +268,11 @@ dependencies = [
 
 [[package]]
 name = "cortex-m-log"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d63959cb1e003dd97233fee6762351540253237eadf06fcdcb98cbfa3f9be4a"
+checksum = "0e202d2eac4e34adf7524a563e36623bae6f69cc0a73ef9bd22a4c93a5a806fa"
 dependencies = [
- "cortex-m 0.6.7",
+ "cortex-m 0.7.4",
  "log",
 ]
 

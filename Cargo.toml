@@ -15,7 +15,7 @@ embedded-hal = "0.2.4"
 enum-iterator = "0.6.0"
 mono-clock = "0.1"
 systick-monotonic = "1.0.0"
-cortex-m-log = { version = "0.6.1", features = ["log-integration"] }
+cortex-m-log = { version = "0.7.0", features = ["log-integration"] }
 log = "0.4.8"
 heapless = { version = "0.7", features = ["serde"] }
 bit_field = "0.10.0"
