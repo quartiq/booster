@@ -1,9 +1,4 @@
 //! Driver for the ADS7924 external ADC.
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
 #![no_std]
 #![deny(warnings)]
 

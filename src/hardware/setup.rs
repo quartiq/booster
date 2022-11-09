@@ -1,9 +1,4 @@
 //! Booster hardware setup and configuration routines.
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
 
 use super::{
     booster_channels::BoosterChannels,
