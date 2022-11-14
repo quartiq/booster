@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[license]
+text = "MIT"
+
+[project]
+name = "booster"
+version = "0.1.0"
+description = "Booster Utilities"
+authors = [
+    { name = "Ryan Summers", email = "ryan.summers@vertigo-designs.com" },
+    { name = "Robert Jördens", email = "rj@quartiq.de" },
+]
+dependencies = [
+    "miniconf-mqtt@git+https://github.com/quartiq/miniconf@main#subdirectory=py/miniconf-mqtt",
+]
