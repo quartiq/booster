@@ -123,7 +123,7 @@ dependencies = [
  "bbqueue",
  "bit_field",
  "built",
- "cortex-m 0.6.7",
+ "cortex-m 0.7.4",
  "cortex-m-log",
  "cortex-m-rt",
  "cortex-m-rtic",
@@ -1239,7 +1239,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11460b4de3a84f072e2cf6e76306c64d27f405a0e83bace0a726f555ddf4bf33"
 dependencies = [
  "bare-metal 0.2.5",
- "cortex-m 0.6.7",
+ "cortex-m 0.5.11",
  "cortex-m-rt",
  "vcell",
 ]
@@ -1251,7 +1251,7 @@ source = "git+https://github.com/stm32-rs/stm32f4xx-hal#c8b11b200ac3c5f9be802f8f
 dependencies = [
  "bare-metal 0.2.5",
  "cast",
- "cortex-m 0.6.7",
+ "cortex-m 0.5.11",
  "cortex-m-rt",
  "embedded-dma",
  "embedded-hal",
