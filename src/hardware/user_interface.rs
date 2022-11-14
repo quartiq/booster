@@ -2,11 +2,11 @@
 
 use super::Channel;
 use bit_field::BitField;
-use embedded_hal::{
+use stm32f4xx_hal as hal;
+use hal::hal::{
     blocking::spi::Write,
     digital::v2::{InputPin, OutputPin},
 };
-use stm32f4xx_hal as hal;
 
 use debounced_pin::{Debounce, DebounceState, DebouncedInputPin};
 

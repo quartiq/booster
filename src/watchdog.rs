@@ -1,8 +1,10 @@
 //! Booster NGFW watchdog manager
 
 use crate::hal;
-use embedded_hal::watchdog::{Watchdog, WatchdogEnable};
-use hal::time::U32Ext;
+use hal::{
+    hal::watchdog::{Watchdog, WatchdogEnable},
+    time::U32Ext,
+};
 
 /// Represents various clients that can check in with the watchdog.
 pub enum WatchdogClient {
