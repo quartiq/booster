@@ -1,7 +1,7 @@
 //! Booster NGFW Application
 
 use super::{I2cError, I2cProxy, MainboardLeds};
-use embedded_hal::digital::v2::OutputPin;
+use stm32f4xx_hal::hal::digital::v2::OutputPin;
 use max6639::Max6639;
 
 /// The default fan speed on power-up.
@@ -107,7 +107,7 @@ impl ChassisFans {
     /// when disabled.
     pub fn self_test(
         &mut self,
-        delay: &mut impl embedded_hal::blocking::delay::DelayMs<u16>,
+        delay: &mut impl stm32f4xx_hal::hal::blocking::delay::DelayMs<u16>,
     ) -> bool {
         self.set_duty_cycles(1.0);
         delay.delay_ms(5000);

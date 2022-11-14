@@ -1,4 +1,4 @@
-use embedded_hal::blocking::delay::{DelayMs, DelayUs};
+use stm32f4xx_hal::hal::blocking::delay::{DelayMs, DelayUs};
 
 pub struct AsmDelay {
     frequency_us: u32,

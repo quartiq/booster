@@ -6,7 +6,7 @@ use tca9548::{self, Tca9548};
 
 use super::rf_channel::{ChannelPins as RfChannelPins, RfChannel, RfChannelMachine};
 use super::{Channel, I2cBusManager, I2cProxy, SystemTimer};
-use embedded_hal::blocking::delay::DelayUs;
+use hal::hal::blocking::delay::DelayUs;
 
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {

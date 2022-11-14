@@ -15,8 +15,8 @@ use crate::{
     },
     Error,
 };
-use embedded_hal::blocking::delay::DelayUs;
 use stm32f4xx_hal::{
+    hal::blocking::delay::DelayUs,
     self as hal,
     adc::config::SampleTime,
     gpio::{Analog, Floating, Input, Output, PullDown, PushPull},
