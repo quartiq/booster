@@ -6,9 +6,6 @@ Description: Provides an API for controlling Booster NGFW over MQTT.
 """
 import argparse
 import asyncio
-import enum
-import json
-import time
 
 from . import BoosterApi, Action
 
