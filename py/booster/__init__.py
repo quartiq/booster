@@ -77,7 +77,7 @@ class BoosterApi:
     """ An asynchronous API for controlling booster using the MQTT control interface. """
 
     @classmethod
-    async def create(cls, prefix, broker, timeout=30):
+    async def create(cls, prefix, broker, timeout=1):
         """ Create a connection to MQTT for communication with booster.
 
         Args:
