@@ -16,10 +16,10 @@ use crate::{
     Error,
 };
 use stm32f4xx_hal::{
-    hal::blocking::delay::DelayUs,
     self as hal,
     adc::config::SampleTime,
     gpio::{Analog, Floating, Input, Output, PullDown, PushPull},
+    hal::blocking::delay::DelayUs,
     prelude::*,
 };
 

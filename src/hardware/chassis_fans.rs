@@ -1,8 +1,8 @@
 //! Booster NGFW Application
 
 use super::{I2cError, I2cProxy, MainboardLeds};
-use stm32f4xx_hal::hal::digital::v2::OutputPin;
 use max6639::Max6639;
+use stm32f4xx_hal::hal::digital::v2::OutputPin;
 
 /// The default fan speed on power-up.
 pub const DEFAULT_FAN_SPEED: f32 = 0.2;
