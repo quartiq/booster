@@ -132,7 +132,7 @@ dependencies = [
  "debounced-pin",
  "enc424j600",
  "enum-iterator",
- "heapless 0.7.9",
+ "heapless",
  "log",
  "logos",
  "max6639",
@@ -229,6 +229,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cobs"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
+
+[[package]]
 name = "cortex-m"
 version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -305,7 +311,7 @@ dependencies = [
  "bare-metal 1.0.0",
  "cortex-m 0.7.6",
  "cortex-m-rtic-macros",
- "heapless 0.7.9",
+ "heapless",
  "rtic-core",
  "rtic-monotonic",
  "version_check",
@@ -404,7 +410,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db9efecb57ab54fa918730f2874d7d37647169c50fa1357fecb81abee840b113"
 dependencies = [
- "heapless 0.7.9",
+ "heapless",
  "nb 1.0.0",
  "no-std-net",
 ]
@@ -526,15 +532,6 @@ dependencies = [
 
 [[package]]
 name = "hash32"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4041af86e63ac4298ce40e5cca669066e75b6f1aa3390fe2561ffa5e1d9f4cc"
-dependencies = [
- "byteorder",
-]
-
-[[package]]
-name = "hash32"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
@@ -550,25 +547,12 @@ checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
 
 [[package]]
 name = "heapless"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74911a68a1658cfcfb61bc0ccfbd536e3b6e906f8c2f7883ee50157e3e2184f1"
-dependencies = [
- "as-slice",
- "generic-array 0.13.3",
- "hash32 0.1.1",
- "serde",
- "stable_deref_trait",
-]
-
-[[package]]
-name = "heapless"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e476c64197665c3725621f0ac3f9e5209aa5e889e02a08b1daf5f16dc5fd952"
 dependencies = [
  "atomic-polyfill",
- "hash32 0.2.1",
+ "hash32",
  "serde",
  "spin",
  "stable_deref_trait",
@@ -736,7 +720,7 @@ version = "0.3.0"
 source = "git+https://github.com/quartiq/miniconf?rev=140b6f3#140b6f339fb1fdaab6547a960441898c6ac66e0e"
 dependencies = [
  "derive_miniconf",
- "heapless 0.7.9",
+ "heapless",
  "log",
  "minimq",
  "serde",
@@ -754,7 +738,7 @@ dependencies = [
  "embedded-nal",
  "embedded-time",
  "enum-iterator",
- "heapless 0.7.9",
+ "heapless",
  "smlang 0.4.2",
 ]
 
@@ -763,7 +747,7 @@ name = "minireq"
 version = "0.1.0"
 source = "git+https://github.com/quartiq/minireq?rev=786bc8845819a26a3669d6e0c81d64b71f510573#786bc8845819a26a3669d6e0c81d64b71f510573"
 dependencies = [
- "heapless 0.7.9",
+ "heapless",
  "log",
  "minimq",
  "serde",
@@ -905,20 +889,14 @@ checksum = "1df8c4ec4b0627e53bdf214615ad287367e482558cf84b109250b37464dc03ae"
 
 [[package]]
 name = "postcard"
-version = "0.5.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3e3f5c2e9a91383c6594ec68aa2dfdfe19a3c86f34b088ba7203f2483d2682f"
+checksum = "1c2b180dc0bade59f03fd005cb967d3f1e5f69b13922dad0cd6e047cb8af2363"
 dependencies = [
- "heapless 0.5.6",
- "postcard-cobs",
+ "cobs",
+ "heapless",
  "serde",
 ]
-
-[[package]]
-name = "postcard-cobs"
-version = "0.1.5-pre"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c68cb38ed13fd7bc9dd5db8f165b7c8d9c1a315104083a2b10f11354c2af97f"
 
 [[package]]
 name = "proc-macro-error"
@@ -1126,7 +1104,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8014aeea272bca0f0779778d43253f2f3375b414185b30e6ecc4d3e4a9994781"
 dependencies = [
- "heapless 0.7.9",
+ "heapless",
  "ryu",
  "serde",
 ]
@@ -1231,7 +1209,7 @@ checksum = "c7b22fc1e9b13e435081ae7f593ab1e5385a3884c2134c753c7fb5729d675373"
 dependencies = [
  "embedded-nal",
  "embedded-time",
- "heapless 0.7.9",
+ "heapless",
  "nanorand",
  "smoltcp",
 ]
