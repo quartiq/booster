@@ -123,7 +123,7 @@ dependencies = [
  "bbqueue",
  "bit_field",
  "built",
- "cortex-m 0.7.4",
+ "cortex-m 0.7.6",
  "cortex-m-log",
  "cortex-m-rt",
  "cortex-m-rtic",
@@ -249,15 +249,15 @@ dependencies = [
  "aligned 0.3.4",
  "bare-metal 0.2.5",
  "bitfield",
- "cortex-m 0.7.4",
+ "cortex-m 0.7.6",
  "volatile-register",
 ]
 
 [[package]]
 name = "cortex-m"
-version = "0.7.4"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37ff967e867ca14eba0c34ac25cd71ea98c678e741e3915d923999bb2fe7c826"
+checksum = "70858629a458fdfd39f9675c4dc309411f2a3f83bede76988d81bf1a0ecee9e0"
 dependencies = [
  "bare-metal 0.2.5",
  "bitfield",
@@ -271,7 +271,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e202d2eac4e34adf7524a563e36623bae6f69cc0a73ef9bd22a4c93a5a806fa"
 dependencies = [
- "cortex-m 0.7.4",
+ "cortex-m 0.7.6",
  "log",
 ]
 
@@ -303,7 +303,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "daae9c453d0d5b467ebcdeae7aba537cb45a7de899930ad09f01c8dc42aa531f"
 dependencies = [
  "bare-metal 1.0.0",
- "cortex-m 0.7.4",
+ "cortex-m 0.7.6",
  "cortex-m-rtic-macros",
  "heapless 0.7.9",
  "rtic-core",
@@ -338,7 +338,7 @@ checksum = "01e191a5a6f6edad9b679777ef6b6c0f2bdd4a333f2ecb8f61c3e28109a03d70"
 dependencies = [
  "bare-metal 1.0.0",
  "cfg-if 1.0.0",
- "cortex-m 0.7.4",
+ "cortex-m 0.7.6",
  "riscv",
 ]
 
@@ -882,7 +882,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32bb382689ecd2c4d2d4df9fd56700ba8d43b7b31cca11018cc0e6f8aef39fd5"
 dependencies = [
- "cortex-m 0.7.4",
+ "cortex-m 0.7.6",
 ]
 
 [[package]]
@@ -1062,7 +1062,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "065d6058bb1204f51a562a67209e1817cf714759d5cf845aa45c75fa7b0b9d9b"
 dependencies = [
- "cortex-m 0.7.4",
+ "cortex-m 0.7.6",
  "ufmt-write",
 ]
 
@@ -1310,7 +1310,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57e71d8e4587d8f434b88b9aef901987f46164df813a3a1d6bdf3a58debf67f0"
 dependencies = [
- "cortex-m 0.7.4",
+ "cortex-m 0.7.6",
  "fugit",
  "rtic-monotonic",
 ]
