@@ -119,7 +119,7 @@ pub fn clear_reset_flags() {
 /// Reset the device to the internal DFU bootloader.
 pub fn reset_to_dfu_bootloader() {
     // Disable the SysTick peripheral.
-    let systick = unsafe { &*cortex_m::peripheral::SYST::ptr() };
+    let systick = unsafe { &*cortex_m::peripheral::SYST::PTR };
     unsafe {
         systick.csr.write(0);
         systick.rvr.write(0);
