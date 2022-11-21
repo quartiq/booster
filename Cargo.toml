@@ -25,9 +25,9 @@ exclude = [
 ]
 
 [dependencies]
-cortex-m = "0.7.4"
+cortex-m = "0.7.6"
 cortex-m-rt = "0.6.10"
-cortex-m-rtic = "1.0"
+cortex-m-rtic = "1.1"
 mono-clock = "0.1"
 systick-monotonic = "1.0.0"
 cortex-m-log = { version = "0.7.0", features = ["log-integration"] }
@@ -50,7 +50,7 @@ smoltcp-nal = { version = "0.2" }
 miniconf = { version = "0.3", features = ["mqtt-client"]}
 minimq = "0.5.3"
 w5500 = { version = "0.4", optional = true }
-smlang= "0.5"
+smlang= "0.6"
 minireq = "0.1"
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "1.2", default-features = false }
