@@ -1,9 +1,9 @@
 //! Booster NGFW NVM settings
 
 use crate::{hardware::Eeprom, Error};
+use encdec::{Decode, DecodeOwned, Encode};
 use heapless::String;
 use minimq::embedded_nal::Ipv4Addr;
-use serde::{Deserialize, Serialize};
 use smoltcp_nal::smoltcp;
 
 use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
@@ -27,7 +27,7 @@ fn identifier_is_valid(id: &str) -> bool {
 }
 
 /// Represents booster mainboard-specific configuration values.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Encode, DecodeOwned)]
 struct BoosterMainBoardData {
     version: SemVersion,
     ip_address: [u8; 4],
@@ -35,7 +35,7 @@ struct BoosterMainBoardData {
     gateway: [u8; 4],
     netmask: [u8; 4],
     identifier: [u8; 23],
-    id_size: usize,
+    id_size: u32,
     fan_speed: f32,
 }
 
@@ -63,7 +63,7 @@ impl BoosterMainBoardData {
             gateway: [0, 0, 0, 0],
             netmask: [0, 0, 0, 0],
             identifier: id,
-            id_size: name.len(),
+            id_size: name.len() as u32,
             fan_speed: DEFAULT_FAN_SPEED,
         }
     }
@@ -78,7 +78,7 @@ impl BoosterMainBoardData {
     /// The configuration if deserialization was successful along with a bool indicating if the
     /// configuration was automatically upgraded. Otherwise, returns an error.
     pub fn deserialize(data: &[u8; 64]) -> Result<(Self, bool), Error> {
-        let mut config: BoosterMainBoardData = postcard::from_bytes(data).unwrap();
+        let (mut config, _) = BoosterMainBoardData::decode_owned(data).unwrap();
         let mut modified = false;
 
         // Check if the stored EEPROM version is older (or incompatible)
@@ -108,7 +108,7 @@ impl BoosterMainBoardData {
 
     /// Get the MQTT identifier of Booster.
     pub fn id(&self) -> &[u8] {
-        &self.identifier[..self.id_size]
+        &self.identifier[..self.id_size as usize]
     }
 
     /// Serialize the booster config into a sinara configuration for storage into EEPROM.
@@ -117,8 +117,8 @@ impl BoosterMainBoardData {
     /// * `config` - The sinara configuration to serialize the booster configuration into.
     pub fn serialize_into(&self, config: &mut SinaraConfiguration) {
         let mut buffer: [u8; 64] = [0; 64];
-        let serialized = postcard::to_slice(self, &mut buffer).unwrap();
-        config.board_data[..serialized.len()].copy_from_slice(serialized);
+        let len = self.encode(&mut buffer).unwrap();
+        config.board_data[..len].copy_from_slice(&buffer[..len]);
     }
 }
 
@@ -187,7 +187,7 @@ impl BoosterSettings {
         // Save the updated configuration to EEPROM.
         let mut serialized = [0u8; 128];
         config.serialize_into(&mut serialized);
-        self.eeprom.write(0, &serialized).unwrap();
+        //self.eeprom.write(0, &serialized).unwrap();
     }
 
     /// Get the Booster unique identifier.
@@ -245,7 +245,7 @@ impl BoosterSettings {
 
         let len = id.as_bytes().len();
         self.board_data.identifier[..len].copy_from_slice(id.as_bytes());
-        self.board_data.id_size = len;
+        self.board_data.id_size = len as u32;
 
         self.dirty = true;
         self.save();

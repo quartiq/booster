@@ -1,6 +1,5 @@
 //! Booster NGFW channel management control interface definitions.
 
-use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal as hal;
 use tca9548::{self, Tca9548};
 
@@ -56,7 +55,7 @@ impl BoosterChannels {
         let mut channels: [Option<RfChannelMachine>; 8] =
             [None, None, None, None, None, None, None, None];
 
-        for (idx, pins) in Channel::into_enum_iter().zip(pins) {
+        for (idx, pins) in enum_iterator::all::<Channel>().zip(pins) {
             // Selecting an I2C bus should never fail.
             mux.select_bus(Some(idx.into()))
                 .expect("Failed to select channel");

@@ -28,7 +28,6 @@ exclude = [
 cortex-m = "0.7.4"
 cortex-m-rt = "0.6.10"
 cortex-m-rtic = "1.0"
-enum-iterator = "0.6.0"
 mono-clock = "0.1"
 systick-monotonic = "1.0.0"
 cortex-m-log = { version = "0.7.0", features = ["log-integration"] }
@@ -44,7 +43,7 @@ bbqueue = "0.5"
 usbd-serial = "0.1.0"
 shared-bus = { version = "0.2", features = ["cortex-m"] }
 usb-device = "0.2.8"
-postcard = "0.5.1"
+encdec = { version = "0.8", default-features = false }
 crc-any = { version = "2.3.5", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
 smoltcp-nal = { version = "0.2" }
@@ -54,6 +53,7 @@ w5500 = { version = "0.4", optional = true }
 smlang= "0.5"
 minireq = "0.1"
 rtt-target = {version = "0.3", features=["cortex-m"]}
+enum-iterator = { version = "1.2", default-features = false }
 
 [build-dependencies]
 built = { version = "0.5", features = ["git2"], default-features = false }
@@ -84,6 +84,10 @@ rev = "140b6f3"
 
 [patch.crates-io.usb-device]
 git = "https://github.com/rust-embedded-community/usb-device"
+
+[patch.crates-io.encdec-base]
+git = "https://github.com/quartiq/rust-encdec"
+branch = "feature/float-support"
 
 [dependencies.ad5627]
 path = "ad5627"
