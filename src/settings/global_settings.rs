@@ -187,7 +187,7 @@ impl BoosterSettings {
         // Save the updated configuration to EEPROM.
         let mut serialized = [0u8; 128];
         config.serialize_into(&mut serialized);
-        //self.eeprom.write(0, &serialized).unwrap();
+        self.eeprom.write(0, &serialized).unwrap();
     }
 
     /// Get the Booster unique identifier.
