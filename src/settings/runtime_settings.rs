@@ -5,7 +5,6 @@ use crate::{
     hardware::{self, platform, Channel},
     net,
 };
-use enum_iterator::IntoEnumIterator;
 use miniconf::Miniconf;
 
 #[derive(Clone, Miniconf)]
@@ -36,7 +35,7 @@ impl RuntimeSettings {
         settings: &mut Self,
         new_settings: &Self,
     ) -> Result<(), &'static str> {
-        for idx in Channel::into_enum_iter() {
+        for idx in enum_iterator::all::<Channel>() {
             if let Some(ref settings) = new_settings.channel[idx as usize] {
                 // Check that the interlock thresholds are sensible.
                 if settings.output_interlock_threshold > platform::MAX_OUTPUT_POWER_DBM {

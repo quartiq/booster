@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Serial port now supports TeraTerm + Putty
 * Serial port now supports backspacing
 * Support for static IP + netmask and gateway configuration
+    * NOTE: Boosters that used firmware from before 0.4.0 will return to old network configurations.
+    To re-enable DHCP, reconfigure the IP address to 0.0.0.0/0
 
 ### Changed
 * Removed custom `mutex` implementation in favor of leveraging `shared-bus`

@@ -40,7 +40,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - '1.57.0'
+          - '1.65.0'
         features:
           - phy_w5500
           - phy_enc424j600

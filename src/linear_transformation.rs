@@ -1,9 +1,12 @@
 //! Booster NGFW linear-transformation routines
 
+use encdec::{Decode, Encode};
 use miniconf::Miniconf;
 
 /// A structure for mapping values between two different domains.
-#[derive(Miniconf, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq)]
+#[derive(
+    Miniconf, serde::Serialize, serde::Deserialize, Debug, Copy, Clone, PartialEq, Encode, Decode,
+)]
 pub struct LinearTransformation {
     slope: f32,
     offset: f32,

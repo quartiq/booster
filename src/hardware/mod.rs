@@ -1,7 +1,7 @@
 //! Booster module-level hardware definitions
 
 use core::fmt::Write;
-use enum_iterator::IntoEnumIterator;
+use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use stm32f4xx_hal as hal;
 
@@ -74,7 +74,7 @@ pub type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;
 pub type Eeprom = microchip_24aa02e48::Microchip24AA02E48<I2C2>;
 
 /// Indicates a booster RF channel.
-#[derive(IntoEnumIterator, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Sequence, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum Channel {
     Zero = 0,
     One = 1,
