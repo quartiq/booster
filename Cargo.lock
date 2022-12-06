@@ -131,7 +131,7 @@ dependencies = [
  "debounced-pin",
  "enc424j600",
  "encdec",
- "enum-iterator 1.2.0",
+ "enum-iterator",
  "heapless",
  "log",
  "logos",
@@ -147,9 +147,9 @@ dependencies = [
  "rtt-logger",
  "rtt-target",
  "serde",
- "serde-json-core 0.5.0",
+ "serde-json-core",
  "shared-bus",
- "smlang 0.6.0",
+ "smlang",
  "smoltcp-nal",
  "stm32f4xx-hal",
  "systick-monotonic",
@@ -398,16 +398,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive_miniconf"
-version = "0.3.0"
-source = "git+https://github.com/quartiq/miniconf?rev=140b6f3#140b6f339fb1fdaab6547a960441898c6ac66e0e"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "embedded-dma"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -491,31 +481,11 @@ dependencies = [
 
 [[package]]
 name = "enum-iterator"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c79a6321a1197d7730510c7e3f6cb80432dfefecb32426de8cea0aa19b4bb8d7"
-dependencies = [
- "enum-iterator-derive 0.6.0",
-]
-
-[[package]]
-name = "enum-iterator"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91a4ec26efacf4aeff80887a175a419493cb6f8b5480d26387eb0bd038976187"
 dependencies = [
- "enum-iterator-derive 1.1.0",
-]
-
-[[package]]
-name = "enum-iterator-derive"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e94aa31f7c0dc764f57896dc615ddd76fc13b0d5dca7eb6cc5e018a5a09ec06"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
+ "enum-iterator-derive",
 ]
 
 [[package]]
@@ -796,43 +766,58 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.3.0"
-source = "git+https://github.com/quartiq/miniconf?rev=140b6f3#140b6f339fb1fdaab6547a960441898c6ac66e0e"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "184b4633fb234558e57a3f1105c63358d0ff224cf8d75cc8b9621df597b7a16e"
 dependencies = [
- "derive_miniconf",
  "heapless",
  "log",
+ "miniconf_derive",
  "minimq",
  "serde",
- "serde-json-core 0.4.0",
- "smlang 0.4.2",
+ "serde-json-core",
+ "smlang",
+]
+
+[[package]]
+name = "miniconf_derive"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e142f4961afed7b940e84903e6f886b35d10017f15aafc960556f053f6a8fa35"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
 name = "minimq"
-version = "0.5.3"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c8e06869d0d2be282e85fdbabdd6f8103155f583f2169206cf6cfc75f3f6474"
+checksum = "5b76ac76e900c755ca49946b2316d76c13e8af097495cd250acea7d09218b7e5"
 dependencies = [
  "bit_field",
  "embedded-nal",
  "embedded-time",
- "enum-iterator 0.6.0",
  "heapless",
- "smlang 0.4.2",
+ "num_enum",
+ "serde",
+ "smlang",
+ "varint-rs",
 ]
 
 [[package]]
 name = "minireq"
-version = "0.1.0"
-source = "git+https://github.com/quartiq/minireq?rev=786bc8845819a26a3669d6e0c81d64b71f510573#786bc8845819a26a3669d6e0c81d64b71f510573"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0ab687b1c94c62ef710973491f6b8a328de07636ec68f623bcae8ff4a145191"
 dependencies = [
  "heapless",
  "log",
  "minimq",
  "serde",
- "serde-json-core 0.4.0",
- "smlang 0.5.1",
+ "serde-json-core",
+ "smlang",
 ]
 
 [[package]]
@@ -932,6 +917,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "num_enum"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf5395665662ef45796a4ff5486c5d41d29e0c09640af4c5f17fd94ee2c119c9"
+dependencies = [
+ "num_enum_derive",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b0498641e53dd6ac1a4f22547548caa6864cc4933784319cd1775271c5a46ce"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1178,17 +1183,6 @@ dependencies = [
 
 [[package]]
 name = "serde-json-core"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8014aeea272bca0f0779778d43253f2f3375b414185b30e6ecc4d3e4a9994781"
-dependencies = [
- "heapless",
- "ryu",
- "serde",
-]
-
-[[package]]
-name = "serde-json-core"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58ec3c8fe427f45ee3aaa0ebb9f0d9ab8ae9ad05d12047fe7249ae5ea9374ff0"
@@ -1221,51 +1215,11 @@ dependencies = [
 
 [[package]]
 name = "smlang"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75f6a641648330c38cc8e0574ddc03807617dc8f27f3005c368522769f818896"
-dependencies = [
- "smlang-macros 0.2.1",
-]
-
-[[package]]
-name = "smlang"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a8a20583c0a718b7ab6ea17871a1bb0c55911df67277d255418e9e82167f44e"
-dependencies = [
- "smlang-macros 0.5.1",
-]
-
-[[package]]
-name = "smlang"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b62b263177e999fea25b50588d4413d1686f070d6fe986c3b2e5a7a4d2c532e9"
 dependencies = [
- "smlang-macros 0.6.0",
-]
-
-[[package]]
-name = "smlang-macros"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac6db7d915f8478423db4889a8933f0f557ec345b3e94495800d7b32b1ac7250"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "smlang-macros"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a20fec38ee915442c56be307cc054a490131b335212054b7cdc3bf0f73da4d8f"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
+ "smlang-macros",
 ]
 
 [[package]]
@@ -1488,6 +1442,12 @@ dependencies = [
  "nb 0.1.3",
  "usb-device",
 ]
+
+[[package]]
+name = "varint-rs"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f54a172d0620933a27a4360d3db3e2ae0dd6cceae9730751a036bbf182c4b23"
 
 [[package]]
 name = "vcell"
