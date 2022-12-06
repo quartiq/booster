@@ -70,7 +70,7 @@ impl DecodeOwned for ChannelState {
 }
 
 /// Represents booster channel-specific configuration values.
-#[derive(Miniconf, Serialize, Deserialize, Encode, DecodeOwned, Debug, Copy, Clone, PartialEq)]
+#[derive(Miniconf, Encode, DecodeOwned, Debug, Copy, Clone, PartialEq)]
 pub struct ChannelSettings {
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,

@@ -147,7 +147,6 @@ dependencies = [
  "rtt-logger",
  "rtt-target",
  "serde",
- "serde-json-core",
  "shared-bus",
  "smlang",
  "smoltcp-nal",
