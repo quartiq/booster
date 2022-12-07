@@ -90,6 +90,7 @@ mod app {
                 .channels
                 .channel_mut(idx)
                 .map(|(channel, _)| *channel.context().settings())
+                .into()
         }
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);

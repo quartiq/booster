@@ -6,6 +6,7 @@ use encdec::{Decode, DecodeOwned, Encode};
 use enum_iterator::Sequence;
 use microchip_24aa02e48::Microchip24AA02E48;
 use miniconf::Miniconf;
+use serde::{Deserialize, Serialize};
 
 /// The expected semver of the BoosterChannelSettings. This version must be updated whenever the
 /// `VersionedChannelData` layout is updated.
@@ -16,9 +17,7 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
 };
 
 /// Indicates the desired state of a channel.
-#[derive(
-    serde::Serialize, serde::Deserialize, Miniconf, Debug, Copy, Clone, PartialEq, Sequence,
-)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Sequence)]
 #[repr(u8)]
 pub enum ChannelState {
     /// The channel should be turned off and power should be disconnected.
