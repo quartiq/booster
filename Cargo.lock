@@ -1494,8 +1494,3 @@ dependencies = [
  "embedded-nal",
  "nb 1.0.0",
 ]
-
-[[patch.unused]]
-name = "encdec-base"
-version = "0.8.1"
-source = "git+https://github.com/quartiq/rust-encdec?branch=feature/float-support#8209c0d07a107eb74367fb5f49ba98bc526132d7"

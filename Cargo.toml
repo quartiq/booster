@@ -75,10 +75,6 @@ optional = true
 [patch.crates-io.usb-device]
 git = "https://github.com/rust-embedded-community/usb-device"
 
-[patch.crates-io.encdec-base]
-git = "https://github.com/quartiq/rust-encdec"
-branch = "feature/float-support"
-
 [dependencies.ad5627]
 path = "ad5627"
 
