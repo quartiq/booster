@@ -448,9 +448,9 @@ dependencies = [
 
 [[package]]
 name = "encdec"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cda2e74abc9ec9cdf26491d775b6aead82f4b815771f3783a9c49917ad109981"
+checksum = "fbbb02ebc5765ba1cbd19ac8b87c75ff050ef8609a19c04b6c08d9307fa4c18b"
 dependencies = [
  "encdec-base",
  "encdec-macros",
@@ -458,8 +458,9 @@ dependencies = [
 
 [[package]]
 name = "encdec-base"
-version = "0.8.1"
-source = "git+https://github.com/quartiq/rust-encdec?branch=feature/float-support#8209c0d07a107eb74367fb5f49ba98bc526132d7"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "825dce54de7b07af1e5e6fb68321151291cd0fe7b0765aaa12a757c932ae3a1d"
 dependencies = [
  "byteorder",
  "num-traits",
@@ -467,9 +468,9 @@ dependencies = [
 
 [[package]]
 name = "encdec-macros"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c898bd5ea39ac4cd7f5b2ba72d8bc66d92833c586158e76d6c5f06aa1aaeff06"
+checksum = "de37081815fcc234be3f9ffd4752270c7005c902ab77611b1047ef67304029e5"
 dependencies = [
  "darling",
  "encdec-base",
@@ -1493,3 +1494,8 @@ dependencies = [
  "embedded-nal",
  "nb 1.0.0",
 ]
+
+[[patch.unused]]
+name = "encdec-base"
+version = "0.8.1"
+source = "git+https://github.com/quartiq/rust-encdec?branch=feature/float-support#8209c0d07a107eb74367fb5f49ba98bc526132d7"
