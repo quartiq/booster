@@ -1431,8 +1431,9 @@ dependencies = [
 
 [[package]]
 name = "usb-device"
-version = "0.2.8"
-source = "git+https://github.com/rust-embedded-community/usb-device#413b77cd38d200c3b0e777dd3055cb7ef82c46a0"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f6cc3adc849b5292b4075fc0d5fdcf2f24866e88e336dd27a8943090a520508"
 
 [[package]]
 name = "usbd-serial"

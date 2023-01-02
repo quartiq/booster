@@ -41,7 +41,7 @@ rtt-logger = "0.2"
 bbqueue = "0.5"
 usbd-serial = "0.1.0"
 shared-bus = { version = "0.2", features = ["cortex-m"] }
-usb-device = "0.2.8"
+usb-device = "0.2.9"
 encdec = { version = "0.8", default-features = false }
 crc-any = { version = "2.4.3", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
@@ -71,9 +71,6 @@ git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
 rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
 features = [ "cortex-m-cpu" ]
 optional = true
-
-[patch.crates-io.usb-device]
-git = "https://github.com/rust-embedded-community/usb-device"
 
 [dependencies.ad5627]
 path = "ad5627"
