@@ -448,9 +448,9 @@ dependencies = [
 
 [[package]]
 name = "encdec"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbbb02ebc5765ba1cbd19ac8b87c75ff050ef8609a19c04b6c08d9307fa4c18b"
+checksum = "0a4204dad1927e6344e7358b1217a93f014f5a812187fb1226c6b937e9cddde1"
 dependencies = [
  "encdec-base",
  "encdec-macros",
