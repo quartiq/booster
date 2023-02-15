@@ -52,7 +52,7 @@ w5500 = { version = "0.4", optional = true }
 smlang= "0.6"
 minireq = "0.1.1"
 rtt-target = {version = "0.3", features=["cortex-m"]}
-enum-iterator = { version = "1.2", default-features = false }
+enum-iterator = { version = "1.3", default-features = false }
 
 [build-dependencies]
 built = { version = "0.5", features = ["git2"], default-features = false }
