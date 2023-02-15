@@ -55,7 +55,7 @@ rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "1.3", default-features = false }
 
 [build-dependencies]
-built = { version = "0.5", features = ["git2"], default-features = false }
+built = { version = "0.6", features = ["git2"], default-features = false }
 
 # Add RawDevice support for the W5500 to operate as an external MAC
 [patch.crates-io.w5500]
