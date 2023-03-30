@@ -149,6 +149,7 @@ dependencies = [
  "serde",
  "shared-bus",
  "smlang",
+ "smoltcp-mac",
  "smoltcp-nal",
  "stm32f4xx-hal",
  "systick-monotonic",
@@ -1244,6 +1245,15 @@ dependencies = [
  "bitflags",
  "byteorder",
  "managed",
+]
+
+[[package]]
+name = "smoltcp-mac"
+version = "0.1.0"
+dependencies = [
+ "cortex-m 0.7.7",
+ "heapless",
+ "smoltcp-nal",
 ]
 
 [[package]]

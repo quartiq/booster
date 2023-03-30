@@ -104,7 +104,7 @@ impl NetworkDevices {
     pub fn process(&mut self) -> bool {
         self.telemetry.update();
 
-        self.manager.process();
+        self.manager.process().unwrap();
 
         self.stack.lock(|stack| stack.poll()).unwrap_or(true)
     }

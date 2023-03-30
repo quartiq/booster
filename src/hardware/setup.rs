@@ -341,7 +341,12 @@ pub fn setup(
             mac
         };
 
-        let (interface, manager) = external_mac::Manager::new(mac);
+        const POOL_SIZE_BYTES: usize = core::mem::size_of::<smoltcp_mac::Frame>() * 16;
+        static mut POOL_STORAGE: [u8; POOL_SIZE_BYTES] = [0; POOL_SIZE_BYTES];
+        let (interface, manager) =
+            smoltcp_mac::new_default(external_mac::WrappedW5500(mac), unsafe {
+                &mut POOL_STORAGE
+            });
 
         let interface = net_interface::setup(interface, &settings);
 
