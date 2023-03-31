@@ -10,7 +10,7 @@ in the original firmware, and to enable continued maintenance and improvements.
 
 # Documentation
 
-Please see the [Online Documentation](https://quartiq.de/booster-doc) for usage information.
+Please see the [Online Documentation](https://quartiq.de/booster) for usage information.
 
 # License
 
