@@ -2,10 +2,7 @@
 
 use super::Channel;
 use bit_field::BitField;
-use hal::hal::{
-    blocking::spi::Write,
-    digital::v2::{InputPin, OutputPin},
-};
+use hal::hal::{blocking::spi::Write, digital::v2::InputPin};
 use stm32f4xx_hal as hal;
 
 use debounced_pin::{Debounce, DebounceState, DebouncedInputPin};
@@ -16,9 +13,9 @@ pub enum ButtonEvent {
     Standby,
 }
 
-type Button1 = hal::gpio::gpiof::PF14<hal::gpio::Input<hal::gpio::Floating>>;
+type Button1 = hal::gpio::gpiof::PF14<hal::gpio::Input>;
 
-type Button2 = hal::gpio::gpiof::PF15<hal::gpio::Input<hal::gpio::Floating>>;
+type Button2 = hal::gpio::gpiof::PF15<hal::gpio::Input>;
 
 /// Represents the two user input buttons on the front panel.
 pub struct UserButtons {
@@ -111,11 +108,11 @@ pub enum Color {
 }
 
 type LedSpi = hal::spi::Spi<
-    hal::stm32::SPI2,
+    hal::pac::SPI2,
     (
-        hal::gpio::gpiob::PB13<hal::gpio::Alternate<hal::gpio::AF5>>,
+        hal::gpio::gpiob::PB13<hal::gpio::Alternate<5>>,
         hal::spi::NoMiso,
-        hal::gpio::gpiob::PB15<hal::gpio::Alternate<hal::gpio::AF5>>,
+        hal::gpio::gpiob::PB15<hal::gpio::Alternate<5>>,
     ),
 >;
 
@@ -143,7 +140,7 @@ impl UserLeds {
         };
 
         // Enable LED output.
-        oen.set_low().unwrap();
+        oen.set_low();
 
         leds.update();
 
@@ -152,11 +149,11 @@ impl UserLeds {
 
     /// Write the LED state to the LED outputs.
     pub fn update(&mut self) {
-        self.spi_csn.set_low().unwrap();
+        self.spi_csn.set_low();
         self.spi
             .write(&[self.green, self.yellow, self.red])
             .unwrap();
-        self.spi_csn.set_high().unwrap();
+        self.spi_csn.set_high();
     }
 
     /// Update the state of an LED.
