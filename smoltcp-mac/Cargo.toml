@@ -2,6 +2,13 @@
 name = "smoltcp-mac"
 version = "0.1.0"
 edition = "2021"
+authors = [
+	"Ryan Summers <ryan.summers@vertigo-designs.com>",
+	"Robert Jördens <rj@quartiq.de>",
+]
+categories = ["embedded", "no-std", "hardware-support", "networking"]
+keywords = ["ethernet", "smoltcp", "phy", "w5500", "mac"]
+description = "Utility to safely enable Smoltcp on top of external Ethernet MACs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
