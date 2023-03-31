@@ -330,15 +330,24 @@ pub fn setup(
 
         // Attempt to read the W5500 VERSION register. On the W5500, we will get the expected
         // version code of 0x04, but the ENC424J600 won't return anything meaningful.
-        cs.set_low();
-        let mut transfer = [
-            0x00, 0x39, 0x01, // Control phase, 1 byte of data
-            0x00, // Data, don't care
-        ];
+        let w5500_detected = {
+            cs.set_low();
+            let mut transfer = [
+                0x00, 0x39, // Reading the version register (address 0x0039)
+                0x01, // Control phase, 1 byte of data, common register block, read
+                0x00, // Data, don't care, will be overwritten during read.
+            ];
 
-        spi.transfer(&mut transfer).unwrap();
+            spi.transfer(&mut transfer).unwrap();
 
-        let mac = if transfer[3] == 0x04 {
+            cs.set_high();
+
+            // The result is stored in the data phase byte. This should always be a 0x04 for the
+            // W5500.
+            transfer[3] == 0x04
+        };
+
+        let mac = if w5500_detected {
             // Reset the W5500.
             let mut mac_reset_n = gpiog.pg5.into_push_pull_output();
 
