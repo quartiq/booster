@@ -52,7 +52,7 @@ pub enum Error {
 
 static LOGGER: BufferedLog = BufferedLog::new();
 
-#[rtic::app(device = stm32f4xx_hal::stm32, dispatchers = [EXTI0, EXTI1, EXTI2, EXTI3, USART1, USART2])]
+#[rtic::app(device = stm32f4xx_hal::pac, dispatchers = [EXTI0, EXTI1, EXTI2, EXTI3, USART1, USART2])]
 mod app {
     use super::*;
 

@@ -42,14 +42,11 @@ use usb_device::prelude::*;
 macro_rules! channel_pins {
     ($gpiod:ident, $gpioe:ident, $gpiog:ident, $enable:ident, $alert:ident, $reflected_overdrive:ident,
      $output_overdrive:ident, $signal_on:ident, $gpioa:ident, $tx_power:ident, $reflected_power:ident) => {{
-        let enable_power = $gpiod.$enable.into_push_pull_output().downgrade();
-        let alert = $gpiod.$alert.into_floating_input().downgrade();
-        let reflected_overdrive = $gpioe
-            .$reflected_overdrive
-            .into_floating_input()
-            .downgrade();
-        let output_overdrive = $gpioe.$output_overdrive.into_pull_down_input().downgrade();
-        let signal_on = $gpiog.$signal_on.into_push_pull_output().downgrade();
+        let enable_power = $gpiod.$enable.into_push_pull_output().erase();
+        let alert = $gpiod.$alert.into_floating_input().erase();
+        let reflected_overdrive = $gpioe.$reflected_overdrive.into_floating_input().erase();
+        let output_overdrive = $gpioe.$output_overdrive.into_pull_down_input().erase();
+        let signal_on = $gpiog.$signal_on.into_push_pull_output().erase();
         let tx_power = AdcPin::$tx_power($gpioa.$tx_power.into_analog());
         let reflected_power = AdcPin::$reflected_power($gpioa.$reflected_power.into_analog());
 
@@ -103,7 +100,7 @@ pub struct NetworkDevices {
 /// The configured [BoosterDevices].
 pub fn setup(
     mut core: rtic::export::Peripherals,
-    device: stm32f4xx_hal::stm32::Peripherals,
+    device: stm32f4xx_hal::pac::Peripherals,
     clock: SystemTimer,
 ) -> BoosterDevices {
     // Configure RTT logging.
@@ -127,20 +124,20 @@ pub fn setup(
     // needed.
     let clocks = rcc
         .cfgr
-        .use_hse(8.mhz())
-        .sysclk(168.mhz())
-        .hclk(CPU_FREQ.hz())
-        .pclk1(42.mhz())
+        .use_hse(8.MHz())
+        .sysclk(168.MHz())
+        .hclk(CPU_FREQ.Hz())
+        .pclk1(42.MHz())
         .require_pll48clk()
         .freeze();
 
-    let systick = Systick::new(core.SYST, clocks.sysclk().0);
+    let systick = Systick::new(core.SYST, clocks.sysclk().to_Hz());
 
     // Start the watchdog during the initialization process.
     let mut watchdog = hal::watchdog::IndependentWatchdog::new(device.IWDG);
-    watchdog.start(30_000_u32.ms());
+    watchdog.start(30.secs());
 
-    let mut delay = AsmDelay::new(clocks.sysclk().0);
+    let mut delay = AsmDelay::new(clocks.sysclk().to_Hz());
 
     let gpioa = device.GPIOA.split();
     let gpiob = device.GPIOB.split();
@@ -151,7 +148,7 @@ pub fn setup(
     let gpiog = device.GPIOG.split();
 
     let mut pa_ch_reset_n = gpiob.pb9.into_push_pull_output();
-    pa_ch_reset_n.set_high().unwrap();
+    pa_ch_reset_n.set_high();
 
     // Manually reset all of the I2C buses across the RF channels using a bit-bang reset.
     let mut i2c_mux_reset = gpiob.pb14.into_push_pull_output();
@@ -159,9 +156,15 @@ pub fn setup(
     let i2c_bus_manager: &'static _ = {
         let mut mux = {
             let i2c = {
-                let scl = gpiob.pb6.into_alternate_af4_open_drain();
-                let sda = gpiob.pb7.into_alternate_af4_open_drain();
-                hal::i2c::I2c::i2c1(device.I2C1, (scl, sda), 100.khz(), clocks)
+                hal::i2c::I2c::new(
+                    device.I2C1,
+                    (
+                        gpiob.pb6.into_alternate_open_drain(),
+                        gpiob.pb7.into_alternate_open_drain(),
+                    ),
+                    100.kHz(),
+                    &clocks,
+                )
             };
 
             tca9548::Tca9548::default(i2c, &mut i2c_mux_reset, &mut delay).unwrap()
@@ -179,9 +182,15 @@ pub fn setup(
         platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
 
         let i2c = {
-            let scl = scl.into_alternate_af4_open_drain();
-            let sda = sda.into_alternate_af4_open_drain();
-            hal::i2c::I2c::i2c1(i2c_peripheral, (scl, sda), 100.khz(), clocks)
+            hal::i2c::I2c::new(
+                i2c_peripheral,
+                (
+                    scl.into_alternate_open_drain(),
+                    sda.into_alternate_open_drain(),
+                ),
+                100.kHz(),
+                &clocks,
+            )
         };
 
         shared_bus::new_atomic_check!(I2C = i2c).unwrap()
@@ -228,20 +237,21 @@ pub fn setup(
 
     let leds = {
         let spi = {
-            let sck = gpiob.pb13.into_alternate_af5();
-            let mosi = gpiob.pb15.into_alternate_af5();
-
             let mode = hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleLow,
                 phase: hal::spi::Phase::CaptureOnFirstTransition,
             };
 
-            hal::spi::Spi::spi2(
+            hal::spi::Spi::new(
                 device.SPI2,
-                (sck, hal::spi::NoMiso, mosi),
+                (
+                    gpiob.pb13.into_alternate(),
+                    hal::gpio::NoPin,
+                    gpiob.pb15.into_alternate(),
+                ),
                 mode,
-                10.mhz().into(),
-                clocks,
+                10.MHz(),
+                &clocks,
             )
         };
 
@@ -259,10 +269,15 @@ pub fn setup(
             let mut sda = gpiob.pb11.into_open_drain_output();
             platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
 
-            let scl = scl.into_alternate_af4_open_drain();
-            let sda = sda.into_alternate_af4_open_drain();
-
-            hal::i2c::I2c::i2c2(device.I2C2, (scl, sda), 100.khz(), clocks)
+            hal::i2c::I2c::new(
+                device.I2C2,
+                (
+                    scl.into_alternate_open_drain(),
+                    sda.into_alternate_open_drain(),
+                ),
+                100.kHz(),
+                &clocks,
+            )
         };
 
         let eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
@@ -277,9 +292,9 @@ pub fn setup(
             let hwrev2 = gpiof.pf2.into_pull_down_input();
 
             HardwareVersion::from(
-                *0u8.set_bit(0, hwrev0.is_high().unwrap())
-                    .set_bit(1, hwrev1.is_high().unwrap())
-                    .set_bit(2, hwrev2.is_high().unwrap()),
+                *0u8.set_bit(0, hwrev0.is_high())
+                    .set_bit(1, hwrev1.is_high())
+                    .set_bit(2, hwrev2.is_high()),
             )
         };
 
@@ -288,27 +303,27 @@ pub fn setup(
 
     let (manager, network_stack) = {
         let spi = {
-            let sck = gpioa.pa5.into_alternate_af5();
-            let miso = gpioa.pa6.into_alternate_af5();
-            let mosi = gpioa.pa7.into_alternate_af5();
-
             let mode = hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleLow,
                 phase: hal::spi::Phase::CaptureOnFirstTransition,
             };
 
-            hal::spi::Spi::spi1(
+            hal::spi::Spi::new(
                 device.SPI1,
-                (sck, miso, mosi),
+                (
+                    gpioa.pa5.into_alternate(),
+                    gpioa.pa6.into_alternate(),
+                    gpioa.pa7.into_alternate(),
+                ),
                 mode,
-                14.mhz().into(),
-                clocks,
+                14.MHz(),
+                &clocks,
             )
         };
 
         let cs = {
             let mut pin = gpioa.pa4.into_push_pull_output();
-            pin.set_high().unwrap();
+            pin.set_high();
             pin
         };
 
@@ -318,9 +333,9 @@ pub fn setup(
             let mut mac_reset_n = gpiog.pg5.into_push_pull_output();
 
             // Ensure the reset is registered.
-            mac_reset_n.set_low().unwrap();
+            mac_reset_n.set_low();
             delay.delay_ms(1u32);
-            mac_reset_n.set_high().unwrap();
+            mac_reset_n.set_high();
 
             // Wait for the W5500 to achieve PLL lock.
             delay.delay_ms(1u32);
@@ -354,9 +369,9 @@ pub fn setup(
             let mut led2 = gpioc.pc9.into_push_pull_output();
             let mut led3 = gpioc.pc10.into_push_pull_output();
 
-            led1.set_low().unwrap();
-            led2.set_low().unwrap();
-            led3.set_low().unwrap();
+            led1.set_low();
+            led2.set_low();
+            led3.set_low();
 
             (led1, led2, led3)
         };
@@ -389,8 +404,8 @@ pub fn setup(
             usb_global: device.OTG_FS_GLOBAL,
             usb_device: device.OTG_FS_DEVICE,
             usb_pwrclk: device.OTG_FS_PWRCLK,
-            pin_dm: gpioa.pa11.into_alternate_af10(),
-            pin_dp: gpioa.pa12.into_alternate_af10(),
+            pin_dm: gpioa.pa11.into_alternate(),
+            pin_dp: gpioa.pa12.into_alternate(),
             hclk: clocks.hclk(),
         };
 

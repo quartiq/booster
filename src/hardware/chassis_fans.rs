@@ -2,7 +2,6 @@
 
 use super::{I2cError, I2cProxy, MainboardLeds};
 use max6639::Max6639;
-use stm32f4xx_hal::hal::digital::v2::OutputPin;
 
 /// The default fan speed on power-up.
 pub const DEFAULT_FAN_SPEED: f32 = 0.2;
@@ -65,17 +64,17 @@ impl ChassisFans {
         let mut retry_set = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| {
             for _ in 0..2 {
                 match fan.set_duty_cycle(subfan, duty_cycle) {
-                    Err(max6639::Error::Interface(I2cError::NACK)) => {
-                        leds.0.set_high().unwrap();
-                        leds.1.set_high().unwrap();
-                        leds.2.set_high().unwrap();
+                    Err(max6639::Error::Interface(I2cError::NoAcknowledge(_))) => {
+                        leds.0.set_high();
+                        leds.1.set_high();
+                        leds.2.set_high();
                     }
-                    Err(e) => Err(e).unwrap(),
                     Ok(_) => {
-                        leds.0.set_low().unwrap();
-                        leds.1.set_low().unwrap();
-                        leds.2.set_low().unwrap();
+                        leds.0.set_low();
+                        leds.1.set_low();
+                        leds.2.set_low();
                     }
+                    Err(e) => panic!("{:?}", e),
                 }
             }
         };
