@@ -1509,8 +1509,9 @@ dependencies = [
 
 [[package]]
 name = "w5500"
-version = "0.4.0"
-source = "git+https://github.com/kellerkindt/w5500?rev=aa5eb1d4bf29b9e3c8ce0f685081440e320f5b7e#aa5eb1d4bf29b9e3c8ce0f685081440e320f5b7e"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c970c98a3a695bcecf841cac51a5316bd41912a380cd5b5b69e357ba4468b8c"
 dependencies = [
  "bit_field",
  "byteorder",
