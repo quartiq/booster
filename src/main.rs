@@ -2,14 +2,6 @@
 #![no_std]
 #![no_main]
 
-#[cfg(not(any(feature = "phy_enc424j600", feature = "phy_w5500")))]
-compile_error!(
-    "A least one PHY device must be enabled. Use a feature gate to
-    enable."
-);
-#[cfg(all(feature = "phy_enc424j600", feature = "phy_w5500"))]
-compile_error!("Cannot enable multiple ethernet PHY devices.");
-
 use stm32f4xx_hal as hal;
 
 #[macro_use]

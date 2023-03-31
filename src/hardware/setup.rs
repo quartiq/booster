@@ -9,7 +9,8 @@ use super::{
     net_interface, platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
-    HardwareVersion, NetworkManager, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ, I2C,
+    HardwareVersion, Mac, NetworkManager, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ,
+    I2C,
 };
 
 use crate::settings::BoosterSettings;
@@ -302,7 +303,7 @@ pub fn setup(
     };
 
     let (manager, network_stack) = {
-        let spi = {
+        let mut spi = {
             let mode = hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleLow,
                 phase: hal::spi::Phase::CaptureOnFirstTransition,
@@ -321,14 +322,23 @@ pub fn setup(
             )
         };
 
-        let cs = {
+        let mut cs = {
             let mut pin = gpioa.pa4.into_push_pull_output();
             pin.set_high();
             pin
         };
 
-        #[cfg(feature = "phy_w5500")]
-        let mac = {
+        // Attempt to read the W5500 VERSION register. On the W5500, we will get the expected
+        // version code of 0x04, but the ENC424J600 won't return anything meaningful.
+        cs.set_low();
+        let mut transfer = [
+            0x00, 0x39, 0x01, // Control phase, 1 byte of data
+            0x00, // Data, don't care
+        ];
+
+        spi.transfer(&mut transfer).unwrap();
+
+        let mac = if transfer[3] == 0x04 {
             // Reset the W5500.
             let mut mac_reset_n = gpiog.pg5.into_push_pull_output();
 
@@ -340,20 +350,19 @@ pub fn setup(
             // Wait for the W5500 to achieve PLL lock.
             delay.delay_ms(1u32);
 
-            w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
+            let w5500 = w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
                 .initialize_macraw(w5500::MacAddress {
                     octets: settings.mac().0,
                 })
-                .unwrap()
-        };
+                .unwrap();
 
-        #[cfg(feature = "phy_enc424j600")]
-        let mac = {
+            Mac::W5500(w5500)
+        } else {
             let mut mac = enc424j600::Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
             mac.init(&mut delay).expect("PHY initialization failed");
             mac.write_mac_addr(settings.mac().as_bytes()).unwrap();
 
-            mac
+            Mac::Enc424j600(mac)
         };
 
         let (interface, manager) = external_mac::Manager::new(mac);
