@@ -135,7 +135,7 @@ pub fn setup(
 
     // Start the watchdog during the initialization process.
     let mut watchdog = hal::watchdog::IndependentWatchdog::new(device.IWDG);
-    watchdog.start(30_000_u32.millis());
+    watchdog.start(30.secs());
 
     let mut delay = AsmDelay::new(clocks.sysclk().to_Hz());
 
@@ -159,8 +159,8 @@ pub fn setup(
                 hal::i2c::I2c::new(
                     device.I2C1,
                     (
-                        gpiob.pb6.into_alternate().set_open_drain(),
-                        gpiob.pb7.into_alternate().set_open_drain(),
+                        gpiob.pb6.into_alternate_open_drain(),
+                        gpiob.pb7.into_alternate_open_drain(),
                     ),
                     100.kHz(),
                     &clocks,

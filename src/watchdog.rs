@@ -26,7 +26,7 @@ impl WatchdogManager {
     /// * `watchdog` - The inedpdent watchdog timer.
     pub fn new(mut watchdog: hal::watchdog::IndependentWatchdog) -> Self {
         watchdog.feed();
-        watchdog.start(4_000_u32.millis());
+        watchdog.start(4.secs());
 
         Self {
             watchdog,
