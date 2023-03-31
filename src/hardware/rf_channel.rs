@@ -18,9 +18,8 @@ use crate::{
 use stm32f4xx_hal::{
     self as hal,
     adc::config::SampleTime,
-    gpio::{Analog, Floating, Input, Output, PullDown, PushPull},
+    gpio::{Analog, Input, Output},
     hal::blocking::delay::DelayUs,
-    prelude::*,
 };
 
 /// A structure representing power supply measurements of a channel.
@@ -73,7 +72,7 @@ pub struct PowerStatus {
 //         AdcPins::PA0(pin)
 //     }
 //
-//     pub fn convert(&self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>, sample_time: SampleTime) -> u16 {
+//     pub fn convert(&self, adc: &mut hal::adc::Adc<hal::pac::ADC3>, sample_time: SampleTime) -> u16 {
 //         match self {
 //             AdcPin::PA0(pin) => adc.convert(pin, sample_time)
 //             // ...
@@ -108,7 +107,7 @@ macro_rules! adc_pins {
     };
 
     (implement_convert: [$($pin:ident, $pin_lower:ident, $port:ident),*]) => {
-        pub fn convert(&self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>, sample_time: SampleTime) -> u16 {
+        pub fn convert(&self, adc: &mut hal::adc::Adc<hal::pac::ADC3>, sample_time: SampleTime) -> u16 {
             match self {
                 $(
                  AdcPin::$pin(pin) => adc.convert(pin, sample_time),
@@ -200,18 +199,18 @@ impl Devices {
 
 /// Represents the control and status pins for an RF channel.
 pub struct ChannelPins {
-    enable_power: hal::gpio::gpiod::PD<Output<PushPull>>,
+    enable_power: hal::gpio::EPin<Output>,
 
     // The alert and input overdrive pins have external pull resistors, so we don't need to pull
     // them internally.
-    alert: hal::gpio::gpiod::PD<Input<Floating>>,
+    alert: hal::gpio::EPin<Input>,
 
-    reflected_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
+    reflected_overdrive: hal::gpio::EPin<Input>,
 
     // There are no pullup/pulldown resistors on this input, so we will pull it down internally.
-    output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
+    output_overdrive: hal::gpio::EPin<Input>,
 
-    signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
+    signal_on: hal::gpio::EPin<Output>,
 
     output_power: AdcPin,
     reflected_power: AdcPin,
@@ -230,11 +229,11 @@ impl ChannelPins {
     /// * `output_power` - The pin to use for measuring transmitted power.
     /// * `reflected_power` - The pin to use for measuring reflected power.
     pub fn new(
-        enable_power: hal::gpio::gpiod::PD<Output<PushPull>>,
-        alert: hal::gpio::gpiod::PD<Input<Floating>>,
-        reflected_overdrive: hal::gpio::gpioe::PE<Input<Floating>>,
-        output_overdrive: hal::gpio::gpioe::PE<Input<PullDown>>,
-        signal_on: hal::gpio::gpiog::PG<Output<PushPull>>,
+        enable_power: hal::gpio::EPin<Output>,
+        alert: hal::gpio::EPin<Input>,
+        reflected_overdrive: hal::gpio::EPin<Input>,
+        output_overdrive: hal::gpio::EPin<Input>,
+        signal_on: hal::gpio::EPin<Output>,
         output_power: AdcPin,
         reflected_power: AdcPin,
     ) -> Self {
@@ -249,8 +248,8 @@ impl ChannelPins {
         };
 
         // Power down channel.
-        pins.signal_on.set_low().unwrap();
-        pins.enable_power.set_low().unwrap();
+        pins.signal_on.set_low();
+        pins.enable_power.set_low();
         pins
     }
 }
@@ -326,12 +325,12 @@ impl RfChannel {
 
     /// Check if the channel RF output is enabled.
     pub fn is_enabled(&self) -> bool {
-        self.pins.signal_on.is_high().unwrap()
+        self.pins.signal_on.is_set_high()
     }
 
     /// Check if the channel is powered.
     pub fn is_powered(&self) -> bool {
-        self.pins.enable_power.is_high().unwrap()
+        self.pins.enable_power.is_set_high()
     }
 
     /// Set the interlock thresholds for the channel.
@@ -377,7 +376,7 @@ impl RfChannel {
             Some(ChannelFault::OverTemperature)
         } else if temperature < 5.0 {
             Some(ChannelFault::UnderTemperature)
-        } else if self.pins.alert.is_low().unwrap() {
+        } else if self.pins.alert.is_low() {
             Some(ChannelFault::SupplyAlert)
         } else {
             None
@@ -389,9 +388,9 @@ impl RfChannel {
         // a safety margin.
         if self.get_input_power() > 20.0 {
             Some(Interlock::Input)
-        } else if self.pins.output_overdrive.is_high().unwrap() {
+        } else if self.pins.output_overdrive.is_high() {
             Some(Interlock::Output)
-        } else if self.pins.reflected_overdrive.is_high().unwrap() {
+        } else if self.pins.reflected_overdrive.is_high() {
             Some(Interlock::Reflected)
         } else {
             None
@@ -547,7 +546,7 @@ impl RfChannel {
     ///
     /// # Returns
     /// The reflected power in dBm.
-    pub fn get_reflected_power(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
+    pub fn get_reflected_power(&mut self, adc: &mut hal::adc::Adc<hal::pac::ADC3>) -> f32 {
         let sample = self
             .pins
             .reflected_power
@@ -567,7 +566,7 @@ impl RfChannel {
     ///
     /// # Returns
     /// The output power in dBm.
-    pub fn get_output_power(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> f32 {
+    pub fn get_output_power(&mut self, adc: &mut hal::adc::Adc<hal::pac::ADC3>) -> f32 {
         let sample = self.pins.output_power.convert(adc, SampleTime::Cycles_480);
         let voltage = adc.sample_to_millivolts(sample) as f32 / 1000.0;
 
@@ -658,7 +657,7 @@ impl sm::StateMachineContext for RfChannel {
 
     /// Turn off the RF output enable switch.
     fn disable_rf_switch(&mut self) {
-        self.pins.signal_on.set_low().unwrap();
+        self.pins.signal_on.set_low();
     }
 
     /// Begin the process of powering up the channel.
@@ -676,7 +675,7 @@ impl sm::StateMachineContext for RfChannel {
         self.disable_rf_switch();
 
         // Start the LM3880 power supply sequencer.
-        self.pins.enable_power.set_high().unwrap();
+        self.pins.enable_power.set_high();
 
         // The LM3880 requires 180ms to power up all supplies on the channel. We add an additional
         // 20ms margin.
@@ -723,7 +722,7 @@ impl sm::StateMachineContext for RfChannel {
         }
 
         // Enable power should always be high before we're enabling the RF switch.
-        if self.pins.enable_power.is_low().unwrap() {
+        if self.pins.enable_power.is_set_low() {
             return Err(());
         }
 
@@ -734,11 +733,11 @@ impl sm::StateMachineContext for RfChannel {
         let settings = self.settings.settings();
 
         // It is only valid to enable the output if the channel is powered.
-        assert!(self.pins.enable_power.is_high().unwrap());
+        assert!(self.pins.enable_power.is_set_high());
         assert!(settings.output_interlock_threshold > settings.output_power_transform.map(0.100));
 
         self.apply_bias().unwrap();
-        self.pins.signal_on.set_high().unwrap();
+        self.pins.signal_on.set_high();
     }
 
     /// Begin the process of powering down the channel.
@@ -754,7 +753,7 @@ impl sm::StateMachineContext for RfChannel {
             .set_voltage(3.2)
             .expect("Failed to disable RF bias voltage");
 
-        self.pins.enable_power.set_low().unwrap();
+        self.pins.enable_power.set_low();
 
         // Note that we use 500ms here due to the worst-case power-sequencing operation of the
         // LM3880 that occurs when a channel is disabled immediately after enable. In this case,
@@ -833,8 +832,8 @@ impl sm::StateMachine<RfChannel> {
         self.process_event(sm::Events::Update).ok();
 
         PowerStatus {
-            powered: self.context().pins.enable_power.is_high().unwrap(),
-            rf_disabled: self.context().pins.signal_on.is_low().unwrap(),
+            powered: self.context().pins.enable_power.is_set_high(),
+            rf_disabled: self.context().pins.signal_on.is_set_low(),
             blocked: matches!(self.state(), &sm::States::Blocked(_)),
         }
     }
@@ -885,15 +884,15 @@ impl sm::StateMachine<RfChannel> {
     }
 
     /// Get status information about the channel.
-    pub fn get_status(&mut self, adc: &mut hal::adc::Adc<hal::stm32::ADC3>) -> ChannelStatus {
+    pub fn get_status(&mut self, adc: &mut hal::adc::Adc<hal::pac::ADC3>) -> ChannelStatus {
         let channel = self.context_mut();
 
         let power_measurements = channel.get_supply_measurements();
 
         ChannelStatus {
-            reflected_overdrive: channel.pins.reflected_overdrive.is_high().unwrap(),
-            output_overdrive: channel.pins.output_overdrive.is_high().unwrap(),
-            alert: channel.pins.alert.is_low().unwrap(),
+            reflected_overdrive: channel.pins.reflected_overdrive.is_high(),
+            output_overdrive: channel.pins.output_overdrive.is_high(),
+            alert: channel.pins.alert.is_low(),
             temperature: channel.get_temperature(),
             p28v_current: power_measurements.i_p28v0ch,
             p5v_current: power_measurements.i_p5v0ch,

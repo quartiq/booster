@@ -1,10 +1,7 @@
 //! Booster NGFW watchdog manager
 
 use crate::hal;
-use hal::{
-    hal::watchdog::{Watchdog, WatchdogEnable},
-    time::U32Ext,
-};
+use hal::prelude::*;
 
 /// Represents various clients that can check in with the watchdog.
 pub enum WatchdogClient {
@@ -29,7 +26,7 @@ impl WatchdogManager {
     /// * `watchdog` - The inedpdent watchdog timer.
     pub fn new(mut watchdog: hal::watchdog::IndependentWatchdog) -> Self {
         watchdog.feed();
-        watchdog.start(4_000_u32.ms());
+        watchdog.start(4.secs());
 
         Self {
             watchdog,

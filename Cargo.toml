@@ -26,7 +26,7 @@ exclude = [
 
 [dependencies]
 cortex-m = "0.7.7"
-cortex-m-rt = "0.6.15"
+cortex-m-rt = "0.7"
 cortex-m-rtic = "1.1"
 mono-clock = "0.1"
 systick-monotonic = "1.0.1"
@@ -48,7 +48,7 @@ panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
 smoltcp-nal = { version = "0.2" }
 miniconf = { version = "0.6", features = ["mqtt-client"]}
 minimq = "0.6"
-w5500 = { version = "0.4", optional = true }
+w5500 = { version = "0.4.1", optional = true }
 smlang= "0.6"
 minireq = "0.1.1"
 rtt-target = {version = "0.3", features=["cortex-m"]}
@@ -57,13 +57,8 @@ enum-iterator = { version = "1.4", default-features = false }
 [build-dependencies]
 built = { version = "0.6", features = ["git2"], default-features = false }
 
-# Add RawDevice support for the W5500 to operate as an external MAC
-[patch.crates-io.w5500]
-git = "https://github.com/kellerkindt/w5500"
-rev = "aa5eb1d4bf29b9e3c8ce0f685081440e320f5b7e"
-
 [dependencies.stm32f4xx-hal]
-git = "https://github.com/stm32-rs/stm32f4xx-hal"
+version = "0.15"
 features = ["stm32f407", "rt", "usb_fs"]
 
 [dependencies.enc424j600]

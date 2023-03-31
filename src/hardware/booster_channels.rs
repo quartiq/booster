@@ -10,7 +10,7 @@ use hal::hal::blocking::delay::DelayUs;
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
     channels: [Option<RfChannelMachine>; 8],
-    adc: hal::adc::Adc<hal::stm32::ADC3>,
+    adc: hal::adc::Adc<hal::pac::ADC3>,
     mux: Tca9548<I2cProxy>,
 }
 
@@ -46,7 +46,7 @@ impl BoosterChannels {
     /// A `BoosterChannels` object that can be used to manage all available RF channels.
     pub fn new(
         mut mux: Tca9548<I2cProxy>,
-        adc: hal::adc::Adc<hal::stm32::ADC3>,
+        adc: hal::adc::Adc<hal::pac::ADC3>,
         manager: &'static I2cBusManager,
         pins: [RfChannelPins; 8],
         clock: SystemTimer,
@@ -84,7 +84,7 @@ impl BoosterChannels {
     pub fn channel_mut(
         &mut self,
         channel: Channel,
-    ) -> Option<(&mut RfChannelMachine, &mut hal::adc::Adc<hal::stm32::ADC3>)> {
+    ) -> Option<(&mut RfChannelMachine, &mut hal::adc::Adc<hal::pac::ADC3>)> {
         let mux = &mut self.mux;
         let adc = &mut self.adc;
         self.channels[channel as usize].as_mut().map(|ch| {
