@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   addresses heating issues observed with some Booster configurations resulting in channel wedging.
 * Relicensed as MIT/Apache
 * Miniconf, minireq, and minimq versions updated to incorporate efficiency updates and bugfixes
+* External MAC has been moved to an external crate to support reusability
 
 ### Fixed
 * A few dependencies were deprecated because changes landed upstream. These dependencies were
