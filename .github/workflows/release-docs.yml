@@ -38,6 +38,7 @@ jobs:
 
       - uses: peaceiris/actions-gh-pages@v3.8.0
         with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: book/booster-manual/html
           enable_jekyll: true
           publish_branch: pages
