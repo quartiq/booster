@@ -9,7 +9,8 @@ use super::{
     net_interface, platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
-    HardwareVersion, NetworkManager, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ, I2C,
+    HardwareVersion, Mac, NetworkManager, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ,
+    I2C,
 };
 
 use crate::settings::BoosterSettings;
@@ -284,25 +285,8 @@ pub fn setup(
         BoosterSettings::new(eui)
     };
 
-    let metadata = {
-        // Read the hardware version pins.
-        let hardware_version = {
-            let hwrev0 = gpiof.pf0.into_pull_down_input();
-            let hwrev1 = gpiof.pf1.into_pull_down_input();
-            let hwrev2 = gpiof.pf2.into_pull_down_input();
-
-            HardwareVersion::from(
-                *0u8.set_bit(0, hwrev0.is_high())
-                    .set_bit(1, hwrev1.is_high())
-                    .set_bit(2, hwrev2.is_high()),
-            )
-        };
-
-        ApplicationMetadata::new(hardware_version)
-    };
-
-    let (manager, network_stack) = {
-        let spi = {
+    let mac = {
+        let mut spi = {
             let mode = hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleLow,
                 phase: hal::spi::Phase::CaptureOnFirstTransition,
@@ -321,14 +305,32 @@ pub fn setup(
             )
         };
 
-        let cs = {
+        let mut cs = {
             let mut pin = gpioa.pa4.into_push_pull_output();
             pin.set_high();
             pin
         };
 
-        #[cfg(feature = "phy_w5500")]
-        let mac = {
+        // Attempt to read the W5500 VERSION register. On the W5500, we will get the expected
+        // version code of 0x04, but the ENC424J600 won't return anything meaningful.
+        let w5500_detected = {
+            cs.set_low();
+            let mut transfer = [
+                0x00, 0x39, // Reading the version register (address 0x0039)
+                0x01, // Control phase, 1 byte of data, common register block, read
+                0x00, // Data, don't care, will be overwritten during read.
+            ];
+
+            spi.transfer(&mut transfer).unwrap();
+
+            cs.set_high();
+
+            // The result is stored in the data phase byte. This should always be a 0x04 for the
+            // W5500.
+            transfer[3] == 0x04
+        };
+
+        if w5500_detected {
             // Reset the W5500.
             let mut mac_reset_n = gpiog.pg5.into_push_pull_output();
 
@@ -340,22 +342,45 @@ pub fn setup(
             // Wait for the W5500 to achieve PLL lock.
             delay.delay_ms(1u32);
 
-            w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
+            let w5500 = w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
                 .initialize_macraw(w5500::MacAddress {
                     octets: settings.mac().0,
                 })
-                .unwrap()
-        };
+                .unwrap();
 
-        #[cfg(feature = "phy_enc424j600")]
-        let mac = {
+            Mac::W5500(w5500)
+        } else {
             let mut mac = enc424j600::Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
             mac.init(&mut delay).expect("PHY initialization failed");
             mac.write_mac_addr(settings.mac().as_bytes()).unwrap();
 
-            mac
+            Mac::Enc424j600(mac)
+        }
+    };
+
+    let metadata = {
+        // Read the hardware version pins.
+        let hardware_version = {
+            let hwrev0 = gpiof.pf0.into_pull_down_input();
+            let hwrev1 = gpiof.pf1.into_pull_down_input();
+            let hwrev2 = gpiof.pf2.into_pull_down_input();
+
+            HardwareVersion::from(
+                *0u8.set_bit(0, hwrev0.is_high())
+                    .set_bit(1, hwrev1.is_high())
+                    .set_bit(2, hwrev2.is_high()),
+            )
         };
 
+        let phy_string = match mac {
+            Mac::W5500(_) => "W5500",
+            Mac::Enc424j600(_) => "Enc424j600",
+        };
+
+        ApplicationMetadata::new(hardware_version, phy_string)
+    };
+
+    let (manager, network_stack) = {
         let (interface, manager) = external_mac::Manager::new(mac);
 
         let interface = net_interface::setup(interface, &settings);

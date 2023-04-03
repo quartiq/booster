@@ -216,6 +216,13 @@ impl SerialTerminal {
                     self.write(msg.as_bytes());
 
                     msg.clear();
+                    writeln!(&mut msg, "{:<20}: {}", "Detected Phy", self.metadata.phy)
+                        .unwrap_or_else(|_| {
+                            msg = String::from("Detected Phy: too long");
+                        });
+                    self.write(msg.as_bytes());
+
+                    msg.clear();
                     // Note(unwrap): The msg size is long enough to always contain the provided
                     // string.
                     write!(&mut msg, "{:<20}: ", "Panic Info").unwrap();
