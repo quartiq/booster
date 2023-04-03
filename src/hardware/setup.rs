@@ -284,24 +284,7 @@ pub fn setup(
         BoosterSettings::new(eui)
     };
 
-    let metadata = {
-        // Read the hardware version pins.
-        let hardware_version = {
-            let hwrev0 = gpiof.pf0.into_pull_down_input();
-            let hwrev1 = gpiof.pf1.into_pull_down_input();
-            let hwrev2 = gpiof.pf2.into_pull_down_input();
-
-            HardwareVersion::from(
-                *0u8.set_bit(0, hwrev0.is_high())
-                    .set_bit(1, hwrev1.is_high())
-                    .set_bit(2, hwrev2.is_high()),
-            )
-        };
-
-        ApplicationMetadata::new(hardware_version)
-    };
-
-    let (manager, network_stack) = {
+    let mac = {
         let mut spi = {
             let mode = hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleLow,
@@ -346,7 +329,7 @@ pub fn setup(
             transfer[3] == 0x04
         };
 
-        let mac = if w5500_detected {
+        if w5500_detected {
             // Reset the W5500.
             let mut mac_reset_n = gpiog.pg5.into_push_pull_output();
 
@@ -371,8 +354,32 @@ pub fn setup(
             mac.write_mac_addr(settings.mac().as_bytes()).unwrap();
 
             Mac::Enc424j600(mac)
+        }
+    };
+
+    let metadata = {
+        // Read the hardware version pins.
+        let hardware_version = {
+            let hwrev0 = gpiof.pf0.into_pull_down_input();
+            let hwrev1 = gpiof.pf1.into_pull_down_input();
+            let hwrev2 = gpiof.pf2.into_pull_down_input();
+
+            HardwareVersion::from(
+                *0u8.set_bit(0, hwrev0.is_high())
+                    .set_bit(1, hwrev1.is_high())
+                    .set_bit(2, hwrev2.is_high()),
+            )
         };
 
+        let phy_string = match mac {
+            Mac::W5500(_) => "W5500",
+            Mac::Enc424j600(_) => "Enc424j600",
+        };
+
+        ApplicationMetadata::new(hardware_version, phy_string)
+    };
+
+    let (manager, network_stack) = {
         const POOL_SIZE_BYTES: usize = core::mem::size_of::<smoltcp_mac::Frame>() * 16;
         static mut POOL_STORAGE: [u8; POOL_SIZE_BYTES] = [0; POOL_SIZE_BYTES];
         let (interface, manager) = smoltcp_mac::new_default(mac, unsafe { &mut POOL_STORAGE });
