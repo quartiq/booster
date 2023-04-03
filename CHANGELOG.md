@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 * A few dependencies were deprecated because changes landed upstream. These dependencies were
   corrected to point upstream.
+* The ethernet PHY is now detected at run-time as opposed to compile time, so there is now a single
+  booster binary. The detected PHY can be found in the service prompt over the USB interface.
 
 ## [0.4.0]
 
