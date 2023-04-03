@@ -55,16 +55,15 @@ pub type Led2 = hal::gpio::gpioc::PC9<hal::gpio::Output<hal::gpio::PushPull>>;
 pub type Led3 = hal::gpio::gpioc::PC10<hal::gpio::Output<hal::gpio::PushPull>>;
 pub type MainboardLeds = (Led1, Led2, Led3);
 
-#[cfg(feature = "phy_w5500")]
-pub type ExternalMac = external_mac::WrappedW5500;
+pub enum Mac {
+    W5500(w5500::raw_device::RawDevice<w5500::bus::FourWire<Spi, SpiCs>>),
+    Enc424j600(enc424j600::Enc424j600<Spi, SpiCs>),
+}
 
-#[cfg(feature = "phy_enc424j600")]
-pub type ExternalMac = enc424j600::Enc424j600<Spi, SpiCs>;
+pub type NetworkManager = smoltcp_mac::Manager<'static, 'static, Mac, 8, 8>;
+pub type SmoltcpDevice = smoltcp_mac::SmoltcpDevice<'static, 'static, 8, 8>;
 
-pub type NetworkManager = external_mac::Manager<'static, ExternalMac>;
-
-pub type NetworkStack =
-    smoltcp_nal::NetworkStack<'static, external_mac::SmoltcpDevice<'static>, SystemTimer>;
+pub type NetworkStack = smoltcp_nal::NetworkStack<'static, SmoltcpDevice, SystemTimer>;
 
 pub type I2cBusManager = shared_bus::BusManagerAtomicCheck<I2C>;
 pub type I2cProxy = shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2C>>;

@@ -3,7 +3,7 @@
 use crate::BoosterSettings;
 use smoltcp_nal::smoltcp;
 
-use super::external_mac::SmoltcpDevice;
+use super::SmoltcpDevice;
 
 /// The number of TCP sockets supported in the network stack.
 const NUM_TCP_SOCKETS: usize = 4;
@@ -62,9 +62,9 @@ impl TcpSocketStorage {
 /// * `device` - The smoltcp interface device.
 /// * `settings` - The device settings to use.
 pub fn setup(
-    device: SmoltcpDevice<'static>,
+    device: SmoltcpDevice,
     settings: &BoosterSettings,
-) -> smoltcp::iface::Interface<'static, SmoltcpDevice<'static>> {
+) -> smoltcp::iface::Interface<'static, SmoltcpDevice> {
     let net_store = cortex_m::singleton!(: NetStorage = NetStorage::new()).unwrap();
 
     let ip_address = settings.ip_address();

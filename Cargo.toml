@@ -48,7 +48,7 @@ panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
 smoltcp-nal = { version = "0.2" }
 miniconf = { version = "0.6", features = ["mqtt-client"]}
 minimq = "0.6"
-w5500 = { version = "0.4.1", optional = true }
+w5500 = "0.4.1"
 smlang= "0.6"
 minireq = "0.1.1"
 rtt-target = {version = "0.3", features=["cortex-m"]}
@@ -65,7 +65,6 @@ features = ["stm32f407", "rt", "usb_fs"]
 git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
 rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
 features = [ "cortex-m-cpu" ]
-optional = true
 
 [dependencies.ad5627]
 path = "ad5627"
@@ -94,11 +93,6 @@ features = ["cortex-m"]
 
 [dependencies.tca9548]
 path = "tca9548"
-
-[features]
-phy_w5500 = [ "w5500" ]
-phy_enc424j600 = [ "enc424j600" ]
-default = [ "phy_w5500" ]
 
 [profile.dev]
 # Note: Opt-level 1 is required to avoid issues with stack overflow during hardware configuration.
