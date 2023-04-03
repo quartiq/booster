@@ -1,9 +1,6 @@
-#![no_std]
 //! Smoltcp device implementation for external ethernet MACs.
 //!
 //! # Design
-//!
-//! ## Ownership Issues
 //!
 //! Smoltcp must own a means to communicate with the PHY. However, smoltcp may have multiple RX/TX
 //! tokens in flight. Because of this, when Smoltcp tries to consume an RX/TX token, it would have
@@ -27,8 +24,43 @@
 //! Similarly, the [SmoltcpDevice] is the software construct with the RX/TX FIFO endpoints that can
 //! be passed to Smoltcp's interface and implements [smoltcp::phy::Device].
 //!
+//! # Example
 //!
-//! ## Ethernet Frame Buffers
+//! ```rust
+//! struct Mac;
+//!
+//! impl smoltcp_mac::ExternalMac for Mac {
+//!     type Error = ();
+//!     fn receive_frame(&mut self, frame: &mut [u8]) -> Result<usize, Self::Error> {
+//!         todo!();
+//!     }
+//!
+//!     fn send_frame(&mut self, frame: &[u8]) -> Result<(), Self::Error> {
+//!         todo!();
+//!     }
+//! }
+//!
+//! // Allocate static storage for ethernet frames.
+//! const POOL_SIZE_BYTES: usize = core::mem::size_of::<smoltcp_mac::Frame>() * 16;
+//! static mut POOL_STORAGE: [u8; POOL_SIZE_BYTES] = [0; POOL_SIZE_BYTES];
+//!
+//! // Construct the smoltcp device and the manager.
+//! let (device, manager) = smoltcp_mac::new_default(mac, unsafe { &mut POOL_STORAGE });
+//!
+//! // Create the smoltcp interface and sockets.
+//! let smoltcp_interface = smoltcp::iface::Interface::new(smoltcp::iface::Config::default(), &mut
+//! device);
+//! let mut sockets = smoltcp::socket::SocketSet::new(&[]);
+//!
+//! loop {
+//!     manager.process().unwrap();
+//!     smoltcp_interface.poll(smoltcp::time::Instant::now(), &mut device, &mut sockets).unwrap();
+//! }
+//!
+//! ```
+//!
+//!
+//! # Ethernet Frame Buffers
 //!
 //! In order to avoid large copying of ethernet frames between [SmoltcpDevice] and [Manager], the
 //! ethernet frames are allocated from a global [heapless::pool::Pool]. Because of the operation of
@@ -36,6 +68,8 @@
 //! Instead, a [heapless::pool::Box] is used, which is a proxy to the underlying `static mut`
 //! buffer. This ensures that the ethernet frames are not copied when transferring data between the
 //! [SmoltcpDevice] and the [Manager]
+#![no_std]
+
 use heapless::pool::Box;
 use smoltcp_nal::smoltcp;
 

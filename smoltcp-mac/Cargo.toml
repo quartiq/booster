@@ -17,6 +17,9 @@ smoltcp-nal = "0.2"
 heapless = "0.7"
 cortex-m = { version = "0.7", optional = true }
 
+[dev-dependencies]
+smoltcp = { version = "0.9", default-features = false, features = ["medium-ethernet", "proto-ipv6", "socket-tcp", "socket-dhcpv4", "socket-udp"] }
+
 [features]
 default = []
 cortex-m = ["dep:cortex-m"]
