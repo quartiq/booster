@@ -14,6 +14,7 @@ python3 -m venv --system-site-packages vpy
 . vpy/bin/activate
 
 # Install Miniconf utilities for configuring stabilizer.
+python3 -m pip install --upgrade pip
 python3 -m pip install -e py
 
 cargo flash --chip STM32F407ZGTx --elf target/thumbv7em-none-eabihf/release/booster --probe 0483:3754:003C002F5632500A20313236
