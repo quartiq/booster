@@ -16,7 +16,7 @@ python3 -m venv --system-site-packages vpy
 # Install Miniconf utilities for configuring stabilizer.
 python3 -m pip install -e py
 
-cargo embed --release
+cargo flash --chip STM32F407ZGTx --elf target/thumbv7em-none-eabihf/release/booster --probe 0483:3754:003C002F5632500A20313236
 
 # Sleep to allow flashing, booting, DHCP, MQTT
 sleep 30
