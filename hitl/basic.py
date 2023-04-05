@@ -92,7 +92,7 @@ async def test_channel(booster, channel, prefix, broker):
         # Lower the interlock threshold so it trips.
         print('Setting output interlock threshold to -5 dB, verifying interlock trips')
         await booster.settings_interface.command(f'channel/{channel}/output_interlock_threshold',
-                                                 -5, retain=False)
+                                                 -5.7, retain=False)
 
         async def is_tripped() -> bool:
             _, tlm = await telemetry.get_next_telemetry()
