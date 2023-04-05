@@ -1,10 +1,5 @@
 //! Smoltcp device implementation for external ethernet MACs.
 //!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
-//!
 //! # Design
 //!
 //! ## Ownership Issues
@@ -40,6 +35,8 @@
 //! Instead, a [heapless::pool::Box] is used, which is a proxy to the underlying `static mut`
 //! buffer. This ensures that the ethernet frames are not copied when transferring data between the
 //! [SmoltcpDevice] and the [Manager]
+use super::Mac;
+use enc424j600::EthPhy;
 use heapless::pool::Box;
 use smoltcp_nal::smoltcp;
 
@@ -137,45 +134,42 @@ pub trait ExternalMac {
     fn send_frame(&mut self, frame: &Frame);
 }
 
-#[cfg(feature = "phy_w5500")]
-impl ExternalMac for w5500::raw_device::RawDevice<w5500::bus::FourWire<super::Spi, super::SpiCs>> {
+impl ExternalMac for Mac {
     fn receive_frame(&mut self, frame: &mut Frame) -> bool {
-        let len = self.read_frame(&mut frame.payload[..]).unwrap();
-        frame.length = len;
+        match self {
+            Mac::W5500(mac) => {
+                let len = mac.read_frame(&mut frame.payload[..]).unwrap();
+                frame.length = len;
 
-        len != 0
-    }
-
-    fn send_frame(&mut self, frame: &Frame) {
-        self.write_frame(&frame.payload[..frame.length]).unwrap();
-    }
-}
-
-#[cfg(feature = "phy_enc424j600")]
-use enc424j600::EthPhy;
-
-#[cfg(feature = "phy_enc424j600")]
-impl ExternalMac for enc424j600::Enc424j600<super::Spi, super::SpiCs> {
-    fn receive_frame(&mut self, frame: &mut Frame) -> bool {
-        match self.recv_packet(false) {
-            Ok(rx_packet) => {
-                rx_packet.write_frame_to(&mut frame.payload[..]);
-                frame.length = rx_packet.get_frame_length();
-                frame.length != 0
+                len != 0
             }
+            Mac::Enc424j600(mac) => match mac.recv_packet(false) {
+                Ok(rx_packet) => {
+                    rx_packet.write_frame_to(&mut frame.payload[..]);
+                    frame.length = rx_packet.get_frame_length();
+                    frame.length != 0
+                }
 
-            Err(enc424j600::Error::NoRxPacketError) => false,
+                Err(enc424j600::Error::NoRxPacketError) => false,
 
-            Err(other) => {
-                panic!("Unexpected MAC error: {:?}", other);
-            }
+                Err(other) => {
+                    panic!("Unexpected MAC error: {:?}", other);
+                }
+            },
         }
     }
 
     fn send_frame(&mut self, frame: &Frame) {
-        let mut tx_packet = enc424j600::tx::TxPacket::new();
-        tx_packet.update_frame(&frame.payload[..], frame.length);
-        self.send_packet(&tx_packet).unwrap();
+        match self {
+            Mac::W5500(mac) => {
+                mac.write_frame(&frame.payload[..frame.length]).unwrap();
+            }
+            Mac::Enc424j600(mac) => {
+                let mut tx_packet = enc424j600::tx::TxPacket::new();
+                tx_packet.update_frame(&frame.payload[..], frame.length);
+                mac.send_packet(&tx_packet).unwrap();
+            }
+        }
     }
 }
 

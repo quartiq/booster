@@ -1,12 +1,7 @@
 //! Booster module-level hardware definitions
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
 
 use core::fmt::Write;
-use enum_iterator::IntoEnumIterator;
+use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use stm32f4xx_hal as hal;
 
@@ -29,29 +24,29 @@ pub const CPU_FREQ: u32 = 168_000_000;
 
 // Convenience type definition for the I2C bus used for booster RF channels.
 pub type I2C = hal::i2c::I2c<
-    hal::stm32::I2C1,
+    hal::pac::I2C1,
     (
-        hal::gpio::gpiob::PB6<hal::gpio::AlternateOD<hal::gpio::AF4>>,
-        hal::gpio::gpiob::PB7<hal::gpio::AlternateOD<hal::gpio::AF4>>,
+        hal::gpio::gpiob::PB6<hal::gpio::Alternate<4, hal::gpio::OpenDrain>>,
+        hal::gpio::gpiob::PB7<hal::gpio::Alternate<4, hal::gpio::OpenDrain>>,
     ),
 >;
 
 pub type I2C2 = hal::i2c::I2c<
-    hal::stm32::I2C2,
+    hal::pac::I2C2,
     (
-        hal::gpio::gpiob::PB10<hal::gpio::AlternateOD<hal::gpio::AF4>>,
-        hal::gpio::gpiob::PB11<hal::gpio::AlternateOD<hal::gpio::AF4>>,
+        hal::gpio::gpiob::PB10<hal::gpio::Alternate<4, hal::gpio::OpenDrain>>,
+        hal::gpio::gpiob::PB11<hal::gpio::Alternate<4, hal::gpio::OpenDrain>>,
     ),
 >;
 
 pub type SpiCs = hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>;
 
 pub type Spi = hal::spi::Spi<
-    hal::stm32::SPI1,
+    hal::pac::SPI1,
     (
-        hal::gpio::gpioa::PA5<hal::gpio::Alternate<hal::gpio::AF5>>,
-        hal::gpio::gpioa::PA6<hal::gpio::Alternate<hal::gpio::AF5>>,
-        hal::gpio::gpioa::PA7<hal::gpio::Alternate<hal::gpio::AF5>>,
+        hal::gpio::gpioa::PA5<hal::gpio::Alternate<5>>,
+        hal::gpio::gpioa::PA6<hal::gpio::Alternate<5>>,
+        hal::gpio::gpioa::PA7<hal::gpio::Alternate<5>>,
     ),
 >;
 
@@ -60,13 +55,12 @@ pub type Led2 = hal::gpio::gpioc::PC9<hal::gpio::Output<hal::gpio::PushPull>>;
 pub type Led3 = hal::gpio::gpioc::PC10<hal::gpio::Output<hal::gpio::PushPull>>;
 pub type MainboardLeds = (Led1, Led2, Led3);
 
-#[cfg(feature = "phy_w5500")]
-pub type ExternalMac = w5500::raw_device::RawDevice<w5500::bus::FourWire<Spi, SpiCs>>;
+pub enum Mac {
+    W5500(w5500::raw_device::RawDevice<w5500::bus::FourWire<Spi, SpiCs>>),
+    Enc424j600(enc424j600::Enc424j600<Spi, SpiCs>),
+}
 
-#[cfg(feature = "phy_enc424j600")]
-pub type ExternalMac = enc424j600::Enc424j600<Spi, SpiCs>;
-
-pub type NetworkManager = external_mac::Manager<'static, ExternalMac>;
+pub type NetworkManager = external_mac::Manager<'static, Mac>;
 
 pub type NetworkStack =
     smoltcp_nal::NetworkStack<'static, external_mac::SmoltcpDevice<'static>, SystemTimer>;
@@ -79,7 +73,7 @@ pub type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;
 pub type Eeprom = microchip_24aa02e48::Microchip24AA02E48<I2C2>;
 
 /// Indicates a booster RF channel.
-#[derive(IntoEnumIterator, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Sequence, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum Channel {
     Zero = 0,
     One = 1,

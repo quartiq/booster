@@ -1,11 +1,6 @@
 //! Booster NGFW Application
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
+
 use super::{I2cError, I2cProxy, MainboardLeds};
-use embedded_hal::digital::v2::OutputPin;
 use max6639::Max6639;
 
 /// The default fan speed on power-up.
@@ -69,17 +64,17 @@ impl ChassisFans {
         let mut retry_set = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| {
             for _ in 0..2 {
                 match fan.set_duty_cycle(subfan, duty_cycle) {
-                    Err(max6639::Error::Interface(I2cError::NACK)) => {
-                        leds.0.set_high().unwrap();
-                        leds.1.set_high().unwrap();
-                        leds.2.set_high().unwrap();
+                    Err(max6639::Error::Interface(I2cError::NoAcknowledge(_))) => {
+                        leds.0.set_high();
+                        leds.1.set_high();
+                        leds.2.set_high();
                     }
-                    Err(e) => Err(e).unwrap(),
                     Ok(_) => {
-                        leds.0.set_low().unwrap();
-                        leds.1.set_low().unwrap();
-                        leds.2.set_low().unwrap();
+                        leds.0.set_low();
+                        leds.1.set_low();
+                        leds.2.set_low();
                     }
+                    Err(e) => panic!("{:?}", e),
                 }
             }
         };
@@ -111,7 +106,7 @@ impl ChassisFans {
     /// when disabled.
     pub fn self_test(
         &mut self,
-        delay: &mut impl embedded_hal::blocking::delay::DelayMs<u16>,
+        delay: &mut impl stm32f4xx_hal::hal::blocking::delay::DelayMs<u16>,
     ) -> bool {
         self.set_duty_cycles(1.0);
         delay.delay_ms(5000);

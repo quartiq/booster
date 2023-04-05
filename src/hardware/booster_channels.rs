@@ -1,11 +1,5 @@
 //! Booster NGFW channel management control interface definitions.
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
 
-use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal as hal;
 use tca9548::{self, Tca9548};
 
@@ -15,7 +9,7 @@ use super::{delay::AsmDelay, Channel, I2cBusManager, I2cProxy, SystemTimer};
 /// Represents a control structure for interfacing to booster RF channels.
 pub struct BoosterChannels {
     channels: [Option<RfChannelMachine>; 8],
-    adc: hal::adc::Adc<hal::stm32::ADC3>,
+    adc: hal::adc::Adc<hal::pac::ADC3>,
     mux: Tca9548<I2cProxy>,
 }
 
@@ -51,7 +45,7 @@ impl BoosterChannels {
     /// A `BoosterChannels` object that can be used to manage all available RF channels.
     pub fn new(
         mut mux: Tca9548<I2cProxy>,
-        adc: hal::adc::Adc<hal::stm32::ADC3>,
+        adc: hal::adc::Adc<hal::pac::ADC3>,
         manager: &'static I2cBusManager,
         pins: [RfChannelPins; 8],
         clock: SystemTimer,
@@ -60,7 +54,7 @@ impl BoosterChannels {
         let mut channels: [Option<RfChannelMachine>; 8] =
             [None, None, None, None, None, None, None, None];
 
-        for (idx, pins) in Channel::into_enum_iter().zip(pins) {
+        for (idx, pins) in enum_iterator::all::<Channel>().zip(pins) {
             // Selecting an I2C bus should never fail.
             mux.select_bus(Some(idx.into()))
                 .expect("Failed to select channel");
@@ -89,7 +83,7 @@ impl BoosterChannels {
     pub fn channel_mut(
         &mut self,
         channel: Channel,
-    ) -> Option<(&mut RfChannelMachine, &mut hal::adc::Adc<hal::stm32::ADC3>)> {
+    ) -> Option<(&mut RfChannelMachine, &mut hal::adc::Adc<hal::pac::ADC3>)> {
         let mux = &mut self.mux;
         let adc = &mut self.adc;
         self.channels[channel as usize].as_mut().map(|ch| {

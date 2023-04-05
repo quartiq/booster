@@ -7,19 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-* The W5500 now operates as an external MAC, and smoltcp is used as the network stack.
-* DHCP support has been added, `netmask`, `ip-address`, and `gateway` settings have been removed.
-  Settings are backwards compatible with previous Booster releases.
-* Fan speed is now stored in EEPROM and configurable via the serial interface.
 * Support for different ethernet daughterboards using the ENC424J00 has been added.
+* Serial port now supports TeraTerm + Putty
+* Serial port now supports backspacing
+* Support for static IP + netmask and gateway configuration
+    * NOTE: Boosters that used firmware from before 0.4.0 will return to old network configurations.
+    To re-enable DHCP, reconfigure the IP address to 0.0.0.0/0
 * Support added for Booster v1.6 RF channels
 
 ### Changed
 * Removed custom `mutex` implementation in favor of leveraging `shared-bus`
+* Fans will now remain on whenever a channel is powered as opposed to actively outputting RF. This
+  addresses heating issues observed with some Booster configurations resulting in channel wedging.
+* Relicensed as MIT/Apache
+* Miniconf, minireq, and minimq versions updated to incorporate efficiency updates and bugfixes
 
 ### Fixed
 * A few dependencies were deprecated because changes landed upstream. These dependencies were
   corrected to point upstream.
+* The ethernet PHY is now detected at run-time as opposed to compile time, so there is now a single
+  booster binary. The detected PHY can be found in the service prompt over the USB interface.
+
+## [0.4.0]
+
+### Added
+* The W5500 now operates as an external MAC, and smoltcp is used as the network stack.
+* DHCP support has been added, `netmask`, `ip-address`, and `gateway` settings have been removed.
+  Settings are backwards compatible with previous Booster releases.
+* Fan speed is now stored in EEPROM and configurable via the serial interface.
 
 ## [0.3.0]
 
@@ -45,7 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 * Output interlock threshold is now limited to a maximum of 47 dBm
 
-[Unreleased]: https://github.com/quartiq/booster/compare/v0.3.0...HEAD
-[v0.3.0]: https://github.com/quartiq/booster/compare/v0.2.0...v0.3.0
-[v0.2.0]: https://github.com/quartiq/booster/compare/v0.1.0...v0.2.0
-[v0.1.0]: https://github.com/quartiq/booster/compare/v0.0.1...v0.1.0
+[Unreleased]: https://github.com/quartiq/booster/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/quartiq/booster/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/quartiq/booster/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/quartiq/booster/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/quartiq/booster/compare/v0.0.1...v0.1.0

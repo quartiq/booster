@@ -1,9 +1,5 @@
 //! Booster network management definitions
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
+
 use crate::hardware::{setup::MainBus, NetworkStack, SystemTimer};
 
 use core::fmt::Write;

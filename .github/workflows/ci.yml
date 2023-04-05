@@ -2,9 +2,9 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [master, develop]
+    branches: [main]
   pull_request:
-    branches: [master, develop]
+    branches: [main]
   schedule:
     # UTC
     - cron: '48 4 * * *'
@@ -40,10 +40,7 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - '1.57.0'
-        features:
-          - phy_w5500
-          - phy_enc424j600
+          - '1.65.0'
     steps:
       - uses: actions/checkout@v2
 
@@ -68,19 +65,18 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --no-default-features --features "${{ matrix.features }}"
 
       - name: Build [Release]
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --no-default-features --features "${{ matrix.features }}"
+          args: --release
 
       - name: Extract Binary
         uses: actions-rs/cargo@v1
         with:
           command: objcopy
-          args: --release --no-default-features --features "${{ matrix.features }}" --verbose -- -O binary booster-release.bin
+          args: --release --verbose -- -O binary booster-release.bin
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v2
@@ -88,7 +84,7 @@ jobs:
           && (github.ref == 'refs/heads/master'
           || github.ref == 'refs/heads/develop') }}
         with:
-          name: Firmware Images (features=${{ matrix.features }})
+          name: Firmware Images
           path: |
             target/*/release/booster
             booster-release.bin

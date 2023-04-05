@@ -1,12 +1,8 @@
 //! Booster NGFW Application
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
+
 use super::hal;
 
-use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
+use hal::hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
 // Booster hardware channels are capable of withstanding up to 1W of reflected RF power. This
 // corresponds with a value of 30 dBm.
@@ -47,8 +43,8 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
 /// Unconditionally disable and power-off all channels.
 pub fn shutdown_channels() {
-    let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
-    let gpiog = unsafe { &*hal::stm32::GPIOG::ptr() };
+    let gpiod = unsafe { &*hal::pac::GPIOD::ptr() };
+    let gpiog = unsafe { &*hal::pac::GPIOG::ptr() };
 
     unsafe {
         // Disable all SIG_ON outputs. Note that the upper 16 bits of this register are the ODR
@@ -108,14 +104,14 @@ pub fn i2c_bus_reset(
 /// # Returns
 /// True if a watchdog reset has been detected. False otherwise.
 pub fn watchdog_detected() -> bool {
-    let rcc = unsafe { &*hal::stm32::RCC::ptr() };
+    let rcc = unsafe { &*hal::pac::RCC::ptr() };
 
     rcc.csr.read().wdgrstf().bit_is_set()
 }
 
 /// Clear all of the reset flags in the device.
 pub fn clear_reset_flags() {
-    let rcc = unsafe { &*hal::stm32::RCC::ptr() };
+    let rcc = unsafe { &*hal::pac::RCC::ptr() };
 
     rcc.csr.modify(|_, w| w.rmvf().set_bit());
 }
@@ -123,7 +119,7 @@ pub fn clear_reset_flags() {
 /// Reset the device to the internal DFU bootloader.
 pub fn reset_to_dfu_bootloader() {
     // Disable the SysTick peripheral.
-    let systick = unsafe { &*cortex_m::peripheral::SYST::ptr() };
+    let systick = unsafe { &*cortex_m::peripheral::SYST::PTR };
     unsafe {
         systick.csr.write(0);
         systick.rvr.write(0);
@@ -131,11 +127,11 @@ pub fn reset_to_dfu_bootloader() {
     }
 
     // Disable the USB peripheral.
-    let usb_otg = unsafe { &*hal::stm32::OTG_FS_GLOBAL::ptr() };
+    let usb_otg = unsafe { &*hal::pac::OTG_FS_GLOBAL::ptr() };
     usb_otg.gccfg.write(|w| unsafe { w.bits(0) });
 
     // Reset the RCC configuration.
-    let rcc = unsafe { &*hal::stm32::RCC::ptr() };
+    let rcc = unsafe { &*hal::pac::RCC::ptr() };
 
     // Enable the HSI - we will be switching back to it shortly for the DFU bootloader.
     rcc.cr.modify(|_, w| w.hsion().set_bit());
@@ -152,7 +148,7 @@ pub fn reset_to_dfu_bootloader() {
     // Remap to system memory.
     rcc.apb2enr.modify(|_, w| w.syscfgen().set_bit());
 
-    let syscfg = unsafe { &*hal::stm32::SYSCFG::ptr() };
+    let syscfg = unsafe { &*hal::pac::SYSCFG::ptr() };
     syscfg.memrm.write(|w| unsafe { w.mem_mode().bits(0b01) });
 
     // Now that the remap is complete, impose instruction and memory barriers on the

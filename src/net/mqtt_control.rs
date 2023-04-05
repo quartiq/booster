@@ -1,15 +1,11 @@
 //! Booster NGFW Application
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
+
 use crate::{
     hardware::{metadata::ApplicationMetadata, setup::MainBus, SystemTimer},
     Channel,
 };
 
-use minimq::embedded_nal;
+use minimq::{embedded_nal, Publication};
 
 use super::NetworkStackProxy;
 
@@ -82,17 +78,16 @@ impl TelemetryClient {
         let mut topic: String<64> = String::new();
         write!(&mut topic, "{}/telemetry/ch{}", self.prefix, channel as u8).unwrap();
 
-        let message: String<1024> = serde_json_core::to_string(telemetry).unwrap();
+        let message: String<1024> = minireq::serde_json_core::to_string(telemetry).unwrap();
 
         // All telemtry is published in a best-effort manner.
         self.mqtt
-            .client
+            .client()
             .publish(
-                topic.as_str(),
-                &message.into_bytes(),
-                minimq::QoS::AtMostOnce,
-                minimq::Retain::NotRetained,
-                &[],
+                Publication::new(message.as_bytes())
+                    .topic(&topic)
+                    .finish()
+                    .unwrap(),
             )
             .ok();
     }
@@ -101,40 +96,38 @@ impl TelemetryClient {
     pub fn update(&mut self) {
         self.mqtt.poll(|_, _, _, _| {}).ok();
 
-        if !self.mqtt.client.is_connected() {
+        if !self.mqtt.client().is_connected() {
             self.meta_published = false;
             return;
         }
 
         // If the metadata has not yet been published, but we can publish it, do so now.
-        if !self.meta_published && self.mqtt.client.can_publish(minimq::QoS::AtMostOnce) {
+        if !self.meta_published && self.mqtt.client().can_publish(minimq::QoS::AtMostOnce) {
             let mut topic: String<64> = String::new();
             write!(&mut topic, "{}/alive/meta", self.prefix).unwrap();
-            let message: String<512> = serde_json_core::to_string(&self.metadata)
+            let message: String<512> = minireq::serde_json_core::to_string(&self.metadata)
                 .unwrap_or_else(|_| String::from(DEFAULT_METADATA));
 
             if self
                 .mqtt
-                .client
+                .client()
                 .publish(
-                    &topic,
-                    &message.into_bytes(),
-                    minimq::QoS::AtMostOnce,
-                    minimq::Retain::NotRetained,
-                    &[],
+                    Publication::new(message.as_bytes())
+                        .topic(&topic)
+                        .finish()
+                        .unwrap(),
                 )
                 .is_err()
             {
                 // Note(unwrap): We can guarantee that this message will be sent because we checked
                 // for ability to publish above.
                 self.mqtt
-                    .client
+                    .client()
                     .publish(
-                        &topic,
-                        DEFAULT_METADATA.as_bytes(),
-                        minimq::QoS::AtMostOnce,
-                        minimq::Retain::NotRetained,
-                        &[],
+                        Publication::new(DEFAULT_METADATA.as_bytes())
+                            .topic(&topic)
+                            .finish()
+                            .unwrap(),
                     )
                     .unwrap();
             }
@@ -173,7 +166,7 @@ impl TelemetryClient {
 /// # Returns
 /// A [minireq::Response] containing a serialized [ChannelBiasResponse].
 pub fn read_bias(main_bus: &mut MainBus, _topic: &str, request: &[u8]) -> MinireqResponse {
-    let request: ChannelRequest = serde_json_core::from_slice(request)?.0;
+    let request: ChannelRequest = minireq::serde_json_core::from_slice(request)?.0;
 
     let response = main_bus
         .channels
@@ -203,7 +196,7 @@ pub fn read_bias(main_bus: &mut MainBus, _topic: &str, request: &[u8]) -> Minire
 /// A [minireq::Response] containing no data, which indicates the success of the command
 /// processing.
 pub fn save_settings(main_bus: &mut MainBus, _topic: &str, request: &[u8]) -> MinireqResponse {
-    let request: ChannelRequest = serde_json_core::from_slice(request)?.0;
+    let request: ChannelRequest = minireq::serde_json_core::from_slice(request)?.0;
 
     let response = main_bus
         .channels

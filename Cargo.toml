@@ -1,73 +1,70 @@
 [package]
-authors = ["Ryan Summers <ryan.summers@vertigo-designs.com>"]
-edition = "2018"
-readme = "README.md"
 name = "booster"
+# Keep versions in Cargo.toml and py/setup.py synchronized.
 version = "0.3.0"
-build = "build.rs"
 resolver = "2"
+authors = [
+	"Ryan Summers <ryan.summers@vertigo-designs.com>",
+	"Robert Jördens <rj@quartiq.de>",
+]
+description = "Firmware for the Sinara Booster device (STM32F4, Ethernet, RF power amplifiers)"
+categories = ["embedded", "no-std", "hardware-support", "science"]
+license = "MIT OR Apache-2.0"
+keywords = ["ethernet", "stm32f4", "adc", "physics"]
+repository = "https://github.com/quartiq/booster"
+readme = "README.md"
+documentation = "https://quartiq.de/booster-doc/"
+edition = "2018"
+# keep MSRV in sync in ci.yaml, Cargo.toml
+rust-version = "1.65"
+build = "build.rs"
+exclude = [
+	".gitignore",
+	"book/",
+	"book/*"
+]
 
 [dependencies]
-cortex-m = "0.6.3"
-cortex-m-rt = "0.6.10"
-cortex-m-rtic = "1.0"
-embedded-hal = "0.2.4"
-enum-iterator = "0.6.0"
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7"
+cortex-m-rtic = "1.1"
 mono-clock = "0.1"
-systick-monotonic = "1.0.0"
-cortex-m-log = { version = "0.6.1", features = ["log-integration"] }
-log = "0.4.8"
+systick-monotonic = "1.0.1"
+cortex-m-log = { version = "0.8.0", features = ["log-integration"] }
+log = "0.4.17"
 heapless = { version = "0.7", features = ["serde"] }
-bit_field = "0.10.0"
+bit_field = "0.10.2"
 debounced-pin = "0.3.0"
 serde = {version = "1.0", features = ["derive"], default-features = false }
-serde-json-core = "0.4"
-logos = { version = "0.11.4", default-features = false, features = ["export_derive"] }
+logos = { version = "0.12.1", default-features = false, features = ["export_derive"] }
 rtt-logger = "0.2"
 bbqueue = "0.5"
 usbd-serial = "0.1.0"
 shared-bus = { version = "0.2", features = ["cortex-m"] }
-usb-device = "0.2.8"
-postcard = "0.5.1"
-crc-any = { version = "2.3.5", default-features = false }
+usb-device = "0.2.9"
+encdec = { version = "0.8", default-features = false }
+crc-any = { version = "2.4.3", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
 smoltcp-nal = { version = "0.2" }
-miniconf = { version = "0.3", features = ["mqtt-client"]}
-minimq = "0.5.3"
-w5500 = { version = "0.4", optional = true }
-smlang= "0.5"
-minireq = "0.1"
+miniconf = { version = "0.6", features = ["mqtt-client"]}
+minimq = "0.6"
+w5500 = "0.4.1"
+smlang= "0.6"
+minireq = "0.1.1"
 rtt-target = {version = "0.3", features=["cortex-m"]}
+enum-iterator = { version = "1.4", default-features = false }
 
 [build-dependencies]
-built = { version = "0.5", features = ["git2"], default-features = false }
-
-# Add RawDevice support for the W5500 to operate as an external MAC
-[patch.crates-io.w5500]
-git = "https://github.com/kellerkindt/w5500"
-rev = "aa5eb1d4bf29b9e3c8ce0f685081440e320f5b7e"
+built = { version = "0.6", features = ["git2"], default-features = false }
 
 [dependencies.stm32f4xx-hal]
-git = "https://github.com/stm32-rs/stm32f4xx-hal"
+version = "0.15"
 features = ["stm32f407", "rt", "usb_fs"]
-
-[patch.crates-io.minireq]
-git = "https://github.com/quartiq/minireq"
-# Patch to serialize responses as a string instead of vector
-rev = "786bc8845819a26a3669d6e0c81d64b71f510573"
 
 [dependencies.enc424j600]
 git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
 rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
 features = [ "cortex-m-cpu" ]
-optional = true
-
-[patch.crates-io.miniconf]
-git = "https://github.com/quartiq/miniconf"
-rev = "140b6f3"
-
-[patch.crates-io.usb-device]
-git = "https://github.com/rust-embedded-community/usb-device"
 
 [dependencies.ad5627]
 path = "ad5627"
@@ -92,11 +89,6 @@ path = "microchip-24aa02e48"
 
 [dependencies.tca9548]
 path = "tca9548"
-
-[features]
-phy_w5500 = [ "w5500" ]
-phy_enc424j600 = [ "enc424j600" ]
-default = [ "phy_w5500" ]
 
 [profile.dev]
 # Note: Opt-level 1 is required to avoid issues with stack overflow during hardware configuration.

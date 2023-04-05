@@ -1,21 +1,7 @@
 //! Booster NGFW Application
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
 #![no_std]
 #![no_main]
 
-#[cfg(not(any(feature = "phy_enc424j600", feature = "phy_w5500")))]
-compile_error!(
-    "A least one PHY device must be enabled. Use a feature gate to
-    enable."
-);
-#[cfg(all(feature = "phy_enc424j600", feature = "phy_w5500"))]
-compile_error!("Cannot enable multiple ethernet PHY devices.");
-
-use enum_iterator::IntoEnumIterator;
 use stm32f4xx_hal as hal;
 
 #[macro_use]
@@ -58,7 +44,7 @@ pub enum Error {
 
 static LOGGER: BufferedLog = BufferedLog::new();
 
-#[rtic::app(device = stm32f4xx_hal::stm32, dispatchers = [EXTI0, EXTI1, EXTI2, EXTI3, USART1, USART2])]
+#[rtic::app(device = stm32f4xx_hal::pac, dispatchers = [EXTI0, EXTI1, EXTI2, EXTI3, USART1, USART2])]
 mod app {
     use super::*;
 
@@ -90,12 +76,13 @@ mod app {
         // Load the default fan speed
         settings.fan_speed = booster.settings.fan_speed();
 
-        for idx in Channel::into_enum_iter() {
+        for idx in enum_iterator::all::<Channel>() {
             settings.channel[idx as usize] = booster
                 .main_bus
                 .channels
                 .channel_mut(idx)
                 .map(|(channel, _)| *channel.context().settings())
+                .into()
         }
 
         let watchdog_manager = WatchdogManager::new(booster.watchdog);
@@ -144,13 +131,13 @@ mod app {
         let mut fans_enabled = false;
 
         let leds = c.local.leds;
-        for idx in Channel::into_enum_iter() {
+        for idx in enum_iterator::all::<Channel>() {
             let status = c.shared.main_bus.lock(|main_bus| {
                 main_bus
                     .channels
                     .channel_mut(idx)
                     .map(|(channel, _)| {
-                        if channel.context().is_enabled() {
+                        if channel.context().is_powered() {
                             fans_enabled = true;
                         }
 
@@ -184,7 +171,7 @@ mod app {
     fn telemetry(mut c: telemetry::Context) {
         // Gather telemetry for all of the channels.
         // And broadcast the measured data over the telemetry interface.
-        for idx in Channel::into_enum_iter() {
+        for idx in enum_iterator::all::<Channel>() {
             (&mut c.shared.main_bus, &mut c.shared.net_devices).lock(|main_bus, net_devices| {
                 main_bus.channels.channel_mut(idx).map(|(ch, adc)| {
                     net_devices
@@ -210,7 +197,7 @@ mod app {
             .lock(|watchdog| watchdog.check_in(WatchdogClient::Button));
 
         if let Some(event) = c.local.buttons.update() {
-            for idx in Channel::into_enum_iter() {
+            for idx in enum_iterator::all::<Channel>() {
                 c.shared.main_bus.lock(|main_bus| {
                     main_bus
                         .channels
@@ -239,7 +226,7 @@ mod app {
             .net_devices
             .lock(|net_devices| net_devices.settings.settings().clone());
 
-        for idx in Channel::into_enum_iter() {
+        for idx in enum_iterator::all::<Channel>() {
             c.shared.main_bus.lock(|main_bus| {
                 main_bus
                     .channels

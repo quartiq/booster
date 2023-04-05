@@ -1,9 +1,5 @@
 //! Booster run-time application metadata
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
+
 use serde::Serialize;
 
 use super::{platform, HardwareVersion};
@@ -14,6 +10,7 @@ mod build_info {
 
 #[derive(Serialize)]
 pub struct ApplicationMetadata {
+    pub phy: &'static str,
     pub firmware_version: &'static str,
     pub rust_version: &'static str,
     pub profile: &'static str,
@@ -32,11 +29,16 @@ impl ApplicationMetadata {
     ///
     /// # Args
     /// * `hardware_version` - The hardware version detected.
+    /// * `phy` - The identifier of the detected ethernet PHY.
     ///
     /// # Returns
     /// A reference to the global metadata.
-    pub fn new(hardware_version: HardwareVersion) -> &'static ApplicationMetadata {
+    pub fn new(
+        hardware_version: HardwareVersion,
+        phy: &'static str,
+    ) -> &'static ApplicationMetadata {
         let mut meta = cortex_m::singleton!(: ApplicationMetadata = ApplicationMetadata {
+            phy,
             firmware_version: "Unspecified",
             rust_version: build_info::RUSTC_VERSION,
             profile: build_info::PROFILE,

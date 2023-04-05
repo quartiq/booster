@@ -1,14 +1,12 @@
 //! Booster NGFW NVM channel settings
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 use crate::{hardware::I2cProxy, linear_transformation::LinearTransformation, Error};
+use encdec::{Decode, DecodeOwned, Encode};
+use enum_iterator::Sequence;
 use microchip_24aa02e48::Microchip24AA02E48;
 use miniconf::Miniconf;
+use serde::{Deserialize, Serialize};
 
 /// The expected semver of the BoosterChannelSettings. This version must be updated whenever the
 /// `VersionedChannelData` layout is updated.
@@ -19,7 +17,8 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
 };
 
 /// Indicates the desired state of a channel.
-#[derive(serde::Serialize, serde::Deserialize, Miniconf, Copy, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Sequence)]
+#[repr(u8)]
 pub enum ChannelState {
     /// The channel should be turned off and power should be disconnected.
     Off = 0,
@@ -32,8 +31,46 @@ pub enum ChannelState {
     Powered = 2,
 }
 
+impl Encode for ChannelState {
+    type Error = encdec::Error;
+
+    fn encode_len(&self) -> Result<usize, Self::Error> {
+        Ok(1)
+    }
+
+    fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
+        if buff.len() < 1 {
+            return Err(encdec::Error::Length);
+        }
+
+        buff[0] = *self as u8;
+
+        Ok(1)
+    }
+}
+
+impl DecodeOwned for ChannelState {
+    type Output = ChannelState;
+
+    type Error = encdec::Error;
+
+    fn decode_owned(buff: &[u8]) -> Result<(Self::Output, usize), Self::Error> {
+        if buff.len() < 1 {
+            return Err(encdec::Error::Length);
+        }
+
+        for state in enum_iterator::all::<ChannelState>() {
+            if state as u8 == buff[0] {
+                return Ok((state, 1));
+            }
+        }
+
+        Err(encdec::Error::Utf8)
+    }
+}
+
 /// Represents booster channel-specific configuration values.
-#[derive(Miniconf, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq)]
+#[derive(Miniconf, Encode, DecodeOwned, Debug, Copy, Clone, PartialEq)]
 pub struct ChannelSettings {
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,
@@ -72,7 +109,7 @@ impl Default for ChannelSettings {
 }
 
 /// Represents versioned channel-specific configuration values.
-#[derive(serde::Serialize, serde::Deserialize, Copy, Clone)]
+#[derive(Encode, DecodeOwned, Debug, Copy, Clone)]
 struct VersionedChannelData {
     version: SemVersion,
     settings: ChannelSettings,
@@ -97,7 +134,7 @@ impl VersionedChannelData {
     /// # Returns
     /// The configuration if deserialization was successful. Otherwise, returns an error.
     pub fn deserialize(data: &[u8; 64]) -> Result<Self, Error> {
-        let data: VersionedChannelData = postcard::from_bytes(data).or(Err(Error::Invalid))?;
+        let (data, _) = VersionedChannelData::decode_owned(data).or(Err(Error::Invalid))?;
 
         // Validate configuration parameters.
         if data.settings.bias_voltage < -3.3 || data.settings.bias_voltage > 0.0 {
@@ -125,8 +162,8 @@ impl VersionedChannelData {
         }
 
         let mut buffer: [u8; 64] = [0; 64];
-        let serialized = postcard::to_slice(&versioned_copy, &mut buffer).unwrap();
-        config.board_data[..serialized.len()].copy_from_slice(serialized);
+        let len = versioned_copy.encode(&mut buffer).unwrap();
+        config.board_data[..len].copy_from_slice(&buffer[..len]);
     }
 }
 

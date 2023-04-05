@@ -1,9 +1,4 @@
 //! Booster NGFW logging utilities
-//!
-//! # Copyright
-//! Copyright (C) 2020 QUARTIQ GmbH - All Rights Reserved
-//! Unauthorized usage, editing, or copying is strictly prohibited.
-//! Proprietary and confidential.
 use heapless::String;
 
 use super::SerialTerminal;
