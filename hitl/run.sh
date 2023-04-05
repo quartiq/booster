@@ -38,7 +38,7 @@ sleep 30
 # Test pinging Booster. This exercises that:
 # * Booster's network is functioning as intended
 # * The Booster application is operational
-#ping -c 5 -w 20 booster-hitl
+ping -c 5 -w 20 booster-hitl
 
 # Test the MQTT interface.
 python3 -m miniconf --discover $PREFIX telemetry_period=5
