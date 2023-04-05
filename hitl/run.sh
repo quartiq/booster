@@ -33,7 +33,7 @@ sleep 5
 cargo flash --chip STM32F407ZGTx --elf target/thumbv7em-none-eabihf/release/booster --probe 0483:3754:003C002F5632500A20313236
 
 # Sleep to allow flashing, booting, DHCP, MQTT
-sleep 30
+sleep 60
 
 # Test pinging Booster. This exercises that:
 # * Booster's network is functioning as intended
