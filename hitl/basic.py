@@ -83,17 +83,23 @@ async def test_channel(booster, channel, prefix, broker):
 
     # Enable the channel, verify telemetry indicates it is now enabled.
     async with channel_on(booster, channel):
-        _, tlm = await telemetry.get_next_telemetry()
-        assert tlm['state'] == 'Enabled', 'Channel did not enable'
+        async def is_enabled() -> bool:
+            _, tlm = await telemetry.get_next_telemetry()
+            return tlm['state'] == 'Enabled'
+
+        await periodic_check(is_enabled, timeout=5)
 
         # Lower the interlock threshold so it trips.
         print('Setting output interlock threshold to -5 dB, verifying interlock trips')
         await booster.settings_interface.command(f'channel/{channel}/output_interlock_threshold',
                                                  -5, retain=False)
 
+        async def is_tripped() -> bool:
+            _, tlm = await telemetry.get_next_telemetry()
+            return tlm['state'] == 'Tripped(Output)'
+
         # Verify the channel is now tripped.
-        _, tlm = await telemetry.get_next_telemetry()
-        assert tlm['state'] == 'Tripped(Output)', 'Channel did not trip'
+        await periodic_check(is_tripped, timeout=5)
 
     print(f'Channel {channel}: PASS')
     print('')
