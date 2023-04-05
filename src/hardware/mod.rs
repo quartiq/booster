@@ -89,6 +89,7 @@ pub enum HardwareVersion {
     Rev1_2OrEarlier,
     Rev1_3,
     Rev1_5,
+    Rev1_6,
     Unknown(u8),
 }
 
@@ -98,6 +99,7 @@ impl From<u8> for HardwareVersion {
             0b000 => HardwareVersion::Rev1_2OrEarlier,
             0b011 => HardwareVersion::Rev1_3,
             0b100 => HardwareVersion::Rev1_5,
+            0b101 => HardwareVersion::Rev1_6,
             other => HardwareVersion::Unknown(other),
         }
     }
@@ -109,6 +111,7 @@ impl core::fmt::Display for HardwareVersion {
             HardwareVersion::Rev1_2OrEarlier => write!(f, "<= v1.2"),
             HardwareVersion::Rev1_3 => write!(f, "v1.3"),
             HardwareVersion::Rev1_5 => write!(f, "v1.5"),
+            HardwareVersion::Rev1_6 => write!(f, "v1.6"),
             HardwareVersion::Unknown(other) => write!(f, "Unknown ({:#b})", other),
         }
     }
