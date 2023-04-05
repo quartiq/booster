@@ -623,7 +623,7 @@ mod sm {
             Off + Disable = Off,
             Off + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
 
-            Powerup(Instant<SystemTimer>) + Update [check_timeout] = Powered,
+            Powerup(Instant<SystemTimer>) + Update [check_timeout] / reset_interlocks = Powered,
             Powerup(Instant<SystemTimer>) + Disable / start_disable_instant = Powerdown(Instant<SystemTimer>),
             Powerup(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault_instant = Blocked(ChannelFault),
 
@@ -673,6 +673,15 @@ impl sm::StateMachineContext for RfChannel {
             .set_voltage(3.2)
             .expect("Failed to disable RF bias voltage");
 
+        // Start the LM3880 power supply sequencer.
+        self.pins.enable_power.set_high();
+
+        // The LM3880 requires 180ms to power up all supplies on the channel. We add an additional
+        // 20ms margin.
+        self.clock.try_now().unwrap() + 200_u32.milliseconds()
+    }
+
+    fn reset_interlocks(&mut self, _: &Instant<SystemTimer>) {
         // Next, handle resetting interlocks for v1.6 hardware. The interlocks are reset by a
         // falling edge on ON/OFF. Because the bias dac is currently in pinch-off (and the RF
         // channel is unpowered), toggling ON/OFF introduces no output transients on the RF
@@ -684,13 +693,6 @@ impl sm::StateMachineContext for RfChannel {
         self.delay.delay_ms(1u32);
 
         self.pins.signal_on.set_low();
-
-        // Start the LM3880 power supply sequencer.
-        self.pins.enable_power.set_high();
-
-        // The LM3880 requires 180ms to power up all supplies on the channel. We add an additional
-        // 20ms margin.
-        self.clock.try_now().unwrap() + 200_u32.milliseconds()
     }
 
     /// Guard against powering up the channel.
