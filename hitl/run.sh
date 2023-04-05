@@ -6,6 +6,13 @@
 # Enable shell operating mode flags.
 set -eux
 
+function finish {
+    # Always disable the mains supply to Booster using the MQTT-enabled power switch upon
+    # completion. Leaving booster enabled can be annoying because of the cooling fans.
+    mosquitto_pub -h mqtt.ber.quartiq.de -t cmnd/tasmota_4F64D0/POWER -m OFF
+}
+trap finish EXIT
+
 # When only one booster is connected, we can use the discovery prefix for all activities.
 PREFIX=dt/sinara/booster/+
 
@@ -14,9 +21,16 @@ python3 -m venv --system-site-packages vpy
 . vpy/bin/activate
 
 # Install Miniconf utilities for configuring stabilizer.
+python3 -m pip install --upgrade pip
 python3 -m pip install -e py
 
-cargo embed --release
+# Enable the mains supply to Booster using the MQTT-enabled power switch.
+mosquitto_pub -h mqtt.ber.quartiq.de -t cmnd/tasmota_4F64D0/POWER -m ON
+
+# Give booster a moment to power up after enabling the mains supply
+sleep 5
+
+cargo flash --chip STM32F407ZGTx --elf target/thumbv7em-none-eabihf/release/booster --probe 0483:3754:003C002F5632500A20313236
 
 # Sleep to allow flashing, booting, DHCP, MQTT
 sleep 30

@@ -8,11 +8,24 @@ import argparse
 import asyncio
 import contextlib
 import sys
+import time
 
 from booster import BoosterApi, TelemetryReader
 
 # The default bias current to tune to.
 DEFAULT_BIAS_CURRENT = 0.05
+
+
+async def periodic_check(awaitable, timeout: float):
+    """ Periodically check a condition for a predefined amount of time until it evaluates true. """
+    start = time.time()
+
+    while (time.time() - start) < timeout:
+        result = await awaitable()
+        if result:
+            return
+
+    raise Exception('Condition did not occur within expected timeout')
 
 
 @contextlib.asynccontextmanager
@@ -48,20 +61,20 @@ async def test_channel(booster, channel, prefix, broker):
     # Start receiving telemetry for the channel under test.
     telemetry = await TelemetryReader.create(prefix, broker, channel)
 
-    # TODO Tune the bias current on the channel
-    # Note: The bias tuning algorithm needs some help and doesn't seem robust. Temporarily disabling
-    # this test for now.
-
-    #async with channel_on(booster, channel, 'Powered'):
-    #    vgs, ids = await booster.tune_bias(channel, DEFAULT_BIAS_CURRENT)
-    #    print(f'Channel {channel} bias tuning: Vgs = {vgs}, Ids = {ids}')
+    # Tune the bias current on the channel
+    async with channel_on(booster, channel, 'Powered'):
+        vgs, ids = await booster.tune_bias(channel, DEFAULT_BIAS_CURRENT)
+        print(f'Channel {channel} bias tuning: Vgs = {vgs}, Ids = {ids}')
 
     # Disable the channel.
     await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
 
     # Check that telemetry indicates channel is powered off.
-    _, tlm = await telemetry.get_next_telemetry()
-    assert tlm['state'] == 'Off', 'Channel did not power off'
+    async def is_off() -> bool:
+        _, tlm = await telemetry.get_next_telemetry()
+        return tlm['state'] == 'Off'
+
+    await periodic_check(is_off, timeout=5)
 
     # Set the interlock threshold so that it won't trip.
     print('Setting output interlock threshold to 30 dB')
@@ -70,17 +83,23 @@ async def test_channel(booster, channel, prefix, broker):
 
     # Enable the channel, verify telemetry indicates it is now enabled.
     async with channel_on(booster, channel):
-        _, tlm = await telemetry.get_next_telemetry()
-        assert tlm['state'] == 'Enabled', 'Channel did not enable'
+        async def is_enabled() -> bool:
+            _, tlm = await telemetry.get_next_telemetry()
+            return tlm['state'] == 'Enabled'
+
+        await periodic_check(is_enabled, timeout=5)
 
         # Lower the interlock threshold so it trips.
         print('Setting output interlock threshold to -5 dB, verifying interlock trips')
         await booster.settings_interface.command(f'channel/{channel}/output_interlock_threshold',
                                                  -5, retain=False)
 
+        async def is_tripped() -> bool:
+            _, tlm = await telemetry.get_next_telemetry()
+            return tlm['state'] == 'Tripped(Output)'
+
         # Verify the channel is now tripped.
-        _, tlm = await telemetry.get_next_telemetry()
-        assert tlm['state'] == 'Tripped(Output)', 'Channel did not trip'
+        await periodic_check(is_tripped, timeout=5)
 
     print(f'Channel {channel}: PASS')
     print('')
