@@ -331,7 +331,7 @@ pub fn setup(
 
             // The result is stored in the data phase byte. This should always be a 0x04 for the
             // W5500.
-            transfer[3] == 0x04
+            result[3] == 0x04
         };
 
         if w5500_detected {
