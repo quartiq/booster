@@ -176,9 +176,18 @@ pub fn setup(
         let (i2c_peripheral, pins) = mux.free().release();
         let (scl, sda) = pins;
 
-        // Configure I2C pins as open-drain outputs.
-        let mut scl = scl.into_open_drain_output();
+        let scl = match scl {
+            hal::gpio::alt::i2c1::Scl::PB6(pin) => pin,
+            _ => unimplemented!(),
+        };
+
+        let sda = match sda {
+            hal::gpio::alt::i2c1::Sda::PB7(pin) => pin,
+            _ => unimplemented!(),
+        };
+
         let mut sda = sda.into_open_drain_output();
+        let mut scl = scl.into_open_drain_output();
 
         platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
 
@@ -247,7 +256,7 @@ pub fn setup(
                 device.SPI2,
                 (
                     gpiob.pb13.into_alternate(),
-                    hal::gpio::NoPin,
+                    hal::spi::NoMosi::new(),
                     gpiob.pb15.into_alternate(),
                 ),
                 mode,
@@ -315,13 +324,15 @@ pub fn setup(
         // version code of 0x04, but the ENC424J600 won't return anything meaningful.
         let w5500_detected = {
             cs.set_low();
-            let mut transfer = [
+            let transfer = [
                 0x00, 0x39, // Reading the version register (address 0x0039)
                 0x01, // Control phase, 1 byte of data, common register block, read
                 0x00, // Data, don't care, will be overwritten during read.
             ];
 
-            spi.transfer(&mut transfer).unwrap();
+            let mut result = [0; 4];
+
+            spi.transfer(&mut result, &transfer).unwrap();
 
             cs.set_high();
 
@@ -425,14 +436,15 @@ pub fn setup(
                 .unwrap();
         let serial_number = cortex_m::singleton!(: Option<String<64>> = None).unwrap();
 
-        let usb = hal::otg_fs::USB {
-            usb_global: device.OTG_FS_GLOBAL,
-            usb_device: device.OTG_FS_DEVICE,
-            usb_pwrclk: device.OTG_FS_PWRCLK,
-            pin_dm: gpioa.pa11.into_alternate(),
-            pin_dp: gpioa.pa12.into_alternate(),
-            hclk: clocks.hclk(),
-        };
+        let usb = hal::otg_fs::USB::new(
+            (
+                device.OTG_FS_GLOBAL,
+                device.OTG_FS_DEVICE,
+                device.OTG_FS_PWRCLK,
+            ),
+            (gpioa.pa11.into_alternate(), gpioa.pa12.into_alternate()),
+            &clocks,
+        );
 
         usb_bus.replace(hal::otg_fs::UsbBus::new(usb, &mut endpoint_memory[..]));
 
