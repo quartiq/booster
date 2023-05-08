@@ -2,7 +2,7 @@
 
 use super::Channel;
 use bit_field::BitField;
-use hal::hal::{blocking::spi::Write, digital::v2::InputPin};
+use hal::hal::digital::v2::InputPin;
 use stm32f4xx_hal as hal;
 
 use debounced_pin::{Debounce, DebounceState, DebouncedInputPin};
@@ -107,14 +107,7 @@ pub enum Color {
     Green,
 }
 
-type LedSpi = hal::spi::Spi<
-    hal::pac::SPI2,
-    (
-        hal::gpio::gpiob::PB13<hal::gpio::Alternate<5>>,
-        hal::spi::NoMiso,
-        hal::gpio::gpiob::PB15<hal::gpio::Alternate<5>>,
-    ),
->;
+type LedSpi = hal::spi::Spi<hal::pac::SPI2>;
 
 pub struct UserLeds {
     red: u8,

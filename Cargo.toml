@@ -58,7 +58,7 @@ enum-iterator = { version = "1.4", default-features = false }
 built = { version = "0.6", features = ["git2"], default-features = false }
 
 [dependencies.stm32f4xx-hal]
-version = "0.15"
+version = "0.16"
 features = ["stm32f407", "rt", "usb_fs"]
 
 [dependencies.enc424j600]
