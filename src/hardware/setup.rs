@@ -18,6 +18,7 @@ use crate::settings::BoosterSettings;
 use stm32f4xx_hal as hal;
 
 use bit_field::BitField;
+use core::convert::TryInto;
 use core::fmt::Write;
 use hal::prelude::*;
 use heapless::String;
@@ -176,18 +177,10 @@ pub fn setup(
         let (i2c_peripheral, pins) = mux.free().release();
         let (scl, sda) = pins;
 
-        let scl = match scl {
-            hal::gpio::alt::i2c1::Scl::PB6(pin) => pin,
-            _ => unimplemented!(),
-        };
-
-        let sda = match sda {
-            hal::gpio::alt::i2c1::Sda::PB7(pin) => pin,
-            _ => unimplemented!(),
-        };
-
-        let mut sda = sda.into_open_drain_output();
-        let mut scl = scl.into_open_drain_output();
+        let mut scl: hal::gpio::PB6<hal::gpio::Output<hal::gpio::OpenDrain>> =
+            scl.try_into().unwrap();
+        let mut sda: hal::gpio::PB7<hal::gpio::Output<hal::gpio::OpenDrain>> =
+            sda.try_into().unwrap();
 
         platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
 
