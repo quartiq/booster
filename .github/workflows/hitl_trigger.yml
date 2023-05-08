@@ -4,13 +4,16 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - staging
-      - trying
+      - main
 
 jobs:
   hitl-trigger:
     runs-on: ubuntu-latest
     environment: hitl
+    concurrency:
+      group: github.head_ref || ${{ github.workflow }}-${{ github.ref}}
+      cancel-in-progress: true
+
     steps:
       - uses: LouisBrunner/checks-action@v1.1.1
         id: hitl-check
