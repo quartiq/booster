@@ -3,7 +3,7 @@
 use crate::BoosterSettings;
 use smoltcp_nal::smoltcp;
 
-use super::SmoltcpDevice;
+use super::Mac;
 
 /// The number of TCP sockets supported in the network stack.
 const NUM_TCP_SOCKETS: usize = 4;
@@ -48,10 +48,10 @@ impl TcpSocketStorage {
 /// This function may only be called exactly once.
 ///
 /// # Args
-/// * `device` - The smoltcp interface device.
+/// * `mac` - The smoltcp interface MAC.
 /// * `settings` - The device settings to use.
 pub fn setup(
-    device: &mut SmoltcpDevice,
+    device: &mut Mac,
     settings: &BoosterSettings,
 ) -> (
     smoltcp::iface::Interface,

@@ -9,6 +9,7 @@ impl smoltcp::phy::Device for Mac {
 
     fn capabilities(&self) -> smoltcp::phy::DeviceCapabilities {
         let mut caps = smoltcp::phy::DeviceCapabilities::default();
+        caps.max_transmission_unit = 1500;
         caps.medium = smoltcp::phy::Medium::Ethernet;
         caps
     }
@@ -73,7 +74,7 @@ impl<'a> smoltcp::phy::TxToken for TxToken<'a> {
         F: FnOnce(&mut [u8]) -> R,
     {
         let mut buffer = [0u8; 1500];
-        let result = f(&mut buffer);
+        let result = f(&mut buffer[..len]);
         match self.mac {
             Mac::W5500(mac) => {
                 mac.write_frame(&buffer[..len]).unwrap();

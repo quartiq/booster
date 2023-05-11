@@ -41,9 +41,7 @@ pub enum Mac {
     Enc424j600(enc424j600::Enc424j600<Spi, SpiCs>),
 }
 
-pub type SmoltcpDevice = Mac;
-
-pub type NetworkStack = smoltcp_nal::NetworkStack<'static, SmoltcpDevice, SystemTimer>;
+pub type NetworkStack = smoltcp_nal::NetworkStack<'static, Mac, SystemTimer>;
 
 pub type I2cBusManager = shared_bus::BusManagerAtomicCheck<I2C>;
 pub type I2cProxy = shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2C>>;
