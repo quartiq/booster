@@ -2,15 +2,17 @@ name: HITL Trigger
 
 on:
   workflow_dispatch:
+  merge_group:
   push:
     branches:
-      - staging
-      - trying
+      - main
 
 jobs:
+
   hitl-trigger:
     runs-on: ubuntu-latest
     environment: hitl
+
     steps:
       - uses: LouisBrunner/checks-action@v1.1.1
         id: hitl-check
