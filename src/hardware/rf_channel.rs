@@ -8,7 +8,7 @@ use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
 use minimq::embedded_time::{duration::Extensions, Clock, Instant};
 
-use super::{platform, I2cBusManager, I2cProxy, SystemTimer};
+use super::{delay::AsmDelay, platform, I2cBusManager, I2cProxy, SystemTimer};
 use crate::{
     settings::{
         channel_settings::ChannelSettings, channel_settings::ChannelState, BoosterChannelSettings,
@@ -19,7 +19,7 @@ use stm32f4xx_hal::{
     self as hal,
     adc::config::SampleTime,
     gpio::{Analog, Input, Output},
-    hal::blocking::delay::DelayUs,
+    hal::blocking::delay::DelayMs,
 };
 
 /// A structure representing power supply measurements of a channel.
@@ -152,7 +152,7 @@ impl Devices {
     /// properly enumerate, the option will be empty. The returend tuple will be (devices, eeprom).
     fn new(
         manager: &'static I2cBusManager,
-        delay: &mut impl DelayUs<u16>,
+        delay: &mut AsmDelay,
     ) -> Option<(Self, Microchip24AA02E48<I2cProxy>)> {
         // The ADS7924 and DAC7571 are present on the booster mainboard, so instantiation
         // and communication should never fail.
@@ -276,6 +276,7 @@ pub struct RfChannel {
     pins: ChannelPins,
     settings: BoosterChannelSettings,
     clock: SystemTimer,
+    delay: AsmDelay,
 }
 
 impl RfChannel {
@@ -295,15 +296,16 @@ impl RfChannel {
         manager: &'static I2cBusManager,
         pins: ChannelPins,
         clock: SystemTimer,
-        delay: &mut impl DelayUs<u16>,
+        mut delay: AsmDelay,
     ) -> Option<Self> {
         // Attempt to instantiate the I2C devices on the channel.
-        Devices::new(manager, delay).map(|(devices, eeprom)| {
+        Devices::new(manager, &mut delay).map(|(devices, eeprom)| {
             let mut channel = Self {
                 devices,
                 pins,
                 settings: BoosterChannelSettings::new(eeprom),
                 clock,
+                delay,
             };
 
             channel.apply_output_interlock_threshold().unwrap();
@@ -621,7 +623,7 @@ mod sm {
             Off + Disable = Off,
             Off + Fault(ChannelFault) / handle_fault = Blocked(ChannelFault),
 
-            Powerup(Instant<SystemTimer>) + Update [check_timeout] = Powered,
+            Powerup(Instant<SystemTimer>) + Update [check_timeout] / reset_interlocks = Powered,
             Powerup(Instant<SystemTimer>) + Disable / start_disable_instant = Powerdown(Instant<SystemTimer>),
             Powerup(Instant<SystemTimer>) + Fault(ChannelFault) / handle_fault_instant = Blocked(ChannelFault),
 
@@ -671,15 +673,26 @@ impl sm::StateMachineContext for RfChannel {
             .set_voltage(3.2)
             .expect("Failed to disable RF bias voltage");
 
-        // Ensure that the RF output is disabled during the power-up process.
-        self.disable_rf_switch();
-
         // Start the LM3880 power supply sequencer.
         self.pins.enable_power.set_high();
 
         // The LM3880 requires 180ms to power up all supplies on the channel. We add an additional
         // 20ms margin.
         self.clock.try_now().unwrap() + 200_u32.milliseconds()
+    }
+
+    fn reset_interlocks(&mut self, _: &Instant<SystemTimer>) {
+        // Next, handle resetting interlocks for v1.6 hardware. The interlocks are reset by a
+        // falling edge on ON/OFF. Because the bias dac is currently in pinch-off (and the RF
+        // channel is unpowered), toggling ON/OFF introduces no output transients on the RF
+        // connectors.
+        self.pins.signal_on.set_high();
+
+        // Note: The delay here are purely to accomodate potential capacitance on the ON/OFF
+        // rail.
+        self.delay.delay_ms(1u32);
+
+        self.pins.signal_on.set_low();
     }
 
     /// Guard against powering up the channel.

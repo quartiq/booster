@@ -1,5 +1,6 @@
 use stm32f4xx_hal::hal::blocking::delay::{DelayMs, DelayUs};
 
+#[derive(Clone)]
 pub struct AsmDelay {
     frequency_us: u32,
     frequency_ms: u32,

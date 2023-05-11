@@ -23,32 +23,13 @@ pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 pub const CPU_FREQ: u32 = 168_000_000;
 
 // Convenience type definition for the I2C bus used for booster RF channels.
-pub type I2C = hal::i2c::I2c<
-    hal::pac::I2C1,
-    (
-        hal::gpio::gpiob::PB6<hal::gpio::Alternate<4, hal::gpio::OpenDrain>>,
-        hal::gpio::gpiob::PB7<hal::gpio::Alternate<4, hal::gpio::OpenDrain>>,
-    ),
->;
+pub type I2C = hal::i2c::I2c<hal::pac::I2C1>;
 
-pub type I2C2 = hal::i2c::I2c<
-    hal::pac::I2C2,
-    (
-        hal::gpio::gpiob::PB10<hal::gpio::Alternate<4, hal::gpio::OpenDrain>>,
-        hal::gpio::gpiob::PB11<hal::gpio::Alternate<4, hal::gpio::OpenDrain>>,
-    ),
->;
+pub type I2C2 = hal::i2c::I2c<hal::pac::I2C2>;
 
 pub type SpiCs = hal::gpio::gpioa::PA4<hal::gpio::Output<hal::gpio::PushPull>>;
 
-pub type Spi = hal::spi::Spi<
-    hal::pac::SPI1,
-    (
-        hal::gpio::gpioa::PA5<hal::gpio::Alternate<5>>,
-        hal::gpio::gpioa::PA6<hal::gpio::Alternate<5>>,
-        hal::gpio::gpioa::PA7<hal::gpio::Alternate<5>>,
-    ),
->;
+pub type Spi = hal::spi::Spi<hal::pac::SPI1>;
 
 pub type Led1 = hal::gpio::gpioc::PC8<hal::gpio::Output<hal::gpio::PushPull>>;
 pub type Led2 = hal::gpio::gpioc::PC9<hal::gpio::Output<hal::gpio::PushPull>>;
@@ -88,6 +69,7 @@ pub enum HardwareVersion {
     Rev1_2OrEarlier,
     Rev1_3,
     Rev1_5,
+    Rev1_6,
     Unknown(u8),
 }
 
@@ -97,6 +79,7 @@ impl From<u8> for HardwareVersion {
             0b000 => HardwareVersion::Rev1_2OrEarlier,
             0b011 => HardwareVersion::Rev1_3,
             0b100 => HardwareVersion::Rev1_5,
+            0b101 => HardwareVersion::Rev1_6,
             other => HardwareVersion::Unknown(other),
         }
     }
@@ -108,6 +91,7 @@ impl core::fmt::Display for HardwareVersion {
             HardwareVersion::Rev1_2OrEarlier => write!(f, "<= v1.2"),
             HardwareVersion::Rev1_3 => write!(f, "v1.3"),
             HardwareVersion::Rev1_5 => write!(f, "v1.5"),
+            HardwareVersion::Rev1_6 => write!(f, "v1.6"),
             HardwareVersion::Unknown(other) => write!(f, "Unknown ({:#b})", other),
         }
     }
