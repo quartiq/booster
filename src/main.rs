@@ -98,7 +98,7 @@ mod app {
                 main_bus: booster.main_bus,
                 net_devices: net::NetworkDevices::new(
                     minimq::embedded_nal::IpAddr::V4(booster.settings.broker()),
-                    booster.network,
+                    booster.network_stack,
                     booster.settings.id(),
                     settings,
                     clock,
