@@ -101,4 +101,3 @@ lto = true # better optimizations
 
 [patch.crates-io.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal"
-branch = "rs/smoltcp-0.9-fixes"
