@@ -3,7 +3,6 @@ name: Continuous Integration
 on:
   push:
     branches: [main, staging, trying]
-  merge_group:
   pull_request:
     branches: [main]
   schedule:
