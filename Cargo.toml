@@ -45,7 +45,7 @@ usb-device = "0.2.9"
 encdec = { version = "0.8", default-features = false }
 crc-any = { version = "2.4.3", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-smoltcp-nal = { version = "0.2" }
+smoltcp-nal = { version = "0.2", features = ["shared-stack"]}
 miniconf = { version = "0.6", features = ["mqtt-client"]}
 minimq = "0.6"
 w5500 = "0.4.1"
@@ -87,10 +87,6 @@ path = "mcp3221"
 [dependencies.microchip-24aa02e48]
 path = "microchip-24aa02e48"
 
-[dependencies.smoltcp-mac]
-path = "smoltcp-mac"
-features = ["cortex-m"]
-
 [dependencies.tca9548]
 path = "tca9548"
 
@@ -102,3 +98,7 @@ opt-level = 1
 codegen-units = 1 # better optimizations
 debug = true # symbols are nice and they don't increase the size on Flash
 lto = true # better optimizations
+
+[patch.crates-io.smoltcp-nal]
+git = "https://github.com/quartiq/smoltcp-nal"
+branch = "rs/smoltcp-0.9-fixes"

@@ -60,8 +60,7 @@ pub enum Mac {
     Enc424j600(enc424j600::Enc424j600<Spi, SpiCs>),
 }
 
-pub type NetworkManager = smoltcp_mac::Manager<'static, 'static, Mac, 8, 8>;
-pub type SmoltcpDevice = smoltcp_mac::SmoltcpDevice<'static, 'static, 8, 8>;
+pub type SmoltcpDevice = Mac;
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<'static, SmoltcpDevice, SystemTimer>;
 

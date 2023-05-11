@@ -8,8 +8,7 @@ use super::{
     net_interface, platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
-    HardwareVersion, Mac, NetworkManager, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ,
-    I2C,
+    HardwareVersion, Mac, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ, I2C,
 };
 
 use crate::settings::BoosterSettings;
@@ -73,18 +72,13 @@ pub struct BoosterDevices {
     pub leds: UserLeds,
     pub buttons: UserButtons,
     pub main_bus: MainBus,
-    pub network: NetworkDevices,
+    pub network_stack: NetworkStack,
     pub watchdog: hal::watchdog::IndependentWatchdog,
     pub usb_device: UsbDevice<'static, UsbBus>,
     pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
     pub settings: BoosterSettings,
     pub metadata: &'static ApplicationMetadata,
     pub systick: Systick,
-}
-
-pub struct NetworkDevices {
-    pub network_stack: NetworkStack,
-    pub manager: NetworkManager,
 }
 
 /// Configure Booster hardware peripherals and RF channels.
@@ -284,7 +278,7 @@ pub fn setup(
         BoosterSettings::new(eui)
     };
 
-    let mac = {
+    let mut mac = {
         let mut spi = {
             let mode = hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleLow,
@@ -379,15 +373,8 @@ pub fn setup(
         ApplicationMetadata::new(hardware_version, phy_string)
     };
 
-    let (manager, network_stack) = {
-        const POOL_SIZE_BYTES: usize = core::mem::size_of::<smoltcp_mac::Frame>() * 16;
-        static mut POOL_STORAGE: [u8; POOL_SIZE_BYTES] = [0; POOL_SIZE_BYTES];
-        let (interface, manager) = smoltcp_mac::new_default(mac, unsafe { &mut POOL_STORAGE });
-
-        let interface = net_interface::setup(interface, &settings);
-
-        (manager, smoltcp_nal::NetworkStack::new(interface, clock))
-    };
+    let (interface, sockets) = net_interface::setup(&mut mac, &settings);
+    let network_stack = smoltcp_nal::NetworkStack::new(interface, mac, sockets, clock);
 
     let mut fans = {
         let main_board_leds = {
@@ -474,10 +461,7 @@ pub fn setup(
         // Note: These devices are within a containing structure because they exist on the same
         // shared I2C bus.
         main_bus: MainBus { channels, fans },
-        network: NetworkDevices {
-            network_stack,
-            manager,
-        },
+        network_stack,
         settings,
         usb_device,
         usb_serial,
