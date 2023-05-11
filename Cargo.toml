@@ -45,7 +45,7 @@ usb-device = "0.2.9"
 encdec = { version = "0.8", default-features = false }
 crc-any = { version = "2.4.3", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-smoltcp-nal = { version = "0.2" }
+smoltcp-nal = { version = "0.2", features = ["shared-stack"]}
 miniconf = { version = "0.6", features = ["mqtt-client"]}
 minimq = "0.6"
 w5500 = "0.4.1"
@@ -58,7 +58,7 @@ enum-iterator = { version = "1.4", default-features = false }
 built = { version = "0.6", features = ["git2"], default-features = false }
 
 [dependencies.stm32f4xx-hal]
-version = "0.15"
+version = "0.16"
 features = ["stm32f407", "rt", "usb_fs"]
 
 [dependencies.enc424j600]
@@ -98,3 +98,6 @@ opt-level = 1
 codegen-units = 1 # better optimizations
 debug = true # symbols are nice and they don't increase the size on Flash
 lto = true # better optimizations
+
+[patch.crates-io.smoltcp-nal]
+git = "https://github.com/quartiq/smoltcp-nal"

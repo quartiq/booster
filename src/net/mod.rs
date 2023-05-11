@@ -6,11 +6,8 @@ use core::fmt::Write;
 use heapless::String;
 
 pub mod mqtt_control;
-mod shared;
 
-use shared::NetworkManager;
-
-type NetworkStackProxy = shared::NetworkStackProxy<'static, NetworkStack>;
+type NetworkStackProxy = smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
 
 /// Container structure for holding all network devices.
 ///
@@ -22,7 +19,6 @@ pub struct NetworkDevices {
     pub settings: miniconf::MqttClient<crate::RuntimeSettings, NetworkStackProxy, SystemTimer, 256>,
     pub control: minireq::Minireq<MainBus, NetworkStackProxy, SystemTimer, 256, 5>,
     stack: NetworkStackProxy,
-    manager: crate::hardware::NetworkManager,
 }
 
 impl NetworkDevices {
@@ -34,18 +30,14 @@ impl NetworkDevices {
     /// * `identifier` - The unique identifier of this device.
     pub fn new(
         broker: minimq::embedded_nal::IpAddr,
-        devices: crate::hardware::setup::NetworkDevices,
+        stack: NetworkStack,
         identifier: &str,
         settings: crate::RuntimeSettings,
         clock: SystemTimer,
         metadata: &'static crate::hardware::metadata::ApplicationMetadata,
     ) -> Self {
-        let crate::hardware::setup::NetworkDevices {
-            manager,
-            network_stack,
-        } = devices;
         let shared =
-            cortex_m::singleton!(: NetworkManager<NetworkStack> = NetworkManager::new(network_stack))
+            cortex_m::singleton!(: smoltcp_nal::shared::NetworkManager<'static, crate::hardware::Mac, crate::hardware::SystemTimer> = smoltcp_nal::shared::NetworkManager::new(stack))
                 .unwrap();
 
         let mut miniconf_client: String<128> = String::new();
@@ -91,7 +83,6 @@ impl NetworkDevices {
             )
             .unwrap(),
             control,
-            manager,
             stack: shared.acquire_stack(),
         }
     }
@@ -103,8 +94,6 @@ impl NetworkDevices {
     /// state management.
     pub fn process(&mut self) -> bool {
         self.telemetry.update();
-
-        self.manager.process();
 
         self.stack.lock(|stack| stack.poll()).unwrap_or(true)
     }

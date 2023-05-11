@@ -39,7 +39,7 @@ impl Encode for ChannelState {
     }
 
     fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
-        if buff.len() < 1 {
+        if buff.is_empty() {
             return Err(encdec::Error::Length);
         }
 
@@ -55,7 +55,7 @@ impl DecodeOwned for ChannelState {
     type Error = encdec::Error;
 
     fn decode_owned(buff: &[u8]) -> Result<(Self::Output, usize), Self::Error> {
-        if buff.len() < 1 {
+        if buff.is_empty() {
             return Err(encdec::Error::Length);
         }
 

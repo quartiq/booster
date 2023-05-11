@@ -4,13 +4,11 @@ use super::{
     booster_channels::BoosterChannels,
     chassis_fans::ChassisFans,
     delay::AsmDelay,
-    external_mac,
     metadata::ApplicationMetadata,
     net_interface, platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
     user_interface::{UserButtons, UserLeds},
-    HardwareVersion, Mac, NetworkManager, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ,
-    I2C,
+    HardwareVersion, Mac, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ, I2C,
 };
 
 use crate::settings::BoosterSettings;
@@ -18,6 +16,7 @@ use crate::settings::BoosterSettings;
 use stm32f4xx_hal as hal;
 
 use bit_field::BitField;
+use core::convert::TryInto;
 use core::fmt::Write;
 use hal::prelude::*;
 use heapless::String;
@@ -74,18 +73,13 @@ pub struct BoosterDevices {
     pub leds: UserLeds,
     pub buttons: UserButtons,
     pub main_bus: MainBus,
-    pub network: NetworkDevices,
+    pub network_stack: NetworkStack,
     pub watchdog: hal::watchdog::IndependentWatchdog,
     pub usb_device: UsbDevice<'static, UsbBus>,
     pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
     pub settings: BoosterSettings,
     pub metadata: &'static ApplicationMetadata,
     pub systick: Systick,
-}
-
-pub struct NetworkDevices {
-    pub network_stack: NetworkStack,
-    pub manager: NetworkManager,
 }
 
 /// Configure Booster hardware peripherals and RF channels.
@@ -176,9 +170,10 @@ pub fn setup(
         let (i2c_peripheral, pins) = mux.free().release();
         let (scl, sda) = pins;
 
-        // Configure I2C pins as open-drain outputs.
-        let mut scl = scl.into_open_drain_output();
-        let mut sda = sda.into_open_drain_output();
+        let mut scl: hal::gpio::PB6<hal::gpio::Output<hal::gpio::OpenDrain>> =
+            scl.try_into().unwrap();
+        let mut sda: hal::gpio::PB7<hal::gpio::Output<hal::gpio::OpenDrain>> =
+            sda.try_into().unwrap();
 
         platform::i2c_bus_reset(&mut sda, &mut scl, &mut delay);
 
@@ -247,7 +242,7 @@ pub fn setup(
                 device.SPI2,
                 (
                     gpiob.pb13.into_alternate(),
-                    hal::gpio::NoPin,
+                    hal::spi::NoMosi::new(),
                     gpiob.pb15.into_alternate(),
                 ),
                 mode,
@@ -285,7 +280,7 @@ pub fn setup(
         BoosterSettings::new(eui)
     };
 
-    let mac = {
+    let mut mac = {
         let mut spi = {
             let mode = hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleLow,
@@ -315,19 +310,21 @@ pub fn setup(
         // version code of 0x04, but the ENC424J600 won't return anything meaningful.
         let w5500_detected = {
             cs.set_low();
-            let mut transfer = [
+            let transfer = [
                 0x00, 0x39, // Reading the version register (address 0x0039)
                 0x01, // Control phase, 1 byte of data, common register block, read
                 0x00, // Data, don't care, will be overwritten during read.
             ];
 
-            spi.transfer(&mut transfer).unwrap();
+            let mut result = [0; 4];
+
+            spi.transfer(&mut result, &transfer).unwrap();
 
             cs.set_high();
 
             // The result is stored in the data phase byte. This should always be a 0x04 for the
             // W5500.
-            transfer[3] == 0x04
+            result[3] == 0x04
         };
 
         if w5500_detected {
@@ -380,13 +377,8 @@ pub fn setup(
         ApplicationMetadata::new(hardware_version, phy_string)
     };
 
-    let (manager, network_stack) = {
-        let (interface, manager) = external_mac::Manager::new(mac);
-
-        let interface = net_interface::setup(interface, &settings);
-
-        (manager, smoltcp_nal::NetworkStack::new(interface, clock))
-    };
+    let (interface, sockets) = net_interface::setup(&mut mac, &settings);
+    let network_stack = smoltcp_nal::NetworkStack::new(interface, mac, sockets, clock);
 
     let mut fans = {
         let main_board_leds = {
@@ -425,14 +417,15 @@ pub fn setup(
                 .unwrap();
         let serial_number = cortex_m::singleton!(: Option<String<64>> = None).unwrap();
 
-        let usb = hal::otg_fs::USB {
-            usb_global: device.OTG_FS_GLOBAL,
-            usb_device: device.OTG_FS_DEVICE,
-            usb_pwrclk: device.OTG_FS_PWRCLK,
-            pin_dm: gpioa.pa11.into_alternate(),
-            pin_dp: gpioa.pa12.into_alternate(),
-            hclk: clocks.hclk(),
-        };
+        let usb = hal::otg_fs::USB::new(
+            (
+                device.OTG_FS_GLOBAL,
+                device.OTG_FS_DEVICE,
+                device.OTG_FS_PWRCLK,
+            ),
+            (gpioa.pa11.into_alternate(), gpioa.pa12.into_alternate()),
+            &clocks,
+        );
 
         usb_bus.replace(hal::otg_fs::UsbBus::new(usb, &mut endpoint_memory[..]));
 
@@ -473,10 +466,7 @@ pub fn setup(
         // Note: These devices are within a containing structure because they exist on the same
         // shared I2C bus.
         main_bus: MainBus { channels, fans },
-        network: NetworkDevices {
-            network_stack,
-            manager,
-        },
+        network_stack,
         settings,
         usb_device,
         usb_serial,
