@@ -456,11 +456,11 @@ dependencies = [
 
 [[package]]
 name = "encdec"
-version = "0.8.3"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a4204dad1927e6344e7358b1217a93f014f5a812187fb1226c6b937e9cddde1"
+checksum = "25de94e10baa85551f7c65730423239370ed5bed60bf8d2a9cbf2683327ba421"
 dependencies = [
- "encdec-base",
+ "encdec-base 0.9.0",
  "encdec-macros",
 ]
 
@@ -475,13 +475,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "encdec-macros"
-version = "0.8.2"
+name = "encdec-base"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de37081815fcc234be3f9ffd4752270c7005c902ab77611b1047ef67304029e5"
+checksum = "516ae3c7d00515548bf26a6531883335ceac2e9cde4938e70feea7456569be09"
+dependencies = [
+ "byteorder",
+ "num-traits",
+]
+
+[[package]]
+name = "encdec-macros"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b15497932aae6b53bf8548cc63c65929b4fab6be54e28709c80fc72f5707eeed"
 dependencies = [
  "darling",
- "encdec-base",
+ "encdec-base 0.8.2",
  "proc-macro2",
  "quote",
  "syn 1.0.105",
