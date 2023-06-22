@@ -231,7 +231,7 @@ mod app {
                 main_bus
                     .channels
                     .channel_mut(idx)
-                    .zip(all_settings.channel[idx as usize].as_ref())
+                    .zip(all_settings.channel[idx as usize].as_ref().as_ref())
                     .map(|((channel, _), settings)| {
                         channel.handle_settings(settings).unwrap_or_else(|err| {
                             log::warn!("Settings failure on {:?}: {:?}", idx, err)
