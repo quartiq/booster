@@ -49,7 +49,7 @@ miniconf = { version = "0.7", features = ["mqtt-client"]}
 minimq = "0.7"
 w5500 = "0.4.1"
 smlang= "0.6"
-minireq = "0.1.1"
+minireq = "0.2"
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "1.4", default-features = false }
 
