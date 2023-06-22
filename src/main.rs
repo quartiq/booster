@@ -231,7 +231,7 @@ mod app {
                 main_bus
                     .channels
                     .channel_mut(idx)
-                    .zip(all_settings.channel[idx as usize].as_ref())
+                    .zip(all_settings.channel[idx as usize].as_ref().as_ref())
                     .map(|((channel, _), settings)| {
                         channel.handle_settings(settings).unwrap_or_else(|err| {
                             log::warn!("Settings failure on {:?}: {:?}", idx, err)
@@ -291,7 +291,9 @@ mod app {
             }) {
                 Ok(true) => update_settings::spawn().unwrap(),
                 Ok(false) => {}
-                Err(miniconf::minimq::Error::Network(smoltcp_nal::NetworkError::NoIpAddress)) => {}
+                Err(minimq::Error::Network(smoltcp_nal::NetworkError::TcpConnectionFailure(
+                    smoltcp_nal::smoltcp::socket::tcp::ConnectError::Unaddressable,
+                ))) => {}
                 other => log::warn!("Miniconf update failure: {:?}", other),
             }
 
@@ -311,7 +313,9 @@ mod app {
                         .poll(|handler, topic, data| main_bus.lock(|bus| handler(bus, topic, data)))
                     {
                         Err(minireq::Error::Mqtt(minimq::Error::Network(
-                            smoltcp_nal::NetworkError::NoIpAddress,
+                            smoltcp_nal::NetworkError::TcpConnectionFailure(
+                                smoltcp_nal::smoltcp::socket::tcp::ConnectError::Unaddressable,
+                            ),
                         ))) => Ok(()),
                         other => other,
                     }
