@@ -52,6 +52,7 @@ smlang= "0.6"
 minireq = "0.2"
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "1.4", default-features = false }
+smoltcp-nal = { version = "0.3", features=["shared-stack"] }
 
 [build-dependencies]
 built = { version = "0.6", features = ["git2"], default-features = false }
@@ -97,8 +98,3 @@ opt-level = 1
 codegen-units = 1 # better optimizations
 debug = true # symbols are nice and they don't increase the size on Flash
 lto = true # better optimizations
-
-[dependencies.smoltcp-nal]
-git = "https://github.com/quartiq/smoltcp-nal"
-rev = "14cedbd29c3853e9d6a407f290e915568ced5c05"
-features = ["shared-stack"]
