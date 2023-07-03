@@ -456,8 +456,9 @@ dependencies = [
 
 [[package]]
 name = "enc424j600"
-version = "0.2.0"
-source = "git+https://git.m-labs.hk/M-Labs/ENC424J600.git?rev=fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a#fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "825ccf836398d94464f4a26fb0ec0cb2b1f0b749e67acc64b7640bdc1f46804c"
 dependencies = [
  "aligned 0.3.4",
  "cortex-m 0.5.11",
