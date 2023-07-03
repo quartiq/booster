@@ -3,6 +3,9 @@ name = "microchip-24aa02e48"
 version = "0.1.0"
 authors = ["Ryan Summers <ryan.summers@vertigo-designs.com>"]
 edition = "2018"
+description = "no_std driver for the Microchip 24AA02E48 EEPROM with EUI-48"
+license = "MIT"
+repository = "https://github.com/quartiq/booster/"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
