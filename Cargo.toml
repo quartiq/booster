@@ -64,27 +64,35 @@ features = ["stm32f407", "rt", "usb_fs"]
 
 [dependencies.ad5627]
 path = "ad5627"
+version = "0.1"
 
 [dependencies.ads7924]
 path = "ads7924"
+version = "0.1"
 
 [dependencies.dac7571]
 path = "dac7571"
+version = "0.1"
 
 [dependencies.max6639]
 path = "max6639"
+version = "0.1"
 
 [dependencies.max6642]
 path = "max6642"
+version = "0.1"
 
 [dependencies.mcp3221]
 path = "mcp3221"
+version = "0.1"
 
 [dependencies.microchip-24aa02e48]
 path = "microchip-24aa02e48"
+version = "0.1"
 
 [dependencies.tca9548]
 path = "tca9548"
+version = "0.1"
 
 [profile.dev]
 # Note: Opt-level 1 is required to avoid issues with stack overflow during hardware configuration.
