@@ -1,7 +1,7 @@
 [package]
 name = "booster"
 # Keep versions in Cargo.toml and py/setup.py synchronized.
-version = "0.3.0"
+version = "0.5.0"
 resolver = "2"
 authors = [
 	"Ryan Summers <ryan.summers@vertigo-designs.com>",
@@ -52,6 +52,7 @@ smlang= "0.6"
 minireq = "0.2"
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "1.4", default-features = false }
+enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
 smoltcp-nal = { version = "0.3", features=["shared-stack"] }
 
 [build-dependencies]
@@ -60,11 +61,6 @@ built = { version = "0.6", features = ["git2"], default-features = false }
 [dependencies.stm32f4xx-hal]
 version = "0.16"
 features = ["stm32f407", "rt", "usb_fs"]
-
-[dependencies.enc424j600]
-git = "https://git.m-labs.hk/M-Labs/ENC424J600.git"
-rev = "fbcc3778d27cfbeec7a1395c9b13a00c8a26af9a"
-features = [ "cortex-m-cpu" ]
 
 [dependencies.ad5627]
 path = "ad5627"
