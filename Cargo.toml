@@ -28,6 +28,7 @@ exclude = [
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7"
 cortex-m-rtic = "1.1"
+rand_core = "0.6"
 mono-clock = "0.1"
 systick-monotonic = "1.0.1"
 cortex-m-log = { version = "0.8.0", features = ["log-integration"] }
@@ -53,7 +54,7 @@ minireq = "0.2"
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "1.4", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
-smoltcp-nal = { version = "0.3", features=["shared-stack"] }
+smoltcp-nal = { version = "0.4", features=["shared-stack"] }
 
 [build-dependencies]
 built = { version = "0.6", features = ["git2"], default-features = false }

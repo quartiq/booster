@@ -20,6 +20,7 @@ use core::convert::TryInto;
 use core::fmt::Write;
 use hal::prelude::*;
 use heapless::String;
+use rand_core::RngCore;
 use usb_device::prelude::*;
 
 /// Macro for genering an RfChannelPins structure.
@@ -377,8 +378,14 @@ pub fn setup(
         ApplicationMetadata::new(hardware_version, phy_string)
     };
 
-    let (interface, sockets) = net_interface::setup(&mut mac, &settings);
-    let network_stack = smoltcp_nal::NetworkStack::new(interface, mac, sockets, clock);
+    let mut rng = device.RNG.constrain(&clocks);
+
+    let (interface, sockets) = net_interface::setup(&mut mac, &settings, rng.next_u64());
+    let mut network_stack = smoltcp_nal::NetworkStack::new(interface, mac, sockets, clock);
+
+    let mut seed_bytes = [0; 8];
+    rng.fill_bytes(&mut seed_bytes);
+    network_stack.seed_random_port(&seed_bytes);
 
     let mut fans = {
         let main_board_leds = {
