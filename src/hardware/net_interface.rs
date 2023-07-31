@@ -50,9 +50,11 @@ impl TcpSocketStorage {
 /// # Args
 /// * `mac` - The smoltcp interface MAC.
 /// * `settings` - The device settings to use.
+/// * `random_seed` - A random seed for the network stack.
 pub fn setup(
     device: &mut Mac,
     settings: &BoosterSettings,
+    random_seed: u64,
 ) -> (
     smoltcp::iface::Interface,
     smoltcp::iface::SocketSet<'static>,
@@ -61,12 +63,12 @@ pub fn setup(
 
     let ip_address = settings.ip_address();
 
-    let mut config = smoltcp::iface::Config::default();
-    config
-        .hardware_addr
-        .replace(smoltcp::wire::HardwareAddress::Ethernet(settings.mac()));
+    let mut config =
+        smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(settings.mac()));
+    config.random_seed = random_seed;
 
-    let mut interface = smoltcp::iface::Interface::new(config, device);
+    let mut interface =
+        smoltcp::iface::Interface::new(config, device, smoltcp::time::Instant::ZERO);
 
     interface
         .routes_mut()

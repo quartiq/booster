@@ -150,6 +150,7 @@ dependencies = [
  "minireq",
  "mono-clock",
  "panic-persist",
+ "rand_core",
  "rtt-logger",
  "rtt-target",
  "serde",
