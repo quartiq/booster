@@ -23,7 +23,7 @@ pub struct RuntimeSettings {
 impl Default for RuntimeSettings {
     fn default() -> Self {
         Self {
-            channel: [None.into(); 8].into(),
+            channel: [None; 8],
             fan_speed: hardware::chassis_fans::DEFAULT_FAN_SPEED,
             telemetry_period: net::mqtt_control::DEFAULT_TELEMETRY_PERIOD_SECS,
         }
