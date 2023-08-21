@@ -9,8 +9,8 @@ use miniconf::Miniconf;
 
 #[derive(Clone, Miniconf)]
 pub struct RuntimeSettings {
-    #[miniconf(defer)]
-    pub channel: miniconf::Array<miniconf::Option<ChannelSettings>, 8>,
+    #[miniconf(defer(3))]
+    pub channel: [Option<ChannelSettings>; 8],
 
     /// The normalized fan speed. 1.0 corresponds to 100% on and 0.0 corresponds to completely
     /// off.
@@ -23,7 +23,7 @@ pub struct RuntimeSettings {
 impl Default for RuntimeSettings {
     fn default() -> Self {
         Self {
-            channel: [None.into(); 8].into(),
+            channel: [None; 8],
             fan_speed: hardware::chassis_fans::DEFAULT_FAN_SPEED,
             telemetry_period: net::mqtt_control::DEFAULT_TELEMETRY_PERIOD_SECS,
         }

@@ -46,7 +46,7 @@ usb-device = "0.2.9"
 encdec = { version = "0.9", default-features = false }
 crc-any = { version = "2.4.3", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-miniconf = { version = "0.7", features = ["mqtt-client"]}
+miniconf = { version = "0.8", features = ["mqtt-client"]}
 minimq = "0.7"
 w5500 = "0.4.1"
 smlang= "0.6"

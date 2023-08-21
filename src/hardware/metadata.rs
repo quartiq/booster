@@ -37,7 +37,7 @@ impl ApplicationMetadata {
         hardware_version: HardwareVersion,
         phy: &'static str,
     ) -> &'static ApplicationMetadata {
-        let mut meta = cortex_m::singleton!(: ApplicationMetadata = ApplicationMetadata {
+        let meta = cortex_m::singleton!(: ApplicationMetadata = ApplicationMetadata {
             phy,
             firmware_version: "Unspecified",
             rust_version: build_info::RUSTC_VERSION,
