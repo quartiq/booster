@@ -16,7 +16,8 @@ type NetworkStackProxy = smoltcp_nal::shared::NetworkStackProxy<'static, Network
 /// potential pre-emption when using the `shared` network stack.
 pub struct NetworkDevices {
     pub telemetry: mqtt_control::TelemetryClient,
-    pub settings: miniconf::MqttClient<crate::RuntimeSettings, NetworkStackProxy, SystemTimer, 256>,
+    pub settings:
+        miniconf::MqttClient<crate::RuntimeSettings, NetworkStackProxy, SystemTimer, 256, 4>,
     pub control: minireq::Minireq<MainBus, NetworkStackProxy, SystemTimer, 256, 5>,
     stack: NetworkStackProxy,
 }

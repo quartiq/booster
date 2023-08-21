@@ -9,8 +9,8 @@ use miniconf::Miniconf;
 
 #[derive(Clone, Miniconf)]
 pub struct RuntimeSettings {
-    #[miniconf(defer)]
-    pub channel: miniconf::Array<miniconf::Option<ChannelSettings>, 8>,
+    #[miniconf(defer(3))]
+    pub channel: [Option<ChannelSettings>; 8],
 
     /// The normalized fan speed. 1.0 corresponds to 100% on and 0.0 corresponds to completely
     /// off.

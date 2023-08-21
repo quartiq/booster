@@ -14,5 +14,5 @@ authors = [
     { name = "Robert Jördens", email = "rj@quartiq.de" },
 ]
 dependencies = [
-    "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.7.0#subdirectory=py/miniconf-mqtt",
+    "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.8.0#subdirectory=py/miniconf-mqtt",
 ]
