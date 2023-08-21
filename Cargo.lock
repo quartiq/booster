@@ -839,9 +839,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0f538daf583319957db1206ce8610645511d80851e16b31880b54f9e37be2b7"
+checksum = "9e34fb3249ad071debda2ceb8d29e271d0fd283039f7bf04d9d7921dec4e6b4e"
 dependencies = [
  "heapless",
  "itoa",
@@ -855,13 +855,13 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.6.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e142f4961afed7b940e84903e6f886b35d10017f15aafc960556f053f6a8fa35"
+checksum = "c2327f540b14c86184b066abe25daca988c15c60f0d9a215d2a37f3032805d47"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.105",
+ "syn 2.0.29",
 ]
 
 [[package]]
@@ -1248,9 +1248,9 @@ dependencies = [
 
 [[package]]
 name = "serde-json-core"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58ec3c8fe427f45ee3aaa0ebb9f0d9ab8ae9ad05d12047fe7249ae5ea9374ff0"
+checksum = "3c9e1ab533c0bc414c34920ec7e5f097101d126ed5eac1a1aac711222e0bbb33"
 dependencies = [
  "heapless",
  "ryu",
