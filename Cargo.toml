@@ -41,7 +41,7 @@ logos = { version = "0.12.1", default-features = false, features = ["export_deri
 rtt-logger = "0.2"
 bbqueue = "0.5"
 usbd-serial = "0.1.0"
-shared-bus = { version = "0.2", features = ["cortex-m"] }
+shared-bus = { version = "0.3", features = ["cortex-m"] }
 usb-device = "0.2.9"
 encdec = { version = "0.9", default-features = false }
 crc-any = { version = "2.4.3", default-features = false }
