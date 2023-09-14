@@ -51,7 +51,7 @@ miniconf = { git = "https://github.com/quartiq/miniconf", features = ["mqtt-clie
 minimq = { git = "https://github.com/quartiq/minimq" }
 w5500 = "0.4.1"
 smlang= "0.6"
-minireq = { git = "https://github.com/quartiq/minireq", branch = "feature/republish-state-fix" }
+minireq = { git = "https://github.com/quartiq/minireq" }
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "1.4", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
