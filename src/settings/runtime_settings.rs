@@ -5,11 +5,11 @@ use crate::{
     hardware::{self, platform, Channel},
     net,
 };
-use miniconf::Miniconf;
+use miniconf::Tree;
 
-#[derive(Clone, Miniconf)]
+#[derive(Clone, Tree)]
 pub struct RuntimeSettings {
-    #[miniconf(defer(3))]
+    #[tree(depth(3))]
     pub channel: [Option<ChannelSettings>; 8],
 
     /// The normalized fan speed. 1.0 corresponds to 100% on and 0.0 corresponds to completely

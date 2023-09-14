@@ -5,7 +5,7 @@ use crate::{
     Channel,
 };
 
-use minimq::{embedded_nal, Publication};
+use minimq::Publication;
 
 use super::NetworkStackProxy;
 
@@ -16,13 +16,48 @@ use serde::Serialize;
 /// Default metadata message if formatting errors occur.
 const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
 
-type MinireqResponse = Result<
-    minireq::Response<256>,
-    minireq::Error<<super::NetworkStack as embedded_nal::TcpClientStack>::Error>,
->;
-
 /// The default telemetry period.
 pub const DEFAULT_TELEMETRY_PERIOD_SECS: u64 = 10;
+
+pub enum Error {
+    JsonDe(serde_json_core::de::Error),
+    JsonSer(serde_json_core::ser::Error),
+    Other(&'static str),
+}
+
+impl From<serde_json_core::de::Error> for Error {
+    fn from(e: serde_json_core::de::Error) -> Self {
+        Self::JsonDe(e)
+    }
+}
+
+impl From<serde_json_core::ser::Error> for Error {
+    fn from(e: serde_json_core::ser::Error) -> Self {
+        Self::JsonSer(e)
+    }
+}
+
+impl From<&'static str> for Error {
+    fn from(e: &'static str) -> Self {
+        Self::Other(e)
+    }
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Error::Other(msg) => {
+                write!(f, "{}", msg)
+            }
+            Error::JsonDe(e) => {
+                write!(f, "{}", e)
+            }
+            Error::JsonSer(e) => {
+                write!(f, "{}", e)
+            }
+        }
+    }
+}
 
 /// Specifies a generic request for a specific channel.
 #[derive(serde::Deserialize, Debug)]
@@ -39,7 +74,12 @@ struct ChannelBiasResponse {
 
 /// Represents a means of handling MQTT-based control interface.
 pub struct TelemetryClient {
-    mqtt: minimq::Minimq<NetworkStackProxy, SystemTimer, 512, 1>,
+    mqtt: minimq::Minimq<
+        'static,
+        NetworkStackProxy,
+        SystemTimer,
+        minimq::broker::NamedBroker<NetworkStackProxy>,
+    >,
     prefix: String<128>,
     telemetry_period: u64,
     meta_published: bool,
@@ -49,20 +89,18 @@ pub struct TelemetryClient {
 impl TelemetryClient {
     /// Construct the MQTT control manager.
     pub fn new(
-        broker: minimq::embedded_nal::IpAddr,
-        stack: super::NetworkStackProxy,
-        clock: SystemTimer,
-        id: &str,
+        mqtt: minimq::Minimq<
+            'static,
+            NetworkStackProxy,
+            SystemTimer,
+            minimq::broker::NamedBroker<NetworkStackProxy>,
+        >,
         metadata: &'static ApplicationMetadata,
+        prefix: &str,
     ) -> Self {
-        let mut client_id: String<64> = String::new();
-        write!(&mut client_id, "booster-{}-tlm", id).unwrap();
-
-        let mut prefix: String<128> = String::new();
-        write!(&mut prefix, "dt/sinara/booster/{}", id).unwrap();
         Self {
-            mqtt: minimq::Minimq::new(broker, &client_id, stack, clock).unwrap(),
-            prefix,
+            mqtt,
+            prefix: String::from(prefix),
             telemetry_period: DEFAULT_TELEMETRY_PERIOD_SECS,
             meta_published: false,
             metadata,
@@ -78,7 +116,7 @@ impl TelemetryClient {
         let mut topic: String<64> = String::new();
         write!(&mut topic, "{}/telemetry/ch{}", self.prefix, channel as u8).unwrap();
 
-        let message: String<1024> = minireq::serde_json_core::to_string(telemetry).unwrap();
+        let message: String<1024> = serde_json_core::to_string(telemetry).unwrap();
 
         // All telemtry is published in a best-effort manner.
         self.mqtt
@@ -105,7 +143,7 @@ impl TelemetryClient {
         if !self.meta_published && self.mqtt.client().can_publish(minimq::QoS::AtMostOnce) {
             let mut topic: String<64> = String::new();
             write!(&mut topic, "{}/alive/meta", self.prefix).unwrap();
-            let message: String<512> = minireq::serde_json_core::to_string(&self.metadata)
+            let message: String<512> = serde_json_core::to_string(&self.metadata)
                 .unwrap_or_else(|_| String::from(DEFAULT_METADATA));
 
             if self
@@ -165,21 +203,23 @@ impl TelemetryClient {
 ///
 /// # Returns
 /// A [minireq::Response] containing a serialized [ChannelBiasResponse].
-pub fn read_bias(main_bus: &mut MainBus, _topic: &str, request: &[u8]) -> MinireqResponse {
-    let request: ChannelRequest = minireq::serde_json_core::from_slice(request)?.0;
+pub fn read_bias(
+    main_bus: &mut MainBus,
+    _topic: &str,
+    request: &[u8],
+    output: &mut [u8],
+) -> Result<usize, Error> {
+    let request: ChannelRequest = serde_json_core::from_slice(request)?.0;
 
-    let response = main_bus
-        .channels
-        .channel_mut(request.channel)
-        .map(|(channel, _)| {
-            minireq::Response::data(ChannelBiasResponse {
-                vgs: channel.context_mut().get_bias_voltage(),
-                ids: channel.context_mut().get_p28v_current(),
-            })
-        })
-        .unwrap_or_else(|| minireq::Response::error("Channel not found"));
+    let Some((channel, _)) = main_bus.channels.channel_mut(request.channel) else {
+        return Err("Channel not found".into());
+    };
+    let response = ChannelBiasResponse {
+        vgs: channel.context_mut().get_bias_voltage(),
+        ids: channel.context_mut().get_p28v_current(),
+    };
 
-    Ok(response)
+    Ok(serde_json_core::to_slice(&response, output)?)
 }
 
 /// Persist channel settings to EEPROM.
@@ -195,17 +235,19 @@ pub fn read_bias(main_bus: &mut MainBus, _topic: &str, request: &[u8]) -> Minire
 /// # Returns
 /// A [minireq::Response] containing no data, which indicates the success of the command
 /// processing.
-pub fn save_settings(main_bus: &mut MainBus, _topic: &str, request: &[u8]) -> MinireqResponse {
-    let request: ChannelRequest = minireq::serde_json_core::from_slice(request)?.0;
+pub fn save_settings(
+    main_bus: &mut MainBus,
+    _topic: &str,
+    request: &[u8],
+    _buffer: &mut [u8],
+) -> Result<usize, Error> {
+    let request: ChannelRequest = serde_json_core::from_slice(request)?.0;
 
-    let response = main_bus
-        .channels
-        .channel_mut(request.channel)
-        .map(|(channel, _)| {
-            channel.context_mut().save_configuration();
-            minireq::Response::ok()
-        })
-        .unwrap_or_else(|| minireq::Response::error("Channel not found"));
+    let Some((channel, _)) = main_bus.channels.channel_mut(request.channel) else {
+        return Err("Channel not found".into());
+    };
 
-    Ok(response)
+    channel.context_mut().save_configuration();
+
+    Ok(0)
 }

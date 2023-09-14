@@ -5,7 +5,7 @@ use crate::{hardware::I2cProxy, linear_transformation::LinearTransformation, Err
 use encdec::{Decode, DecodeOwned, Encode};
 use enum_iterator::Sequence;
 use microchip_24aa02e48::Microchip24AA02E48;
-use miniconf::Miniconf;
+use miniconf::Tree;
 use serde::{Deserialize, Serialize};
 
 /// The expected semver of the BoosterChannelSettings. This version must be updated whenever the
@@ -70,7 +70,7 @@ impl DecodeOwned for ChannelState {
 }
 
 /// Represents booster channel-specific configuration values.
-#[derive(Miniconf, Encode, DecodeOwned, Debug, Copy, Clone, PartialEq)]
+#[derive(Tree, Encode, DecodeOwned, Debug, Copy, Clone, PartialEq)]
 pub struct ChannelSettings {
     pub output_interlock_threshold: f32,
     pub bias_voltage: f32,
