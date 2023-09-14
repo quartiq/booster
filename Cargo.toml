@@ -16,7 +16,7 @@ readme = "README.md"
 documentation = "https://quartiq.de/booster-doc/"
 edition = "2018"
 # keep MSRV in sync in ci.yaml, Cargo.toml
-rust-version = "1.65"
+rust-version = "1.72"
 build = "build.rs"
 exclude = [
 	".gitignore",
