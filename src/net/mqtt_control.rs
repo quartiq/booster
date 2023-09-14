@@ -5,7 +5,7 @@ use crate::{
     Channel,
 };
 
-use minimq::Publication;
+use minimq::{DeferredPublication, Publication};
 
 use super::NetworkStackProxy;
 
@@ -74,12 +74,7 @@ struct ChannelBiasResponse {
 
 /// Represents a means of handling MQTT-based control interface.
 pub struct TelemetryClient {
-    mqtt: minimq::Minimq<
-        'static,
-        NetworkStackProxy,
-        SystemTimer,
-        minimq::broker::NamedBroker<NetworkStackProxy>,
-    >,
+    mqtt: minimq::Minimq<'static, NetworkStackProxy, SystemTimer, minimq::broker::IpBroker>,
     prefix: String<128>,
     telemetry_period: u64,
     meta_published: bool,
@@ -89,12 +84,7 @@ pub struct TelemetryClient {
 impl TelemetryClient {
     /// Construct the MQTT control manager.
     pub fn new(
-        mqtt: minimq::Minimq<
-            'static,
-            NetworkStackProxy,
-            SystemTimer,
-            minimq::broker::NamedBroker<NetworkStackProxy>,
-        >,
+        mqtt: minimq::Minimq<'static, NetworkStackProxy, SystemTimer, minimq::broker::IpBroker>,
         metadata: &'static ApplicationMetadata,
         prefix: &str,
     ) -> Self {
@@ -116,13 +106,11 @@ impl TelemetryClient {
         let mut topic: String<64> = String::new();
         write!(&mut topic, "{}/telemetry/ch{}", self.prefix, channel as u8).unwrap();
 
-        let message: String<1024> = serde_json_core::to_string(telemetry).unwrap();
-
         // All telemtry is published in a best-effort manner.
         self.mqtt
             .client()
             .publish(
-                Publication::new(message.as_bytes())
+                DeferredPublication::new(|buf| serde_json_core::to_slice(telemetry, buf))
                     .topic(&topic)
                     .finish()
                     .unwrap(),
@@ -143,14 +131,17 @@ impl TelemetryClient {
         if !self.meta_published && self.mqtt.client().can_publish(minimq::QoS::AtMostOnce) {
             let mut topic: String<64> = String::new();
             write!(&mut topic, "{}/alive/meta", self.prefix).unwrap();
-            let message: String<512> = serde_json_core::to_string(&self.metadata)
-                .unwrap_or_else(|_| String::from(DEFAULT_METADATA));
 
-            if self
-                .mqtt
+            let Self {
+                ref mut mqtt,
+                metadata,
+                ..
+            } = self;
+
+            if mqtt
                 .client()
                 .publish(
-                    Publication::new(message.as_bytes())
+                    DeferredPublication::new(|buf| serde_json_core::to_slice(&metadata, buf))
                         .topic(&topic)
                         .finish()
                         .unwrap(),
@@ -159,8 +150,7 @@ impl TelemetryClient {
             {
                 // Note(unwrap): We can guarantee that this message will be sent because we checked
                 // for ability to publish above.
-                self.mqtt
-                    .client()
+                mqtt.client()
                     .publish(
                         Publication::new(DEFAULT_METADATA.as_bytes())
                             .topic(&topic)

@@ -96,9 +96,8 @@ mod app {
             SharedResources {
                 main_bus: booster.main_bus,
                 net_devices: net::NetworkDevices::new(
-                    // TODO: Replace with settings.
-                    //minimq::embedded_nal::IpAddr::V4(booster.settings.broker()),
-                    "mqtt",
+                    // TODO: Replace with hostname-based broker.
+                    minimq::embedded_nal::IpAddr::V4(booster.settings.broker()),
                     booster.network_stack,
                     booster.settings.id(),
                     settings,
