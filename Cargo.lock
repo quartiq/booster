@@ -896,7 +896,7 @@ dependencies = [
 [[package]]
 name = "minireq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minireq?branch=feature/republish-state-fix#98c22c909253ae47934695fb4bb00a6f941bdc31"
+source = "git+https://github.com/quartiq/minireq#b7a4c90714e1695c953b355b26e05e967aea782e"
 dependencies = [
  "embedded-io",
  "heapless",

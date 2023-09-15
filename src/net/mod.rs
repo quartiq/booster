@@ -106,6 +106,9 @@ impl NetworkDevices {
 
             let broker = minireq::minimq::broker::IpBroker::new(broker);
             let config = miniconf::minimq::ConfigBuilder::new(broker, &mut store.telemetry)
+                // The telemetry client doesn't do much in terms of receiving data, so reserve the
+                // buffer for transmission.
+                .rx_buffer(miniconf::minimq::config::BufferConfig::Maximum(100))
                 .client_id(&client_id)
                 .unwrap();
             mqtt_control::TelemetryClient::new(
