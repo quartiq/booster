@@ -136,7 +136,10 @@ class BoosterApi:
 
         # Indicate a response was received.
         request_id = int.from_bytes(properties['correlation_data'][0], 'big')
-        self.inflight[request_id].set_result(json.loads(payload))
+        assert len(properties['user_property']) == 1, 'Unexpected number of user properties'
+        response_prop = properties['user_property'][0]
+        assert response_prop[0] == 'code'
+        self.inflight[request_id].set_result((response_prop[1], json.loads(payload)))
         del self.inflight[request_id]
 
 
@@ -167,8 +170,8 @@ class BoosterApi:
             correlation_data=request_id.to_bytes(4, 'big'))
 
         # Check the response code.
-        response = await result
-        assert response['code'] == 0, f'Request failed: {response}'
+        code, response = await result
+        assert code == 'Ok', f'Request failed: {response}'
         return response
 
 
@@ -184,16 +187,14 @@ class BoosterApi:
             the measured RF amplifier drain current.
         """
         # Power up the channel. Wait for the channel to fully power-up before continuing.
-        await self.settings_interface.command(f'channel/{channel}/state', "Powered", retain=False)
+        await self.settings_interface.set(f'/channel/{channel}/state', "Powered")
         await asyncio.sleep(0.4)
 
         async def set_bias(voltage):
-            await self.settings_interface.command(f'channel/{channel}/bias_voltage',
-                                                  voltage, retain=False)
+            await self.settings_interface.set(f'/channel/{channel}/bias_voltage', voltage)
             # Sleep 100 ms for bias current to settle and for ADC to take current measurement.
             await asyncio.sleep(0.2)
             response = await self.perform_action(Action.ReadBiasCurrent, channel)
-            response = json.loads(response['data'])
             vgs, ids = response['vgs'], response['ids']
             print(f'Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
             return vgs, ids

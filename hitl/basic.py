@@ -39,12 +39,11 @@ async def channel_on(booster, channel, initial_state='Enabled'):
     """
     try:
         print(f'Commanding channel {channel} into {initial_state}')
-        await booster.settings_interface.command(f'channel/{channel}/state', initial_state,
-                                                 retain=False)
+        await booster.settings_interface.set(f'/channel/{channel}/state', initial_state)
         yield
     finally:
         print(f'Commanding channel {channel} off')
-        await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
+        await booster.settings_interface.set(f'/channel/{channel}/state', 'Off')
 
 
 async def test_channel(booster, channel, prefix, broker):
@@ -67,7 +66,7 @@ async def test_channel(booster, channel, prefix, broker):
         print(f'Channel {channel} bias tuning: Vgs = {vgs}, Ids = {ids}')
 
     # Disable the channel.
-    await booster.settings_interface.command(f'channel/{channel}/state', 'Off', retain=False)
+    await booster.settings_interface.set(f'/channel/{channel}/state', 'Off')
 
     # Check that telemetry indicates channel is powered off.
     async def is_off() -> bool:
@@ -78,8 +77,7 @@ async def test_channel(booster, channel, prefix, broker):
 
     # Set the interlock threshold so that it won't trip.
     print('Setting output interlock threshold to 30 dB')
-    await booster.settings_interface.command(f'channel/{channel}/output_interlock_threshold', 30,
-                                             retain=False)
+    await booster.settings_interface.set(f'/channel/{channel}/output_interlock_threshold', 30)
 
     # Enable the channel, verify telemetry indicates it is now enabled.
     async with channel_on(booster, channel):
@@ -91,8 +89,7 @@ async def test_channel(booster, channel, prefix, broker):
 
         # Lower the interlock threshold so it trips.
         print('Setting output interlock threshold to -5 dB, verifying interlock trips')
-        await booster.settings_interface.command(f'channel/{channel}/output_interlock_threshold',
-                                                 -5.7, retain=False)
+        await booster.settings_interface.set(f'/channel/{channel}/output_interlock_threshold', -5.7)
 
         async def is_tripped() -> bool:
             _, tlm = await telemetry.get_next_telemetry()
@@ -121,7 +118,7 @@ def main():
         booster = await BoosterApi.create(args.prefix, args.broker)
 
         # Disable configure the telemetry rate.
-        await booster.settings_interface.command('telemetry_period', 1, retain=False)
+        await booster.settings_interface.set('/telemetry_period', 1, retain=False)
 
         # Test operation of an RF channel
         for channel in args.channels:

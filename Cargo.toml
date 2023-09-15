@@ -16,7 +16,7 @@ readme = "README.md"
 documentation = "https://quartiq.de/booster-doc/"
 edition = "2018"
 # keep MSRV in sync in ci.yaml, Cargo.toml
-rust-version = "1.65"
+rust-version = "1.72"
 build = "build.rs"
 exclude = [
 	".gitignore",
@@ -25,6 +25,7 @@ exclude = [
 ]
 
 [dependencies]
+serde-json-core = "0.5"
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7"
 cortex-m-rtic = "1.1"
@@ -46,11 +47,12 @@ usb-device = "0.2.9"
 encdec = { version = "0.9", default-features = false }
 crc-any = { version = "2.4.3", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-miniconf = { version = "0.8", features = ["mqtt-client"]}
-minimq = "0.7"
+miniconf = { git = "https://github.com/quartiq/miniconf", features = ["mqtt-client"]}
+# Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
+minimq = { git = "https://github.com/quartiq/minimq" }
 w5500 = "0.4.1"
 smlang= "0.6"
-minireq = "0.2"
+minireq = { git = "https://github.com/quartiq/minireq" }
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "1.4", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }

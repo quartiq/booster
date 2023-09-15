@@ -10,16 +10,19 @@ const NUM_TCP_SOCKETS: usize = 4;
 
 /// Containers for smoltcp-related network configurations
 struct NetStorage {
-    // Note: There is an additional socket set item required for the DHCP socket.
-    pub sockets: [smoltcp::iface::SocketStorage<'static>; NUM_TCP_SOCKETS + 1],
+    // Note: There is an additional socket set item required for the DHCP and DNS sockets
+    // respectively.
+    pub sockets: [smoltcp::iface::SocketStorage<'static>; NUM_TCP_SOCKETS + 2],
     pub tcp_socket_storage: [TcpSocketStorage; NUM_TCP_SOCKETS],
+    pub dns_storage: [Option<smoltcp::socket::dns::DnsQuery>; 1],
 }
 
 impl NetStorage {
     const fn new() -> Self {
         NetStorage {
-            sockets: [smoltcp::iface::SocketStorage::EMPTY; NUM_TCP_SOCKETS + 1],
+            sockets: [smoltcp::iface::SocketStorage::EMPTY; NUM_TCP_SOCKETS + 2],
             tcp_socket_storage: [TcpSocketStorage::new(); NUM_TCP_SOCKETS],
+            dns_storage: [None; 1],
         }
     }
 }
@@ -86,6 +89,11 @@ pub fn setup(
 
         sockets.add(tcp_socket);
     }
+
+    sockets.add(smoltcp::socket::dns::Socket::new(
+        &[],
+        &mut net_store.dns_storage[..],
+    ));
 
     if ip_address.address().is_unspecified() {
         sockets.add(smoltcp::socket::dhcpv4::Socket::new());

@@ -96,6 +96,7 @@ mod app {
             SharedResources {
                 main_bus: booster.main_bus,
                 net_devices: net::NetworkDevices::new(
+                    // TODO: Replace with hostname-based broker.
                     minimq::embedded_nal::IpAddr::V4(booster.settings.broker()),
                     booster.network_stack,
                     booster.settings.id(),
@@ -307,11 +308,10 @@ mod app {
             c.shared
                 .net_devices
                 .lock(|net| {
-                    match net
-                        .control
-                        .poll(|handler, topic, data| main_bus.lock(|bus| handler(bus, topic, data)))
-                    {
-                        Err(minireq::Error::Mqtt(minimq::Error::Network(
+                    match net.control.poll(|handler, topic, data, output| {
+                        main_bus.lock(|bus| handler(bus, topic, data, output))
+                    }) {
+                        Err(minireq::Error::Mqtt(minireq::minimq::Error::Network(
                             smoltcp_nal::NetworkError::TcpConnectionFailure(
                                 smoltcp_nal::smoltcp::socket::tcp::ConnectError::Unaddressable,
                             ),

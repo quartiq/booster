@@ -9,6 +9,24 @@ pub mod mqtt_control;
 
 type NetworkStackProxy = smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
 
+pub struct MqttStorage {
+    telemetry: [u8; 1024],
+    settings: [u8; 1024],
+    control: [u8; 1024],
+    minireq_handlers: [minireq::HandlerSlot<'static, MainBus, mqtt_control::Error>; 2],
+}
+
+impl Default for MqttStorage {
+    fn default() -> Self {
+        Self {
+            telemetry: [0u8; 1024],
+            settings: [0u8; 1024],
+            control: [0u8; 1024],
+            minireq_handlers: [None, None],
+        }
+    }
+}
+
 /// Container structure for holding all network devices.
 ///
 /// # Note
@@ -16,9 +34,22 @@ type NetworkStackProxy = smoltcp_nal::shared::NetworkStackProxy<'static, Network
 /// potential pre-emption when using the `shared` network stack.
 pub struct NetworkDevices {
     pub telemetry: mqtt_control::TelemetryClient,
-    pub settings:
-        miniconf::MqttClient<crate::RuntimeSettings, NetworkStackProxy, SystemTimer, 256, 4>,
-    pub control: minireq::Minireq<MainBus, NetworkStackProxy, SystemTimer, 256, 5>,
+    pub settings: miniconf::MqttClient<
+        'static,
+        crate::RuntimeSettings,
+        NetworkStackProxy,
+        SystemTimer,
+        minireq::minimq::broker::IpBroker,
+        4,
+    >,
+    pub control: minireq::Minireq<
+        'static,
+        MainBus,
+        NetworkStackProxy,
+        SystemTimer,
+        minireq::minimq::broker::IpBroker,
+        mqtt_control::Error,
+    >,
     stack: NetworkStackProxy,
 }
 
@@ -41,49 +72,68 @@ impl NetworkDevices {
             cortex_m::singleton!(: smoltcp_nal::shared::NetworkManager<'static, crate::hardware::Mac, crate::hardware::SystemTimer> = smoltcp_nal::shared::NetworkManager::new(stack))
                 .unwrap();
 
-        let mut miniconf_client: String<128> = String::new();
-        write!(&mut miniconf_client, "booster-{}-settings", identifier).unwrap();
-
-        let mut minireq_client: String<128> = String::new();
-        write!(&mut minireq_client, "booster-{}-req", identifier).unwrap();
+        let store = cortex_m::singleton!(: MqttStorage = MqttStorage::default()).unwrap();
 
         let mut prefix: String<128> = String::new();
         write!(&mut prefix, "dt/sinara/booster/{}", identifier).unwrap();
 
-        let mut control = minireq::Minireq::new(
-            shared.acquire_stack(),
-            &minireq_client,
-            &prefix,
-            broker,
-            clock,
-        )
-        .unwrap();
+        let control = {
+            let mut client_id: String<128> = String::new();
+            write!(&mut client_id, "booster-{}-req", identifier).unwrap();
 
-        control
-            .register("save", mqtt_control::save_settings)
-            .unwrap();
-        control
-            .register("read-bias", mqtt_control::read_bias)
-            .unwrap();
+            let broker = minireq::minimq::broker::IpBroker::new(broker);
+            let config = minireq::minimq::ConfigBuilder::new(broker, &mut store.settings)
+                .client_id(&client_id)
+                .unwrap();
+            let mqtt = minireq::minimq::Minimq::new(shared.acquire_stack(), clock, config);
+
+            let mut control =
+                minireq::Minireq::new(&prefix, mqtt, &mut store.minireq_handlers).unwrap();
+
+            control
+                .register("save", mqtt_control::save_settings)
+                .unwrap();
+            control
+                .register("read-bias", mqtt_control::read_bias)
+                .unwrap();
+
+            control
+        };
+
+        let telemetry = {
+            let mut client_id: String<64> = String::new();
+            write!(&mut client_id, "booster-{}-tlm", identifier).unwrap();
+
+            let broker = minireq::minimq::broker::IpBroker::new(broker);
+            let config = miniconf::minimq::ConfigBuilder::new(broker, &mut store.telemetry)
+                // The telemetry client doesn't do much in terms of receiving data, so reserve the
+                // buffer for transmission.
+                .rx_buffer(miniconf::minimq::config::BufferConfig::Maximum(100))
+                .client_id(&client_id)
+                .unwrap();
+            mqtt_control::TelemetryClient::new(
+                minimq::Minimq::new(shared.acquire_stack(), clock, config),
+                metadata,
+                &prefix,
+            )
+        };
+
+        let settings = {
+            let mut client_id: String<128> = String::new();
+            write!(&mut client_id, "booster-{}-settings", identifier).unwrap();
+
+            let broker = minireq::minimq::broker::IpBroker::new(broker);
+            let config = miniconf::minimq::ConfigBuilder::new(broker, &mut store.control)
+                .client_id(&client_id)
+                .unwrap();
+            miniconf::MqttClient::new(shared.acquire_stack(), &prefix, clock, settings, config)
+                .unwrap()
+        };
 
         Self {
-            telemetry: mqtt_control::TelemetryClient::new(
-                broker,
-                shared.acquire_stack(),
-                clock,
-                identifier,
-                metadata,
-            ),
-            settings: miniconf::MqttClient::new(
-                shared.acquire_stack(),
-                &miniconf_client,
-                &prefix,
-                broker,
-                clock,
-                settings,
-            )
-            .unwrap(),
+            telemetry,
             control,
+            settings,
             stack: shared.acquire_stack(),
         }
     }

@@ -163,6 +163,7 @@ dependencies = [
  "rtt-logger",
  "rtt-target",
  "serde",
+ "serde-json-core",
  "shared-bus 0.3.0",
  "smlang",
  "smoltcp-nal",
@@ -433,6 +434,12 @@ dependencies = [
  "embedded-hal 1.0.0-alpha.11",
  "nb 1.1.0",
 ]
+
+[[package]]
+name = "embedded-io"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "658bbadc628dc286b9ae02f0cb0f5411c056eb7487b72f0083203f115de94060"
 
 [[package]]
 name = "embedded-nal"
@@ -849,8 +856,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e34fb3249ad071debda2ceb8d29e271d0fd283039f7bf04d9d7921dec4e6b4e"
+source = "git+https://github.com/quartiq/miniconf#61946c1a739abb79870fedcb096c5cd697eee361"
 dependencies = [
  "heapless",
  "itoa",
@@ -865,8 +871,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2327f540b14c86184b066abe25daca988c15c60f0d9a215d2a37f3032805d47"
+source = "git+https://github.com/quartiq/miniconf#61946c1a739abb79870fedcb096c5cd697eee361"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -876,8 +881,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0106439fe4eb2e88c5b6b8fcb505b2f679bd8e105c947aa1f1a77f6b57a38653"
+source = "git+https://github.com/quartiq/minimq#cec9ce70a9091b4e20d3b09c0efe8341dc762f41"
 dependencies = [
  "bit_field",
  "embedded-nal 0.7.0",
@@ -892,14 +896,13 @@ dependencies = [
 [[package]]
 name = "minireq"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f85d60240fb77183cd698380356928ed5314cf574d69252aef36024156bcb423"
+source = "git+https://github.com/quartiq/minireq#b7a4c90714e1695c953b355b26e05e967aea782e"
 dependencies = [
+ "embedded-io",
  "heapless",
  "log",
  "minimq",
  "serde",
- "serde-json-core",
  "smlang",
 ]
 

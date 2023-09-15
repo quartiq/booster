@@ -41,7 +41,7 @@ sleep 30
 ping -c 5 -w 20 booster-hitl
 
 # Test the MQTT interface.
-python3 -m miniconf --discover $PREFIX telemetry_period=5
+python3 -m miniconf --discover $PREFIX /telemetry_period=5
 
 # Test basic operation
 python3 hitl/basic.py
