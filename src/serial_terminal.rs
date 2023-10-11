@@ -4,132 +4,413 @@ use super::{
     BoosterSettings,
 };
 use bbqueue::BBBuffer;
-use core::convert::{TryFrom, TryInto};
-use heapless::{String, Vec};
-use logos::Logos;
 use usbd_serial::UsbError;
 
-use core::{fmt::Write, str::FromStr};
-use minimq::embedded_nal::Ipv4Addr;
-
-#[derive(Logos)]
-enum Token {
-    #[error]
-    #[regex(r"[ \t\n\f\r]+", logos::skip)]
-    Error,
-
-    #[token("reset")]
-    Reset,
-
-    #[token("dfu")]
-    Dfu,
-
-    #[token("help")]
-    Help,
-
-    #[token("read")]
-    Read,
-
-    #[token("write")]
-    Write,
-
-    #[token("mac")]
-    Mac,
-
-    #[token("id")]
-    Identifier,
-
-    #[token("broker-address")]
-    BrokerAddress,
-
-    #[token("gateway")]
-    Gateway,
-
-    #[token("netmask")]
-    Netmask,
-
-    #[token("ip-address")]
-    StaticIpAddress,
-
-    #[token("fan")]
-    FanSpeed,
-
-    #[regex(r"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", |lex| lex.slice().parse())]
-    IpAddress(Ipv4Addr),
-
-    #[regex(r"[a-zA-Z0-9-]+")]
-    DeviceIdentifier,
-
-    #[token("service")]
-    ServiceInfo,
-}
-
-#[derive(PartialEq)]
-pub enum Property {
-    Mac,
-    BrokerAddress,
-    Identifier,
-    FanSpeed,
-    IpAddress,
-    Netmask,
-    Gateway,
-}
-
-pub enum Request {
-    Reset,
-    ResetBootloader,
-    Help,
-    Read(Property),
-    ServiceInfo,
-    WriteIpAddress(Property, Ipv4Addr),
-    WriteIdentifier(String<32>),
-    WriteFanSpeed(f32),
-}
-
-impl TryFrom<Token> for Property {
-    type Error = ();
-    fn try_from(token: Token) -> Result<Property, ()> {
-        let property = match token {
-            Token::Mac => Property::Mac,
-            Token::BrokerAddress => Property::BrokerAddress,
-            Token::Identifier => Property::Identifier,
-            Token::FanSpeed => Property::FanSpeed,
-            Token::StaticIpAddress => Property::IpAddress,
-            Token::Gateway => Property::Gateway,
-            Token::Netmask => Property::Netmask,
-            _ => return Err(()),
-        };
-
-        Ok(property)
-    }
-}
-
-fn get_property_string(prop: Property, settings: &BoosterSettings) -> String<128> {
-    let mut msg = String::<128>::new();
-    match prop {
-        Property::Identifier => writeln!(&mut msg, "{}", settings.id()).unwrap(),
-        Property::Mac => writeln!(&mut msg, "{}", settings.mac()).unwrap(),
-        Property::BrokerAddress => writeln!(&mut msg, "{}", settings.broker()).unwrap(),
-        Property::Gateway => writeln!(&mut msg, "{}", settings.gateway()).unwrap(),
-        Property::IpAddress => writeln!(&mut msg, "{}", settings.ip_address()).unwrap(),
-        Property::Netmask => writeln!(&mut msg, "{}", settings.netmask()).unwrap(),
-        Property::FanSpeed => writeln!(&mut msg, "{:.2} %", settings.fan_speed() * 100.0).unwrap(),
-    };
-    msg
-}
+use core::fmt::Write;
 
 /// A static-scope BBqueue for handling serial output buffering.
 static OUTPUT_BUFFER: BBBuffer<1024> = BBBuffer::new();
 
+const ROOT_MENU: menu::Menu<Context> = menu::Menu {
+    label: "root",
+    items: &[
+        &menu::Item {
+            command: "reset",
+            help: Some("Resets the device"),
+            item_type: menu::ItemType::Callback {
+                function: handle_reset,
+                parameters: &[],
+            },
+        },
+        &menu::Item {
+            command: "dfu",
+            help: Some("Resets the device into DFU mode for firmware upgrade"),
+            item_type: menu::ItemType::Callback {
+                function: handle_dfu,
+                parameters: &[],
+            },
+        },
+        &menu::Item {
+            command: "service",
+            help: Some("Read the device service information. Service information clears once read"),
+            item_type: menu::ItemType::Callback {
+                function: handle_service,
+                parameters: &[],
+            },
+        },
+        &menu::Item {
+            command: "read",
+            help: Some("Read a property from the device"),
+            item_type: menu::ItemType::Callback {
+                function: handle_property_read,
+                parameters: &[menu::Parameter::Optional {
+                    parameter_name: "property",
+                    help: Some(
+                        "The name of the property to read.
+
+Note:
+* If a property is not specified, all properties are read.
+
+Available Properties:
+* id: The MQTT ID of the device
+* mac: The MAC address of the device
+* broker-address: The MQTT broker IP address
+* gateway: The internet gateway address (Unused when DHCP is enabled)
+* ip-address: The static IP address of Booster (0.0.0.0 indicates DHCP usage)
+* netmask: The netmask to use when DHCP is disabled
+* fan: The duty cycle of fans when channels are enabled",
+                    ),
+                }],
+            },
+        },
+        &menu::Item {
+            command: "write",
+            help: Some(
+                "Updates the value of a property on the device.
+
+Notes:
+* Netmasks must contain only leading data. E.g. 255.255.0.0
+* Fan speeds specify the default fan speed duty cycle, and is specified as [0, 1.0]
+* MQTT client IDs must be 23 or less ASCII characters.
+
+Examples:
+    # Use DHCP for IP address allocation
+    write ip-address 0.0.0.0
+
+    # Set fans to 45% duty cycle
+    write fan 0.45
+
+    # Update the Booster MQTT ID
+    write id my-booster
+",
+            ),
+            item_type: menu::ItemType::Callback {
+                function: handle_property_write,
+                parameters: &[
+                    menu::Parameter::Mandatory {
+                        parameter_name: "property",
+                        help: Some(
+                            "The name of the property to write.
+
+May be one of:
+* [broker-address, gateway, ip-address, netmask] <IP>
+* id <ID>
+* fan <DUTY>
+",
+                        ),
+                    },
+                    menu::Parameter::Mandatory {
+                        parameter_name: "value",
+                        help: Some(
+                            "Specifies the value to be written to the property.
+
+The format of the value depends on the property to be written.
+
+Examples:
+* <IP>: 192.168.1.1
+* <ID>: my-booster
+* <DUTY>: 0.45
+",
+                        ),
+                    },
+                ],
+            },
+        },
+    ],
+    entry: None,
+    exit: None,
+};
+
+struct OutputBuffer(bbqueue::Producer<'static, 1024>);
+
+impl OutputBuffer {
+    pub fn write(&mut self, data: &[u8]) {
+        // If we overflow the output buffer, allow the write to be silently truncated. The issue
+        // will likely be cleared up as data is processed.
+        let Ok(mut grant) = self
+            .0
+            .grant_exact(data.len() + data.iter().filter(|&x| *x == b'\n').count())
+            .or_else(|_| self.0.grant_max_remaining(data.len()))
+        else {
+            return;
+        };
+
+        let buf = grant.buf();
+        let mut buf_iter = buf.iter_mut();
+
+        // Copy the data into the outbound buffer. For each Newline encounteded, append a
+        // carriage return to support formating in raw terminals such as Putty.
+        for val in data.iter() {
+            if let Some(pos) = buf_iter.next() {
+                *pos = *val;
+            }
+
+            if *val == b'\n' {
+                if let Some(pos) = buf_iter.next() {
+                    *pos = b'\r';
+                }
+            }
+        }
+
+        let length = {
+            // Count returns the remaining number of positions, which is nominally zero.
+            // The length of the amount of data we pushed into the iterator is thus the
+            // original buffer length minus the remaining items.
+            let remainder = buf_iter.count();
+            buf.len() - remainder
+        };
+        grant.commit(length);
+    }
+}
+
+impl core::fmt::Write for OutputBuffer {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.write(s.as_bytes());
+        Ok(())
+    }
+}
+
+struct Context {
+    output_buffer: OutputBuffer,
+    metadata: &'static crate::hardware::metadata::ApplicationMetadata,
+    settings: BoosterSettings,
+}
+
+impl Context {
+    pub fn write(&mut self, data: &[u8]) {
+        self.output_buffer.write(data)
+    }
+}
+
+impl core::fmt::Write for Context {
+    /// Write data to the serial terminal.
+    ///
+    /// # Note
+    /// The terminal uses an internal buffer. Overflows of the output buffer are silently ignored.
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.output_buffer.write_str(s)
+    }
+}
+
+fn handle_reset<'a>(
+    _menu: &menu::Menu<Context>,
+    _item: &menu::Item<Context>,
+    _args: &[&str],
+    _context: &mut Context,
+) {
+    // Power off all output channels and reset the MCU.
+    cortex_m::interrupt::disable();
+    platform::shutdown_channels();
+    cortex_m::peripheral::SCB::sys_reset();
+}
+
+fn handle_dfu<'a>(
+    _menu: &menu::Menu<Context>,
+    _item: &menu::Item<Context>,
+    _args: &[&str],
+    _context: &mut Context,
+) {
+    cortex_m::interrupt::disable();
+
+    // Power off all output channels and reset the MCU.
+    platform::shutdown_channels();
+
+    platform::reset_to_dfu_bootloader();
+}
+
+fn handle_service<'a>(
+    _menu: &menu::Menu<Context>,
+    _item: &menu::Item<Context>,
+    _args: &[&str],
+    context: &mut Context,
+) {
+    writeln!(
+        context,
+        "{:<20}: {} [{}]",
+        "Version", context.metadata.firmware_version, context.metadata.profile,
+    )
+    .unwrap();
+    writeln!(
+        context,
+        "{:<20}: {}",
+        "Hardware Revision", context.metadata.hardware_version
+    )
+    .unwrap();
+    writeln!(
+        context,
+        "{:<20}: {}",
+        "Rustc Version", context.metadata.rust_version
+    )
+    .unwrap();
+    writeln!(context, "{:<20}: {}", "Features", context.metadata.features).unwrap();
+    writeln!(context, "{:<20}: {}", "Detected Phy", context.metadata.phy).unwrap();
+    writeln!(
+        context,
+        "{:<20}: {}",
+        "Panic Info", context.metadata.panic_info
+    )
+    .unwrap();
+    writeln!(
+        context,
+        "{:<20}: {}",
+        "Watchdog Detected", context.metadata.watchdog
+    )
+    .unwrap();
+
+    // Use this as a mechanism for the user to "acknowledge" the service state of
+    // the device. This will allow RF channels to re-enable.
+    platform::clear_reset_flags();
+}
+
+fn handle_property_read<'a>(
+    _menu: &menu::Menu<Context>,
+    item: &menu::Item<Context>,
+    args: &[&str],
+    context: &mut Context,
+) {
+    let property = menu::argument_finder(item, args, "property").unwrap();
+
+    let mut num_printed = 0;
+    if property.map(|prop| prop == "id").unwrap_or(true) {
+        writeln!(context.output_buffer, "id: {}", context.settings.id()).unwrap();
+        num_printed += 1;
+    }
+
+    if property.map(|prop| prop == "mac").unwrap_or(true) {
+        writeln!(context.output_buffer, "mac: {}", context.settings.mac()).unwrap();
+        num_printed += 1;
+    }
+
+    if property
+        .map(|prop| prop == "broker-address")
+        .unwrap_or(true)
+    {
+        writeln!(
+            context.output_buffer,
+            "broker-address: {}",
+            context.settings.broker()
+        )
+        .unwrap();
+        num_printed += 1;
+    }
+
+    if property.map(|prop| prop == "gateway").unwrap_or(true) {
+        writeln!(
+            context.output_buffer,
+            "gateway: {}",
+            context.settings.broker()
+        )
+        .unwrap();
+        num_printed += 1;
+    }
+
+    if property.map(|prop| prop == "ip-address").unwrap_or(true) {
+        writeln!(
+            context.output_buffer,
+            "ip-address: {}",
+            context.settings.ip_address()
+        )
+        .unwrap();
+        num_printed += 1;
+    }
+
+    if property.map(|prop| prop == "netmask").unwrap_or(true) {
+        writeln!(
+            context.output_buffer,
+            "netmask: {}",
+            context.settings.netmask()
+        )
+        .unwrap();
+        num_printed += 1;
+    }
+
+    if property.map(|prop| prop == "fan").unwrap_or(true) {
+        writeln!(
+            context.output_buffer,
+            "fan: {:.2} %",
+            context.settings.fan_speed() * 100.0
+        )
+        .unwrap();
+        num_printed += 1;
+    }
+
+    if num_printed == 0 {
+        // Note: Unwrap. If property is None, we should have printed something.
+        writeln!(
+            context,
+            "Unknown property specified: `{}`",
+            property.unwrap()
+        )
+        .unwrap();
+    }
+}
+
+fn handle_property_write<'a>(
+    _menu: &menu::Menu<Context>,
+    item: &menu::Item<Context>,
+    args: &[&str],
+    context: &mut Context,
+) {
+    let value = menu::argument_finder(item, args, "value").unwrap().unwrap();
+    match menu::argument_finder(item, args, "property")
+        .unwrap()
+        .unwrap()
+    {
+        "broker-address" => match value.parse() {
+            Ok(value) => context.settings.set_broker(value),
+            Err(e) => writeln!(context, "Invalid IP: {:?}", e).unwrap(),
+        },
+        "gateway" => match value.parse() {
+            Ok(value) => context.settings.set_gateway(value),
+            Err(e) => writeln!(context, "Invalid IP: {:?}", e).unwrap(),
+        },
+        "ip-address" => match value.parse() {
+            Ok(value) => context.settings.set_ip_address(value),
+            Err(e) => writeln!(context, "Invalid IP: {:?}", e).unwrap(),
+        },
+        "netmask" => match value.parse() {
+            Ok(value) => context.settings.set_netmask(value),
+            Err(e) => writeln!(context, "Invalid IP: {:?}", e).unwrap(),
+        },
+        "id" => {
+            if context.settings.set_id(value).is_err() {
+                writeln!(
+                    context,
+                    "The provided ID is invalid.
+It may only be 23 characters or less and contain alphanumeric characters (or '-')"
+                )
+                .unwrap();
+            }
+        }
+        "fan" => match value.parse() {
+            Ok(value) => context.settings.set_fan_speed(value),
+            Err(e) => writeln!(context, "{:?}", e).unwrap(),
+        },
+        other => {
+            writeln!(context,
+                "Unknown property: `{}`. Available options: [broker-address, gateway, ip-address, netmask, id, fan]", other).unwrap();
+        }
+    }
+
+    // Warn the user if there are settings in memory that differ from those that are
+    // currently operating.
+    if context.settings.are_dirty() {
+        writeln!(
+            context,
+            "Settings in memory may differ from currently operating settings. \
+Reset the device to apply settings."
+        )
+        .unwrap();
+    }
+}
+
 /// A serial terminal for allowing the user to interact with Booster over USB.
 pub struct SerialTerminal {
-    settings: BoosterSettings,
     usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
     usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
-    input_buffer: Vec<u8, 128>,
-    output_buffer_producer: bbqueue::Producer<'static, 1024>,
+    menu: menu::Runner<'static, Context>,
     output_buffer_consumer: bbqueue::Consumer<'static, 1024>,
-    metadata: &'static crate::hardware::metadata::ApplicationMetadata,
+    prompted: bool,
 }
 
 impl SerialTerminal {
@@ -141,146 +422,19 @@ impl SerialTerminal {
         metadata: &'static crate::hardware::metadata::ApplicationMetadata,
     ) -> Self {
         let (producer, consumer) = OUTPUT_BUFFER.try_split().unwrap();
-        Self {
+        let context = Context {
             settings,
+            output_buffer: OutputBuffer(producer),
+            metadata,
+        };
+
+        let input_buffer = cortex_m::singleton!(: [u8; 128] = [0; 128]).unwrap();
+        Self {
             usb_device,
             usb_serial,
-            input_buffer: Vec::new(),
-            output_buffer_producer: producer,
+            menu: menu::Runner::new(&ROOT_MENU, input_buffer, context),
             output_buffer_consumer: consumer,
-            metadata,
-        }
-    }
-
-    /// Poll the serial terminal and process any necessary updates.
-    pub fn process(&mut self) {
-        if let Some(request) = self.poll() {
-            match request {
-                Request::Help => self.print_help(),
-
-                Request::Reset => {
-                    // Power off all output channels and reset the MCU.
-                    cortex_m::interrupt::disable();
-                    platform::shutdown_channels();
-                    cortex_m::peripheral::SCB::sys_reset();
-                }
-
-                Request::ResetBootloader => {
-                    cortex_m::interrupt::disable();
-
-                    // Power off all output channels and reset the MCU.
-                    platform::shutdown_channels();
-
-                    platform::reset_to_dfu_bootloader();
-                }
-
-                Request::ServiceInfo => {
-                    let mut msg: String<256> = String::new();
-                    writeln!(
-                        &mut msg,
-                        "{:<20}: {} [{}]",
-                        "Version", self.metadata.firmware_version, self.metadata.profile,
-                    )
-                    .unwrap_or_else(|_| {
-                        msg = String::from("Version: too long");
-                    });
-                    self.write(msg.as_bytes());
-
-                    msg.clear();
-                    writeln!(
-                        &mut msg,
-                        "{:<20}: {}",
-                        "Hardware Revision", self.metadata.hardware_version
-                    )
-                    .unwrap_or_else(|_| {
-                        msg = String::from("Hardware version: too long");
-                    });
-                    self.write(msg.as_bytes());
-
-                    msg.clear();
-                    writeln!(
-                        &mut msg,
-                        "{:<20}: {}",
-                        "Rustc Version", self.metadata.rust_version,
-                    )
-                    .unwrap_or_else(|_| {
-                        msg = String::from("Rustc Version: too long");
-                    });
-                    self.write(msg.as_bytes());
-
-                    msg.clear();
-                    writeln!(&mut msg, "{:<20}: {}", "Features", self.metadata.features)
-                        .unwrap_or_else(|_| {
-                            msg = String::from("Features: too long");
-                        });
-                    self.write(msg.as_bytes());
-
-                    msg.clear();
-                    writeln!(&mut msg, "{:<20}: {}", "Detected Phy", self.metadata.phy)
-                        .unwrap_or_else(|_| {
-                            msg = String::from("Detected Phy: too long");
-                        });
-                    self.write(msg.as_bytes());
-
-                    msg.clear();
-                    // Note(unwrap): The msg size is long enough to always contain the provided
-                    // string.
-                    write!(&mut msg, "{:<20}: ", "Panic Info").unwrap();
-                    self.write(msg.as_bytes());
-                    self.write(self.metadata.panic_info.as_bytes());
-                    self.write("\n".as_bytes());
-
-                    msg.clear();
-                    // Note(unwrap): The msg size is long enough to be sufficient for all possible
-                    // formats.
-                    writeln!(
-                        &mut msg,
-                        "{:<20}: {}",
-                        "Watchdog Detected", self.metadata.watchdog
-                    )
-                    .unwrap();
-                    self.write(msg.as_bytes());
-
-                    // Use this as a mechanism for the user to "acknowledge" the service state of
-                    // the device. This will allow RF channels to re-enable.
-                    platform::clear_reset_flags();
-                }
-
-                Request::WriteIpAddress(prop, addr) => match prop {
-                    Property::BrokerAddress => self.settings.set_broker(addr),
-                    Property::Gateway => self.settings.set_gateway(addr),
-                    Property::Netmask => self.settings.set_netmask(addr),
-                    Property::IpAddress => self.settings.set_ip_address(addr),
-                    _ => self.write("Invalid property write\n".as_bytes()),
-                },
-
-                Request::WriteIdentifier(id) => {
-                    if self.settings.set_id(id.as_str()).is_err() {
-                        self.write("Invalid identifier\n".as_bytes());
-                    }
-                }
-
-                Request::WriteFanSpeed(speed) => {
-                    self.settings.set_fan_speed(speed);
-                }
-
-                Request::Read(prop) => {
-                    let msg = get_property_string(prop, &self.settings);
-                    self.write(msg.as_bytes());
-                }
-            }
-
-            // Warn the user if there are settings in memory that differ from those that are
-            // currently operating.
-            if self.settings.are_dirty() {
-                self.write(
-                    "Settings in memory may differ from currently operating settings. \
-                           Reset the device to apply settings.\n"
-                        .as_bytes(),
-                );
-            }
-
-            self.reset();
+            prompted: false,
         }
     }
 
@@ -300,116 +454,51 @@ impl SerialTerminal {
                 read.release(0);
             }
             Err(_) => {
-                self.input_buffer.clear();
                 let len = read.buf().len();
                 read.release(len);
             }
         };
     }
 
-    /// Write data to the serial terminal.
-    ///
-    /// # Note
-    /// The terminal uses an internal buffer. Overflows of the output buffer are silently ignored.
     pub fn write(&mut self, data: &[u8]) {
-        // If we overflow the output buffer, allow the write to be silently truncated. The issue
-        // will likely be cleared up as data is processed.
-        match self
-            .output_buffer_producer
-            .grant_exact(data.len() + data.iter().filter(|&x| *x == b'\n').count())
-            .or_else(|_| self.output_buffer_producer.grant_max_remaining(data.len()))
-        {
-            Ok(mut grant) => {
-                let buf = grant.buf();
-                let mut buf_iter = buf.iter_mut();
-
-                // Copy the data into the outbound buffer. For each Newline encounteded, append a
-                // carriage return to support formating in raw terminals such as Putty.
-                for val in data.iter() {
-                    if let Some(pos) = buf_iter.next() {
-                        *pos = *val;
-                    }
-
-                    if *val == b'\n' {
-                        if let Some(pos) = buf_iter.next() {
-                            *pos = b'\r';
-                        }
-                    }
-                }
-
-                let length = {
-                    // Count returns the remaining number of positions, which is nominally zero.
-                    // The length of the amount of data we pushed into the iterator is thus the
-                    // original buffer length minus the remaining items.
-                    let remainder = buf_iter.count();
-                    buf.len() - remainder
-                };
-                grant.commit(length);
-            }
-            Err(_) => return,
-        };
-
-        self.flush();
+        self.menu.context.write(data);
     }
 
-    /// Poll the serial interface for any pending requests from the user.
-    fn poll(&mut self) -> Option<Request> {
-        // Update the USB serial port.
-        if !self.usb_device.poll(&mut [&mut self.usb_serial]) {
-            return None;
+    /// Poll the serial terminal and process any necessary updates.
+    pub fn process(&mut self) {
+        self.flush();
+
+        if !self.usb_serial.dtr() {
+            self.prompted = false;
         }
 
-        // Attempt to flush the output buffer.
-        self.flush();
+        if self.usb_serial.dtr() && !self.prompted {
+            self.menu.prompt(true);
+            self.prompted = true;
+        }
+
+        // Update the USB serial port.
+        if !self.usb_device.poll(&mut [&mut self.usb_serial]) {
+            return;
+        }
 
         // Consume data from the serial port.
         let mut buffer = [0u8; 64];
         match self.usb_serial.read(&mut buffer) {
             Ok(count) => {
                 for &value in &buffer[..count] {
-                    // Interpret the DEL and BS characters as a request to delete the most recently
-                    // provided value. This supports Putty and TeraTerm defaults.
-                    if value == b'\x08' || value == b'\x7F' {
-                        // If there was previously data in the buffer, go back one, print an empty
-                        // space, and then go back again to clear out the character on the user's
-                        // screen.
-                        if self.input_buffer.pop().is_some() {
-                            // Note: we use this sequence because not all terminal emulators
-                            // support the DEL character.
-                            self.write(b"\x08 \x08");
-                        }
-                        continue;
-                    }
-
-                    // If we're echoing a CR, send a linefeed as well.
-                    if value == b'\r' {
-                        self.write(b"\n");
-                    }
-
-                    self.write(&[value]);
-
-                    if self.input_buffer.push(value).is_err() {
-                        // Make a best effort to inform the user of the overflow.
-                        self.write("[!] Buffer overflow\n".as_bytes());
-                        self.reset();
-                        return None;
-                    }
+                    self.menu.input_byte(value);
                 }
-
-                self.parse_buffer().unwrap_or_else(|msg| {
-                    self.write(msg.as_bytes());
-                    self.print_help();
-                    self.reset();
-                    None
-                })
             }
             // If there's no data available, don't process anything.
-            Err(UsbError::WouldBlock) => None,
+            Err(UsbError::WouldBlock) => {}
 
             // If USB encountered an error, it's likely the port was disconnected. Reset our
             // buffers.
             Err(_) => {
-                self.input_buffer.clear();
+                // TODO: Does this reset the menu linefeeder?
+                self.menu.prompt(true);
+
                 self.output_buffer_consumer
                     .read()
                     .map(|grant| {
@@ -417,127 +506,7 @@ impl SerialTerminal {
                         grant.release(len);
                     })
                     .ok();
-                None
             }
-        }
-    }
-
-    fn reset(&mut self) {
-        self.input_buffer.clear();
-        self.write("\n> ".as_bytes());
-    }
-
-    fn print_help(&mut self) {
-        self.write(
-            "\n
-+----------------------+
-| Booster Command Help :
-+----------------------+
-* `reset` - Resets the device
-* `service` - Read the service information. Service infromation clears once read.
-* `dfu` - Resets the device to DFU mode
-* `read <PROP>` - Reads the value of <PROP>. <PROP> may be:
-    - [broker-address, mac, id, fan, ip-address, netmask, gateway]
-* `write [broker-address <IP> | gateway <IP> | ip-address <IP> | netmask <IP> | id <ID> | fan <DUTY>]
-    - Writes the value of <IP> to the broker address, static IP, or gateway.
-        * An `ip-address` of 0.0.0.0 will use DHCP
-        * <IP> must be an IP address (e.g.  192.168.1.1)
-        * Netmasks must contain only leading data. E.g. 255.255.0.0
-    - Write the MQTT client ID of the device. <ID> must be 23 or less ASCII characters.
-    - Write the <DUTY> default fan speed duty cycle, which is specified [0, 1.0].
-"
-            .as_bytes(),
-        );
-    }
-
-    fn parse_buffer(&self) -> Result<Option<Request>, &'static str> {
-        // If there's a line available in the buffer, parse it as a command.
-        let mut lex = {
-            if let Some(pos) = self
-                .input_buffer
-                .iter()
-                .position(|&c| c == b'\n' || c == b'\r')
-            {
-                // Attempt to convert the slice to a string.
-                let line =
-                    core::str::from_utf8(&self.input_buffer[..pos]).map_err(|_| "Invalid bytes")?;
-                Token::lexer(line)
-            } else {
-                // If there's no line available for parsing yet, there's no command to parse.
-                return Ok(None);
-            }
-        };
-
-        let command = lex.next().ok_or("Invalid command")?;
-        let request = match command {
-            Token::Reset => Request::Reset,
-            Token::Dfu => Request::ResetBootloader,
-            Token::Help => Request::Help,
-            Token::ServiceInfo => Request::ServiceInfo,
-            Token::Read => {
-                // Validate that there is one valid token following.
-                let property_token = lex.next().ok_or("Malformed command")?;
-
-                // Check that the property is acceptable for a read.
-                let property = match property_token.try_into() {
-                    Ok(prop) => prop,
-                    _ => return Err("Invalid property read"),
-                };
-
-                Request::Read(property)
-            }
-            Token::Write => {
-                // Check that the property is acceptable for a write.
-                match lex.next().ok_or("Malformed command")? {
-                    token @ Token::BrokerAddress
-                    | token @ Token::StaticIpAddress
-                    | token @ Token::Gateway
-                    | token @ Token::Netmask => {
-                        if let Token::IpAddress(addr) = lex.next().ok_or("Malformed address")? {
-                            Request::WriteIpAddress(token.try_into().unwrap(), addr)
-                        } else {
-                            return Err("Invalid property");
-                        }
-                    }
-                    Token::Identifier => {
-                        if let Token::DeviceIdentifier = lex.next().ok_or("Malformed ID")? {
-                            if lex.slice().len() < 23 {
-                                // The regex on this capture allow us to assume it is valid utf8, since
-                                // we know it is alphanumeric.
-                                let id: String<32> = String::from_str(
-                                    core::str::from_utf8(lex.slice().as_bytes()).unwrap(),
-                                )
-                                .unwrap();
-
-                                Request::WriteIdentifier(id)
-                            } else {
-                                return Err("ID too long");
-                            }
-                        } else {
-                            return Err("Invalid property");
-                        }
-                    }
-                    Token::FanSpeed => {
-                        let fan_speed: f32 = lex
-                            .remainder()
-                            .trim()
-                            .parse()
-                            .map_err(|_| "Invalid float")?;
-                        lex.bump(lex.remainder().len());
-                        Request::WriteFanSpeed(fan_speed)
-                    }
-                    _ => return Err("Invalid property write"),
-                }
-            }
-            _ => return Err("Invalid command"),
-        };
-
-        // Finally, verify that the lexer was consumed during parsing. Otherwise, the command
-        // was malformed.
-        if lex.next().is_some() {
-            Err("Malformed command - trailing data\n")
-        } else {
-            Ok(Some(request))
         }
     }
 }
