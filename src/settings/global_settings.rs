@@ -31,19 +31,23 @@ fn identifier_is_valid(id: &str) -> bool {
 #[derive(DeserializeFromStr, Copy, Clone, Debug)]
 pub struct IpAddr(pub smoltcp_nal::smoltcp::wire::Ipv4Address);
 
+impl Serialize for IpAddr {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut display: String<16> = String::new();
+        write!(&mut display, "{}", self).unwrap();
+        serializer.serialize_str(&display)
+    }
+}
+
 impl encdec::Encode for IpAddr {
     type Error = encdec::Error;
 
     fn encode_len(&self) -> Result<usize, Self::Error> {
-        Ok(4)
+        Ok(self.0 .0.len())
     }
 
     fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
-        if buff.len() < 4 {
-            return Err(encdec::Error::Length);
-        }
-        buff[..4].copy_from_slice(&self.0 .0);
-        Ok(4)
+        self.0 .0.encode(buff)
     }
 }
 
@@ -52,11 +56,8 @@ impl encdec::DecodeOwned for IpAddr {
     type Error = encdec::Error;
 
     fn decode_owned(buff: &[u8]) -> Result<(Self::Output, usize), Self::Error> {
-        if buff.len() < 4 {
-            return Err(encdec::Error::Length);
-        }
-
-        Ok((Self::new(&buff[..4]), 4))
+        let (data, size) = <[u8; 4]>::decode_owned(buff)?;
+        Ok((Self::new(&data[..]), size))
     }
 }
 
@@ -68,7 +69,7 @@ impl encdec::Encode for MqttIdentifier {
     type Error = encdec::Error;
 
     fn encode_len(&self) -> Result<usize, Self::Error> {
-        Ok(27)
+        Ok(self.0.capacity())
     }
 
     fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
@@ -96,14 +97,6 @@ impl encdec::DecodeOwned for MqttIdentifier {
         let string = core::str::from_utf8(&buff[..len]).map_err(|_| encdec::Error::Utf8)?;
 
         Ok((MqttIdentifier(String::from(string)), 27))
-    }
-}
-
-impl Serialize for IpAddr {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut display: String<16> = String::new();
-        write!(&mut display, "{}", self).unwrap();
-        serializer.serialize_str(&display)
     }
 }
 
