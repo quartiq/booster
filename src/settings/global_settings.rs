@@ -43,11 +43,11 @@ impl encdec::Encode for IpAddr {
     type Error = encdec::Error;
 
     fn encode_len(&self) -> Result<usize, Self::Error> {
-        Ok(self.0 .0.len())
+        Ok(self.0.0.len())
     }
 
     fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
-        self.0 .0.encode(buff)
+        self.0.0.encode(buff)
     }
 }
 
@@ -69,7 +69,7 @@ impl encdec::Encode for MqttIdentifier {
     type Error = encdec::Error;
 
     fn encode_len(&self) -> Result<usize, Self::Error> {
-        Ok(self.0.capacity())
+        Ok(self.0.capacity() + core::mem::size_of<u32>())
     }
 
     fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
@@ -99,6 +99,7 @@ impl encdec::DecodeOwned for MqttIdentifier {
         Ok((MqttIdentifier(String::from(string)), 27))
     }
 }
+
 
 impl IpAddr {
     pub fn new(bytes: &[u8]) -> Self {
