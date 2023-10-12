@@ -64,10 +64,10 @@ pub fn setup(
 ) {
     let net_store = cortex_m::singleton!(: NetStorage = NetStorage::new()).unwrap();
 
-    let ip_address = settings.ip_address();
+    let ip_address = settings.properties.ip_cidr();
 
     let mut config =
-        smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(settings.mac()));
+        smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(settings.mac));
     config.random_seed = random_seed;
 
     let mut interface =
@@ -75,7 +75,7 @@ pub fn setup(
 
     interface
         .routes_mut()
-        .add_default_ipv4_route(settings.gateway())
+        .add_default_ipv4_route(settings.properties.gateway.0)
         .unwrap();
 
     let mut sockets = smoltcp::iface::SocketSet::new(&mut net_store.sockets[..]);

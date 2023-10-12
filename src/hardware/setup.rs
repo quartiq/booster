@@ -342,7 +342,7 @@ pub fn setup(
 
             let w5500 = w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
                 .initialize_macraw(w5500::MacAddress {
-                    octets: settings.mac().0,
+                    octets: settings.mac.0,
                 })
                 .unwrap();
 
@@ -350,7 +350,7 @@ pub fn setup(
         } else {
             let mut mac = enc424j600::Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
             mac.init(&mut delay).expect("PHY initialization failed");
-            mac.write_mac_addr(settings.mac().as_bytes()).unwrap();
+            mac.write_mac_addr(settings.mac.as_bytes()).unwrap();
 
             Mac::Enc424j600(mac)
         }
@@ -409,7 +409,11 @@ pub fn setup(
             max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pullup)
                 .unwrap();
 
-        ChassisFans::new([fan1, fan2, fan3], main_board_leds, settings.fan_speed())
+        ChassisFans::new(
+            [fan1, fan2, fan3],
+            main_board_leds,
+            settings.properties.fan_speed,
+        )
     };
 
     assert!(fans.self_test(&mut delay));
@@ -442,7 +446,7 @@ pub fn setup(
         {
             let mut serial_string: String<64> = String::new();
 
-            let octets = settings.mac().0;
+            let octets = settings.mac.0;
 
             write!(
                 &mut serial_string,
