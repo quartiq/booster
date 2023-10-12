@@ -39,15 +39,36 @@ impl Serialize for IpAddr {
     }
 }
 
+impl IpAddr {
+    pub fn new(bytes: &[u8]) -> Self {
+        Self(smoltcp::wire::Ipv4Address::from_bytes(bytes))
+    }
+}
+
+impl core::str::FromStr for IpAddr {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let addr = smoltcp::wire::Ipv4Address::from_str(s).map_err(|_| "Invalid IP format")?;
+        Ok(Self(addr))
+    }
+}
+
+impl core::fmt::Display for IpAddr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl encdec::Encode for IpAddr {
     type Error = encdec::Error;
 
     fn encode_len(&self) -> Result<usize, Self::Error> {
-        Ok(self.0.0.len())
+        Ok(self.0 .0.len())
     }
 
     fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
-        self.0.0.encode(buff)
+        self.0 .0.encode(buff)
     }
 }
 
@@ -69,7 +90,7 @@ impl encdec::Encode for MqttIdentifier {
     type Error = encdec::Error;
 
     fn encode_len(&self) -> Result<usize, Self::Error> {
-        Ok(self.0.capacity() + core::mem::size_of<u32>())
+        Ok(self.0.capacity() + core::mem::size_of::<u32>())
     }
 
     fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
@@ -97,28 +118,6 @@ impl encdec::DecodeOwned for MqttIdentifier {
         let string = core::str::from_utf8(&buff[..len]).map_err(|_| encdec::Error::Utf8)?;
 
         Ok((MqttIdentifier(String::from(string)), 27))
-    }
-}
-
-
-impl IpAddr {
-    pub fn new(bytes: &[u8]) -> Self {
-        Self(smoltcp::wire::Ipv4Address::from_bytes(bytes))
-    }
-}
-
-impl core::str::FromStr for IpAddr {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let addr = smoltcp::wire::Ipv4Address::from_str(s).map_err(|_| "Invalid IP format")?;
-        Ok(Self(addr))
-    }
-}
-
-impl core::fmt::Display for IpAddr {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.0.fmt(f)
     }
 }
 
