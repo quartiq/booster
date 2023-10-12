@@ -285,7 +285,7 @@ impl BoosterSettings {
             .unwrap_or((BoosterMainBoardData::default(&mac), true));
 
         let mut settings = Self {
-            properties: board_data.into(),
+            properties: board_data,
             mac: MacAddress(mac),
             eeprom,
         };
@@ -304,7 +304,7 @@ impl BoosterSettings {
             Ok(config) => config,
         };
 
-        let board_data: BoosterMainBoardData = self.properties.clone().into();
+        let board_data: BoosterMainBoardData = self.properties.clone();
         board_data.serialize_into(&mut config);
         config.update_crc32();
         self.save_config(&config);
