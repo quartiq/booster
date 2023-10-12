@@ -10,7 +10,7 @@ use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
 use smoltcp_nal::smoltcp::wire::EthernetAddress as MacAddress;
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use core::fmt::Write;
 use miniconf::Tree;
@@ -30,6 +30,74 @@ fn identifier_is_valid(id: &str) -> bool {
 
 #[derive(DeserializeFromStr, Copy, Clone, Debug)]
 pub struct IpAddr(pub smoltcp_nal::smoltcp::wire::Ipv4Address);
+
+impl encdec::Encode for IpAddr {
+    type Error = encdec::Error;
+
+    fn encode_len(&self) -> Result<usize, Self::Error> {
+        Ok(4)
+    }
+
+    fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
+        if buff.len() < 4 {
+            return Err(encdec::Error::Length);
+        }
+        buff[..4].copy_from_slice(&self.0 .0);
+        Ok(4)
+    }
+}
+
+impl encdec::DecodeOwned for IpAddr {
+    type Output = IpAddr;
+    type Error = encdec::Error;
+
+    fn decode_owned(buff: &[u8]) -> Result<(Self::Output, usize), Self::Error> {
+        if buff.len() < 4 {
+            return Err(encdec::Error::Length);
+        }
+
+        Ok((Self::new(&buff[..4]), 4))
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct MqttIdentifier(pub String<23>);
+
+impl encdec::Encode for MqttIdentifier {
+    type Error = encdec::Error;
+
+    fn encode_len(&self) -> Result<usize, Self::Error> {
+        Ok(27)
+    }
+
+    fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
+        if buff.len() < 27 {
+            return Err(encdec::Error::Length);
+        }
+        let id_bytes = self.0.as_bytes();
+        buff[..id_bytes.len()].copy_from_slice(id_bytes);
+        let len = id_bytes.len() as u32;
+        len.encode(&mut buff[23..])?;
+        Ok(27)
+    }
+}
+
+impl encdec::DecodeOwned for MqttIdentifier {
+    type Output = MqttIdentifier;
+    type Error = encdec::Error;
+
+    fn decode_owned(buff: &[u8]) -> Result<(Self::Output, usize), Self::Error> {
+        if buff.len() < 27 {
+            return Err(encdec::Error::Length);
+        }
+
+        let len = u32::decode_owned(&buff[23..])?.0 as usize;
+        let string = core::str::from_utf8(&buff[..len]).map_err(|_| encdec::Error::Utf8)?;
+
+        Ok((MqttIdentifier(String::from(string)), 27))
+    }
+}
 
 impl Serialize for IpAddr {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -60,19 +128,97 @@ impl core::fmt::Display for IpAddr {
     }
 }
 
-#[derive(Tree, Clone, Debug)]
-pub struct Properties {
+/// Represents booster mainboard-specific configuration values.
+#[derive(Debug, Clone, Tree, Encode, DecodeOwned)]
+pub struct BoosterMainBoardData {
+    #[tree(skip)]
+    version: SemVersion,
+
     pub ip: IpAddr,
-    pub netmask: IpAddr,
-    pub gateway: IpAddr,
     pub broker: IpAddr,
+    pub gateway: IpAddr,
+    pub netmask: IpAddr,
+    pub id: MqttIdentifier,
     pub fan_speed: f32,
-    pub id: String<23>,
 }
 
-impl Properties {
+impl BoosterMainBoardData {
+    /// Generate default booster configuration data given the device EUI48.
+    ///
+    /// # Args
+    /// * `eui48` - The EUI48 identifier of the booster mainboard.
+    pub fn default(eui48: &[u8; 6]) -> Self {
+        let mut name: String<23> = String::new();
+        write!(
+            &mut name,
+            "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
+            eui48[0], eui48[1], eui48[2], eui48[3], eui48[4], eui48[5]
+        )
+        .unwrap();
+
+        let mut id: [u8; 23] = [0; 23];
+        id[..name.len()].copy_from_slice(name.as_str().as_bytes());
+
+        Self {
+            version: EXPECTED_VERSION,
+            ip: IpAddr::new(&[0, 0, 0, 0]),
+            broker: IpAddr::new(&[10, 0, 0, 2]),
+            gateway: IpAddr::new(&[0, 0, 0, 0]),
+            netmask: IpAddr::new(&[0, 0, 0, 0]),
+            id: MqttIdentifier(name),
+            fan_speed: DEFAULT_FAN_SPEED,
+        }
+    }
+
+    /// Construct booster configuration data from serialized `board_data` from a
+    /// SinaraConfiguration.
+    ///
+    /// # Args
+    /// * `data` - The data to deserialize from.
+    ///
+    /// # Returns
+    /// The configuration if deserialization was successful along with a bool indicating if the
+    /// configuration was automatically upgraded. Otherwise, returns an error.
+    pub fn deserialize(data: &[u8; 64]) -> Result<(Self, bool), Error> {
+        let (mut config, _) = BoosterMainBoardData::decode_owned(data).unwrap();
+        let mut modified = false;
+
+        // Check if the stored EEPROM version is older (or incompatible)
+        if !EXPECTED_VERSION.is_compatible_with(&config.version) {
+            // If the stored config is compatible with the new version (e.g. older), we can upgrade
+            // the config version in a backward compatible manner by adding in new parameters and
+            // writing it back.
+            if config.version.is_compatible_with(&EXPECTED_VERSION) {
+                log::info!("Adding default fan speed setting");
+                config.fan_speed = DEFAULT_FAN_SPEED;
+                config.version = EXPECTED_VERSION;
+                modified = true;
+            } else {
+                // The version stored in EEPROM is some future version that we don't understand.
+                return Err(Error::Invalid);
+            }
+        }
+
+        // Validate configuration parameters.
+        if !identifier_is_valid(&config.id.0) {
+            return Err(Error::Invalid);
+        }
+
+        Ok((config, modified))
+    }
+
+    /// Serialize the booster config into a sinara configuration for storage into EEPROM.
+    ///
+    /// # Args
+    /// * `config` - The sinara configuration to serialize the booster configuration into.
+    pub fn serialize_into(&self, config: &mut SinaraConfiguration) {
+        let mut buffer: [u8; 64] = [0; 64];
+        let len = self.encode(&mut buffer).unwrap();
+        config.board_data[..len].copy_from_slice(&buffer[..len]);
+    }
+
     pub fn validate(&self) -> bool {
-        if !identifier_is_valid(&self.id) {
+        if !identifier_is_valid(&self.id.0) {
             log::error!("The ID must be 23 or less alpha-numeric characters (or '-')");
             return false;
         }
@@ -117,139 +263,9 @@ impl Properties {
     }
 }
 
-impl From<BoosterMainBoardData> for Properties {
-    fn from(data: BoosterMainBoardData) -> Self {
-        Self {
-            ip: IpAddr::new(&data.ip_address),
-            netmask: IpAddr::new(&data.netmask),
-            gateway: IpAddr::new(&data.gateway),
-            broker: IpAddr::new(&data.broker_address),
-            fan_speed: data.fan_speed,
-            // Note(unwrap): We checked for valid UTF8 previously when constructing the board data.
-            id: String::from(core::str::from_utf8(data.id()).unwrap()),
-        }
-    }
-}
-
-impl From<Properties> for BoosterMainBoardData {
-    fn from(props: Properties) -> Self {
-        let mut identifier = [0u8; 23];
-
-        let id_bytes = props.id.as_bytes();
-        identifier[..id_bytes.len()].copy_from_slice(id_bytes);
-
-        BoosterMainBoardData {
-            version: EXPECTED_VERSION,
-            broker_address: props.broker.0 .0,
-            ip_address: props.ip.0 .0,
-            gateway: props.gateway.0 .0,
-            netmask: props.netmask.0 .0,
-            fan_speed: props.fan_speed,
-            identifier,
-            id_size: id_bytes.len() as u32,
-        }
-    }
-}
-
-/// Represents booster mainboard-specific configuration values.
-#[derive(Debug, Encode, DecodeOwned)]
-struct BoosterMainBoardData {
-    version: SemVersion,
-    ip_address: [u8; 4],
-    broker_address: [u8; 4],
-    gateway: [u8; 4],
-    netmask: [u8; 4],
-    identifier: [u8; 23],
-    id_size: u32,
-    fan_speed: f32,
-}
-
-impl BoosterMainBoardData {
-    /// Generate default booster configuration data given the device EUI48.
-    ///
-    /// # Args
-    /// * `eui48` - The EUI48 identifier of the booster mainboard.
-    pub fn default(eui48: &[u8; 6]) -> Self {
-        let mut name: String<23> = String::new();
-        write!(
-            &mut name,
-            "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
-            eui48[0], eui48[1], eui48[2], eui48[3], eui48[4], eui48[5]
-        )
-        .unwrap();
-
-        let mut id: [u8; 23] = [0; 23];
-        id[..name.len()].copy_from_slice(name.as_str().as_bytes());
-
-        Self {
-            version: EXPECTED_VERSION,
-            ip_address: [0, 0, 0, 0],
-            broker_address: [10, 0, 0, 2],
-            gateway: [0, 0, 0, 0],
-            netmask: [0, 0, 0, 0],
-            identifier: id,
-            id_size: name.len() as u32,
-            fan_speed: DEFAULT_FAN_SPEED,
-        }
-    }
-
-    /// Construct booster configuration data from serialized `board_data` from a
-    /// SinaraConfiguration.
-    ///
-    /// # Args
-    /// * `data` - The data to deserialize from.
-    ///
-    /// # Returns
-    /// The configuration if deserialization was successful along with a bool indicating if the
-    /// configuration was automatically upgraded. Otherwise, returns an error.
-    pub fn deserialize(data: &[u8; 64]) -> Result<(Self, bool), Error> {
-        let (mut config, _) = BoosterMainBoardData::decode_owned(data).unwrap();
-        let mut modified = false;
-
-        // Check if the stored EEPROM version is older (or incompatible)
-        if !EXPECTED_VERSION.is_compatible_with(&config.version) {
-            // If the stored config is compatible with the new version (e.g. older), we can upgrade
-            // the config version in a backward compatible manner by adding in new parameters and
-            // writing it back.
-            if config.version.is_compatible_with(&EXPECTED_VERSION) {
-                log::info!("Adding default fan speed setting");
-                config.fan_speed = DEFAULT_FAN_SPEED;
-                config.version = EXPECTED_VERSION;
-                modified = true;
-            } else {
-                // The version stored in EEPROM is some future version that we don't understand.
-                return Err(Error::Invalid);
-            }
-        }
-
-        // Validate configuration parameters.
-        let identifier = core::str::from_utf8(config.id()).map_err(|_| Error::Invalid)?;
-        if !identifier_is_valid(identifier) {
-            return Err(Error::Invalid);
-        }
-
-        Ok((config, modified))
-    }
-
-    /// Get the MQTT identifier of Booster.
-    pub fn id(&self) -> &[u8] {
-        &self.identifier[..self.id_size as usize]
-    }
-
-    /// Serialize the booster config into a sinara configuration for storage into EEPROM.
-    ///
-    /// # Args
-    /// * `config` - The sinara configuration to serialize the booster configuration into.
-    pub fn serialize_into(&self, config: &mut SinaraConfiguration) {
-        let mut buffer: [u8; 64] = [0; 64];
-        let len = self.encode(&mut buffer).unwrap();
-        config.board_data[..len].copy_from_slice(&buffer[..len]);
-    }
-}
-
 /// Booster device-wide configurable settings.
 pub struct BoosterSettings {
-    pub properties: Properties,
+    pub properties: BoosterMainBoardData,
     pub mac: MacAddress,
     eeprom: Eeprom,
 }

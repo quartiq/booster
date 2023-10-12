@@ -48,7 +48,7 @@ usb-device = "0.2.9"
 encdec = { version = "0.9", default-features = false }
 crc-any = { version = "2.4.3", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-miniconf = { git = "https://github.com/quartiq/miniconf", features = ["mqtt-client"]}
+miniconf = { git = "https://github.com/quartiq/miniconf", features = ["mqtt-client"], branch = "feature/skip-support"}
 # Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
 minimq = { git = "https://github.com/quartiq/minimq" }
 w5500 = "0.4.1"
