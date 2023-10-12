@@ -258,7 +258,7 @@ fn handle_property_read(
         match context.settings.properties.get_json(&path, &mut buf) {
             Ok(len) => {
                 let str_prop = core::str::from_utf8(&buf[..len]).unwrap();
-                writeln!(context, "{prop}: {str_prop}").unwrap();
+                writeln!(context, "{prop:<20}: {str_prop}").unwrap();
             }
             Err(e) => writeln!(context, "Failed to retrieve setting: {e:?}").unwrap(),
         }
@@ -278,7 +278,12 @@ fn handle_property_read(
         }
 
         // Print out MAC address
-        writeln!(context.output_buffer, "mac: {}", context.settings.mac).unwrap();
+        writeln!(
+            context.output_buffer,
+            "{:<20}: {}",
+            "mac", context.settings.mac
+        )
+        .unwrap();
     }
 }
 
