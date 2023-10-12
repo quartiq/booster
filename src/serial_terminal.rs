@@ -3,7 +3,7 @@ use super::{
     hardware::{platform, UsbBus},
     BoosterSettings,
 };
-use crate::settings::global_settings::Properties;
+use crate::settings::global_settings::BoosterMainBoardData;
 use bbqueue::BBBuffer;
 use heapless::String;
 use miniconf::{JsonCoreSlash, TreeKey};
@@ -265,7 +265,7 @@ fn handle_property_read(
     } else {
         // Print out all properties
         let mut buf = [0u8; 64];
-        for path in Properties::iter_paths::<String<32>>("/") {
+        for path in BoosterMainBoardData::iter_paths::<String<32>>("/") {
             let path = path.unwrap();
             let len = context
                 .settings
@@ -312,6 +312,7 @@ fn handle_property_write(
         return;
     }
 
+    context.settings.properties = new_props;
     context.settings.save();
     writeln!(
         context,

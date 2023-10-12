@@ -99,7 +99,7 @@ mod app {
                     // TODO: Replace with hostname-based broker.
                     booster.settings.properties.broker(),
                     booster.network_stack,
-                    &booster.settings.properties.id,
+                    &booster.settings.properties.id.0,
                     settings,
                     clock,
                     booster.metadata,
