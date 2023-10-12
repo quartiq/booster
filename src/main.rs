@@ -74,7 +74,7 @@ mod app {
         let mut settings = RuntimeSettings::default();
 
         // Load the default fan speed
-        settings.fan_speed = booster.settings.fan_speed();
+        settings.fan_speed = booster.settings.properties.fan_speed;
 
         for idx in enum_iterator::all::<Channel>() {
             settings.channel[idx as usize] = booster
@@ -97,9 +97,9 @@ mod app {
                 main_bus: booster.main_bus,
                 net_devices: net::NetworkDevices::new(
                     // TODO: Replace with hostname-based broker.
-                    minimq::embedded_nal::IpAddr::V4(booster.settings.broker()),
+                    booster.settings.properties.broker(),
                     booster.network_stack,
-                    booster.settings.id(),
+                    &booster.settings.properties.id,
                     settings,
                     clock,
                     booster.metadata,

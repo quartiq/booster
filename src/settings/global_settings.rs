@@ -3,7 +3,6 @@
 use crate::{hardware::Eeprom, Error};
 use encdec::{Decode, DecodeOwned, Encode};
 use heapless::String;
-use minimq::embedded_nal::Ipv4Addr;
 use smoltcp_nal::smoltcp;
 
 use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
@@ -11,8 +10,11 @@ use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
 use smoltcp_nal::smoltcp::wire::EthernetAddress as MacAddress;
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
+use serde::Serialize;
 
 use core::fmt::Write;
+use miniconf::Tree;
+use serde_with::DeserializeFromStr;
 
 /// The expected semver of the BoosterChannelSettings. This version must be updated whenever the
 /// `BoosterMainBoardData` layout is updated.
@@ -24,6 +26,129 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
 
 fn identifier_is_valid(id: &str) -> bool {
     id.len() <= 23 && id.chars().all(|x| x.is_alphanumeric() || x == '-')
+}
+
+#[derive(DeserializeFromStr, Copy, Clone, Debug)]
+pub struct IpAddr(pub smoltcp_nal::smoltcp::wire::Ipv4Address);
+
+impl Serialize for IpAddr {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut display: String<16> = String::new();
+        write!(&mut display, "{}", self).unwrap();
+        serializer.serialize_str(&display)
+    }
+}
+
+impl IpAddr {
+    pub fn new(bytes: &[u8]) -> Self {
+        Self(smoltcp::wire::Ipv4Address::from_bytes(bytes))
+    }
+}
+
+impl core::str::FromStr for IpAddr {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let addr = smoltcp::wire::Ipv4Address::from_str(s).map_err(|_| "Invalid IP format")?;
+        Ok(Self(addr))
+    }
+}
+
+impl core::fmt::Display for IpAddr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+#[derive(Tree, Clone, Debug)]
+pub struct Properties {
+    pub ip: IpAddr,
+    pub netmask: IpAddr,
+    pub gateway: IpAddr,
+    pub broker: IpAddr,
+    pub fan_speed: f32,
+    pub id: String<23>,
+}
+
+impl Properties {
+    pub fn validate(&self) -> bool {
+        if !identifier_is_valid(&self.id) {
+            log::error!("The ID must be 23 or less alpha-numeric characters (or '-')");
+            return false;
+        }
+
+        if smoltcp::wire::IpAddress::Ipv4(self.netmask.0)
+            .prefix_len()
+            .is_none()
+        {
+            log::error!("Netmasks must contain no trailing bits");
+            return false;
+        }
+
+        true
+    }
+
+    /// Get the IP address of the device.
+    ///
+    /// # Note
+    /// The IP address will be unspecified if DHCP is to be used.
+    pub fn ip_cidr(&self) -> smoltcp::wire::IpCidr {
+        let ip_addr = self.ip.0;
+
+        let prefix = if !ip_addr.is_unspecified() {
+            let netmask = smoltcp::wire::IpAddress::Ipv4(self.netmask.0);
+
+            netmask.prefix_len().unwrap_or_else(|| {
+                log::error!("Invalid netmask found. Assuming no mask.");
+                0
+            })
+        } else {
+            0
+        };
+
+        smoltcp::wire::IpCidr::new(smoltcp::wire::IpAddress::Ipv4(ip_addr), prefix)
+    }
+
+    pub fn broker(&self) -> minimq::embedded_nal::IpAddr {
+        let octets = self.broker.0 .0;
+        minimq::embedded_nal::IpAddr::V4(minimq::embedded_nal::Ipv4Addr::new(
+            octets[0], octets[1], octets[2], octets[3],
+        ))
+    }
+}
+
+impl From<BoosterMainBoardData> for Properties {
+    fn from(data: BoosterMainBoardData) -> Self {
+        Self {
+            ip: IpAddr::new(&data.ip_address),
+            netmask: IpAddr::new(&data.netmask),
+            gateway: IpAddr::new(&data.gateway),
+            broker: IpAddr::new(&data.broker_address),
+            fan_speed: data.fan_speed,
+            // Note(unwrap): We checked for valid UTF8 previously when constructing the board data.
+            id: String::from(core::str::from_utf8(data.id()).unwrap()),
+        }
+    }
+}
+
+impl From<Properties> for BoosterMainBoardData {
+    fn from(props: Properties) -> Self {
+        let mut identifier = [0u8; 23];
+
+        let id_bytes = props.id.as_bytes();
+        identifier[..id_bytes.len()].copy_from_slice(&id_bytes);
+
+        BoosterMainBoardData {
+            version: EXPECTED_VERSION,
+            broker_address: props.broker.0 .0,
+            ip_address: props.ip.0 .0,
+            gateway: props.gateway.0 .0,
+            netmask: props.netmask.0 .0,
+            fan_speed: props.fan_speed,
+            identifier,
+            id_size: id_bytes.len() as u32,
+        }
+    }
 }
 
 /// Represents booster mainboard-specific configuration values.
@@ -124,10 +249,9 @@ impl BoosterMainBoardData {
 
 /// Booster device-wide configurable settings.
 pub struct BoosterSettings {
-    board_data: BoosterMainBoardData,
-    eui48: [u8; 6],
+    pub properties: Properties,
+    pub mac: MacAddress,
     eeprom: Eeprom,
-    dirty: bool,
 }
 
 impl BoosterSettings {
@@ -145,9 +269,8 @@ impl BoosterSettings {
             .unwrap_or((BoosterMainBoardData::default(&mac), true));
 
         let mut settings = Self {
-            board_data,
-            eui48: mac,
-            dirty: false,
+            properties: board_data.into(),
+            mac: MacAddress(mac),
             eeprom,
         };
 
@@ -165,7 +288,8 @@ impl BoosterSettings {
             Ok(config) => config,
         };
 
-        self.board_data.serialize_into(&mut config);
+        let board_data: BoosterMainBoardData = self.properties.clone().into();
+        board_data.serialize_into(&mut config);
         config.update_crc32();
         self.save_config(&config);
     }
@@ -188,136 +312,5 @@ impl BoosterSettings {
         let mut serialized = [0u8; 128];
         config.serialize_into(&mut serialized);
         self.eeprom.write(0, &serialized).unwrap();
-    }
-
-    /// Get the Booster unique identifier.
-    pub fn id(&self) -> &str {
-        core::str::from_utf8(self.board_data.id()).unwrap()
-    }
-
-    /// Get the Booster MAC address.
-    pub fn mac(&self) -> MacAddress {
-        MacAddress(self.eui48)
-    }
-
-    /// Get the saved Booster fan speed.
-    pub fn fan_speed(&self) -> f32 {
-        self.board_data.fan_speed
-    }
-
-    /// Set the default fan speed of the device.
-    pub fn set_fan_speed(&mut self, fan_speed: f32) {
-        self.board_data.fan_speed = fan_speed.clamp(0.0, 1.0);
-        self.dirty = true;
-        self.save();
-    }
-
-    /// Get the MQTT broker IP address.
-    pub fn broker(&self) -> Ipv4Addr {
-        let addr = &self.board_data.broker_address;
-        Ipv4Addr::new(addr[0], addr[1], addr[2], addr[3])
-    }
-
-    /// Check if current settings differ from active (executing) settings.
-    pub fn are_dirty(&self) -> bool {
-        self.dirty
-    }
-
-    /// Update the broker IP address.
-    pub fn set_broker(&mut self, addr: Ipv4Addr) {
-        self.dirty = true;
-        self.board_data.broker_address = addr.octets();
-        self.save();
-    }
-
-    /// Set the MQTT ID of Booster.
-    ///
-    /// # Args
-    /// * `id` - The new MQTT id. This must conform with MQTT identifier standards. That means that
-    ///   it must be 23 characters or shorter and contain only alphanumeric values.
-    ///
-    /// # Returns
-    /// Ok if the update was successful. Otherwise, returns an error.
-    pub fn set_id(&mut self, id: &str) -> Result<(), Error> {
-        if !identifier_is_valid(id) {
-            return Err(Error::Invalid);
-        }
-
-        let len = id.as_bytes().len();
-        self.board_data.identifier[..len].copy_from_slice(id.as_bytes());
-        self.board_data.id_size = len as u32;
-
-        self.dirty = true;
-        self.save();
-
-        Ok(())
-    }
-
-    /// Get the IP address of the device.
-    ///
-    /// # Note
-    /// The IP address will be unspecified if DHCP is to be used.
-    pub fn ip_address(&self) -> smoltcp::wire::IpCidr {
-        let ip_addr = smoltcp::wire::Ipv4Address::from_bytes(&self.board_data.ip_address);
-
-        let prefix = if !ip_addr.is_unspecified() {
-            let netmask = smoltcp::wire::IpAddress::Ipv4(smoltcp::wire::Ipv4Address::from_bytes(
-                &self.board_data.netmask,
-            ));
-
-            netmask.prefix_len().unwrap_or_else(|| {
-                log::error!("Invalid netmask found. Assuming no mask.");
-                0
-            })
-        } else {
-            0
-        };
-
-        smoltcp::wire::IpCidr::new(smoltcp::wire::IpAddress::Ipv4(ip_addr), prefix)
-    }
-
-    /// Set the static IP address of the device.
-    ///
-    /// # Args
-    /// * `addr` - The address to set
-    pub fn set_ip_address(&mut self, addr: Ipv4Addr) {
-        self.board_data.ip_address = addr.octets();
-        self.dirty = true;
-        self.save();
-    }
-
-    /// Get the netmask of the device.
-    pub fn netmask(&self) -> smoltcp::wire::Ipv4Address {
-        smoltcp::wire::Ipv4Address::from_bytes(&self.board_data.netmask)
-    }
-
-    /// Set the netmask of the static IP address.
-    pub fn set_netmask(&mut self, mask: Ipv4Addr) {
-        let netmask = smoltcp::wire::IpAddress::Ipv4(smoltcp::wire::Ipv4Address::from_bytes(
-            &mask.octets()[..],
-        ));
-
-        if netmask.prefix_len().is_none() {
-            log::error!("Netmask is invalid. Ignoring");
-            return;
-        }
-
-        self.board_data.netmask = mask.octets();
-        self.dirty = true;
-        self.save();
-    }
-
-    /// Get the default gateway IP address for the interface.
-    pub fn gateway(&self) -> smoltcp::wire::Ipv4Address {
-        smoltcp::wire::Ipv4Address::from_bytes(&self.board_data.gateway)
-    }
-
-    /// Set the gateway of the device.
-    ///
-    /// # Note
-    pub fn set_gateway(&mut self, gateway: Ipv4Addr) {
-        self.board_data.gateway = gateway.octets();
-        self.dirty = true;
-        self.save();
     }
 }

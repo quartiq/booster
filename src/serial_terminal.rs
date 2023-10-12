@@ -3,7 +3,10 @@ use super::{
     hardware::{platform, UsbBus},
     BoosterSettings,
 };
+use crate::settings::global_settings::Properties;
 use bbqueue::BBBuffer;
+use heapless::String;
+use miniconf::{JsonCoreSlash, TreeKey};
 use usbd_serial::UsbError;
 
 use core::fmt::Write;
@@ -40,33 +43,27 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
         },
         &menu::Item {
             command: "read",
-            help: Some("Read a property from the device"),
-            item_type: menu::ItemType::Callback {
-                function: handle_property_read,
-                parameters: &[menu::Parameter::Optional {
-                    parameter_name: "property",
-                    help: Some(
-                        "The name of the property to read.
-
-Note:
-* If a property is not specified, all properties are read.
+            help: Some("Read a property from the device:
 
 Available Properties:
 * id: The MQTT ID of the device
 * mac: The MAC address of the device
-* broker-address: The MQTT broker IP address
+* broker: The MQTT broker IP address
 * gateway: The internet gateway address (Unused when DHCP is enabled)
-* ip-address: The static IP address of Booster (0.0.0.0 indicates DHCP usage)
+* ip: The static IP address of Booster (0.0.0.0 indicates DHCP usage)
 * netmask: The netmask to use when DHCP is disabled
-* fan: The duty cycle of fans when channels are enabled",
-                    ),
+* fan_speed: The duty cycle of fans when channels are enabled"),
+            item_type: menu::ItemType::Callback {
+                function: handle_property_read,
+                parameters: &[menu::Parameter::Optional {
+                    parameter_name: "property",
+                    help: Some("The name of the property to read. If not specified, all properties are read"),
                 }],
             },
         },
         &menu::Item {
             command: "write",
-            help: Some(
-                "Updates the value of a property on the device.
+            help: Some("Updates the value of a property on the device.
 
 Notes:
 * Netmasks must contain only leading data. E.g. 255.255.0.0
@@ -75,43 +72,23 @@ Notes:
 
 Examples:
     # Use DHCP for IP address allocation
-    write ip-address 0.0.0.0
+    write ip \"0.0.0.0\"
 
     # Set fans to 45% duty cycle
-    write fan 0.45
+    write fan_speed 0.45
 
     # Update the Booster MQTT ID
-    write id my-booster
-",
-            ),
+    write id \"my-booster-01\""),
             item_type: menu::ItemType::Callback {
                 function: handle_property_write,
                 parameters: &[
                     menu::Parameter::Mandatory {
                         parameter_name: "property",
-                        help: Some(
-                            "The name of the property to write.
-
-May be one of:
-* [broker-address, gateway, ip-address, netmask] <IP>
-* id <ID>
-* fan <DUTY>
-",
-                        ),
+                        help: Some("The name of the property to write: [broker, gateway, ip, netmask, id, fan_speed]"),
                     },
                     menu::Parameter::Mandatory {
                         parameter_name: "value",
-                        help: Some(
-                            "Specifies the value to be written to the property.
-
-The format of the value depends on the property to be written.
-
-Examples:
-* <IP>: 192.168.1.1
-* <ID>: my-booster
-* <DUTY>: 0.45
-",
-                        ),
+                        help: Some("Specifies the value to be written to the property. The format of the value depends on the property to be written."),
                     },
                 ],
             },
@@ -192,7 +169,7 @@ impl core::fmt::Write for Context {
     }
 }
 
-fn handle_reset<'a>(
+fn handle_reset(
     _menu: &menu::Menu<Context>,
     _item: &menu::Item<Context>,
     _args: &[&str],
@@ -204,7 +181,7 @@ fn handle_reset<'a>(
     cortex_m::peripheral::SCB::sys_reset();
 }
 
-fn handle_dfu<'a>(
+fn handle_dfu(
     _menu: &menu::Menu<Context>,
     _item: &menu::Item<Context>,
     _args: &[&str],
@@ -218,7 +195,7 @@ fn handle_dfu<'a>(
     platform::reset_to_dfu_bootloader();
 }
 
-fn handle_service<'a>(
+fn handle_service(
     _menu: &menu::Menu<Context>,
     _item: &menu::Item<Context>,
     _args: &[&str],
@@ -262,146 +239,81 @@ fn handle_service<'a>(
     platform::clear_reset_flags();
 }
 
-fn handle_property_read<'a>(
+fn handle_property_read(
     _menu: &menu::Menu<Context>,
     item: &menu::Item<Context>,
     args: &[&str],
     context: &mut Context,
 ) {
-    let property = menu::argument_finder(item, args, "property").unwrap();
+    if let Some(prop) = menu::argument_finder(item, args, "property").unwrap() {
+        if prop == "mac" {
+            writeln!(context.output_buffer, "{prop}: {}", context.settings.mac).unwrap();
+            return;
+        }
 
-    let mut num_printed = 0;
-    if property.map(|prop| prop == "id").unwrap_or(true) {
-        writeln!(context.output_buffer, "id: {}", context.settings.id()).unwrap();
-        num_printed += 1;
-    }
+        let mut path: String<32> = String::from("/");
+        path.push_str(prop).unwrap();
 
-    if property.map(|prop| prop == "mac").unwrap_or(true) {
-        writeln!(context.output_buffer, "mac: {}", context.settings.mac()).unwrap();
-        num_printed += 1;
-    }
+        let mut buf = [0u8; 64];
+        match context.settings.properties.get_json(&path, &mut buf) {
+            Ok(len) => {
+                let str_prop = core::str::from_utf8(&buf[..len]).unwrap();
+                writeln!(context, "{prop}: {str_prop}").unwrap();
+            }
+            Err(e) => writeln!(context, "Failed to retrieve setting: {e:?}").unwrap(),
+        }
+    } else {
+        // Print out all properties
+        let mut buf = [0u8; 64];
+        for path in Properties::iter_paths::<String<32>>("/") {
+            let path = path.unwrap();
+            let len = context
+                .settings
+                .properties
+                .get_json(&path, &mut buf)
+                .unwrap();
+            let str_prop = core::str::from_utf8(&buf[..len]).unwrap();
+            let prop = path.strip_prefix('/').unwrap_or_else(|| &path);
+            writeln!(context, "{prop:<20}: {str_prop}").unwrap();
+        }
 
-    if property
-        .map(|prop| prop == "broker-address")
-        .unwrap_or(true)
-    {
-        writeln!(
-            context.output_buffer,
-            "broker-address: {}",
-            context.settings.broker()
-        )
-        .unwrap();
-        num_printed += 1;
-    }
-
-    if property.map(|prop| prop == "gateway").unwrap_or(true) {
-        writeln!(
-            context.output_buffer,
-            "gateway: {}",
-            context.settings.broker()
-        )
-        .unwrap();
-        num_printed += 1;
-    }
-
-    if property.map(|prop| prop == "ip-address").unwrap_or(true) {
-        writeln!(
-            context.output_buffer,
-            "ip-address: {}",
-            context.settings.ip_address()
-        )
-        .unwrap();
-        num_printed += 1;
-    }
-
-    if property.map(|prop| prop == "netmask").unwrap_or(true) {
-        writeln!(
-            context.output_buffer,
-            "netmask: {}",
-            context.settings.netmask()
-        )
-        .unwrap();
-        num_printed += 1;
-    }
-
-    if property.map(|prop| prop == "fan").unwrap_or(true) {
-        writeln!(
-            context.output_buffer,
-            "fan: {:.2} %",
-            context.settings.fan_speed() * 100.0
-        )
-        .unwrap();
-        num_printed += 1;
-    }
-
-    if num_printed == 0 {
-        // Note: Unwrap. If property is None, we should have printed something.
-        writeln!(
-            context,
-            "Unknown property specified: `{}`",
-            property.unwrap()
-        )
-        .unwrap();
+        // Print out MAC address
+        writeln!(context.output_buffer, "mac: {}", context.settings.mac).unwrap();
     }
 }
 
-fn handle_property_write<'a>(
+fn handle_property_write(
     _menu: &menu::Menu<Context>,
     item: &menu::Item<Context>,
     args: &[&str],
     context: &mut Context,
 ) {
+    let property = menu::argument_finder(item, args, "property")
+        .unwrap()
+        .unwrap();
     let value = menu::argument_finder(item, args, "value").unwrap().unwrap();
-    match menu::argument_finder(item, args, "property")
-        .unwrap()
-        .unwrap()
-    {
-        "broker-address" => match value.parse() {
-            Ok(value) => context.settings.set_broker(value),
-            Err(e) => writeln!(context, "Invalid IP: {:?}", e).unwrap(),
-        },
-        "gateway" => match value.parse() {
-            Ok(value) => context.settings.set_gateway(value),
-            Err(e) => writeln!(context, "Invalid IP: {:?}", e).unwrap(),
-        },
-        "ip-address" => match value.parse() {
-            Ok(value) => context.settings.set_ip_address(value),
-            Err(e) => writeln!(context, "Invalid IP: {:?}", e).unwrap(),
-        },
-        "netmask" => match value.parse() {
-            Ok(value) => context.settings.set_netmask(value),
-            Err(e) => writeln!(context, "Invalid IP: {:?}", e).unwrap(),
-        },
-        "id" => {
-            if context.settings.set_id(value).is_err() {
-                writeln!(
-                    context,
-                    "The provided ID is invalid.
-It may only be 23 characters or less and contain alphanumeric characters (or '-')"
-                )
-                .unwrap();
-            }
-        }
-        "fan" => match value.parse() {
-            Ok(value) => context.settings.set_fan_speed(value),
-            Err(e) => writeln!(context, "{:?}", e).unwrap(),
-        },
-        other => {
-            writeln!(context,
-                "Unknown property: `{}`. Available options: [broker-address, gateway, ip-address, netmask, id, fan]", other).unwrap();
-        }
+
+    let mut path: String<32> = String::from("/");
+    path.push_str(property).unwrap();
+
+    let mut new_props = context.settings.properties.clone();
+    if let Err(error) = new_props.set_json(&path, value.as_bytes()) {
+        writeln!(context, "Failed to set {property}: {error:?}").unwrap();
+        return;
     }
 
-    // Warn the user if there are settings in memory that differ from those that are
-    // currently operating.
-    if context.settings.are_dirty() {
-        writeln!(
-            context,
-            "Settings in memory may differ from currently operating settings. \
-Reset the device to apply settings."
-        )
-        .unwrap();
+    if !new_props.validate() {
+        log::error!("{property} was invalid. Ignoring.");
+        return;
     }
+
+    context.settings.save();
+    writeln!(
+        context,
+        "Settings in memory may differ from currently operating settings. \
+Reset device to apply settings."
+    )
+    .unwrap();
 }
 
 /// A serial terminal for allowing the user to interact with Booster over USB.
