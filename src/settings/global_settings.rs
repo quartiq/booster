@@ -136,7 +136,7 @@ impl From<Properties> for BoosterMainBoardData {
         let mut identifier = [0u8; 23];
 
         let id_bytes = props.id.as_bytes();
-        identifier[..id_bytes.len()].copy_from_slice(&id_bytes);
+        identifier[..id_bytes.len()].copy_from_slice(id_bytes);
 
         BoosterMainBoardData {
             version: EXPECTED_VERSION,
