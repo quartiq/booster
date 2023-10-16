@@ -60,7 +60,7 @@ enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
 smoltcp-nal = { version = "0.4", features=["shared-stack"] }
 
 [build-dependencies]
-built = { version = "0.6", features = ["git2"], default-features = false }
+built = { version = "0.7", features = ["git2"], default-features = false }
 
 [dependencies.stm32f4xx-hal]
 version = "0.17"
