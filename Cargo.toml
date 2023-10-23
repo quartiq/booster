@@ -25,7 +25,7 @@ exclude = [
 ]
 
 [dependencies]
-serde_with = { version = "3.3", default-features = false, features = ["macros"] }
+serde_with = { version = "3.4", default-features = false, features = ["macros"] }
 serde-json-core = "0.5"
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7"
