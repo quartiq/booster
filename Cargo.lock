@@ -149,7 +149,7 @@ dependencies = [
  "menu",
  "microchip-24aa02e48",
  "miniconf",
- "minimq",
+ "minimq 0.8.0 (git+https://github.com/quartiq/minimq)",
  "minireq",
  "mono-clock",
  "panic-persist",
@@ -457,6 +457,12 @@ name = "embedded-io"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "658bbadc628dc286b9ae02f0cb0f5411c056eb7487b72f0083203f115de94060"
+
+[[package]]
+name = "embedded-io"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "embedded-nal"
@@ -836,12 +842,12 @@ name = "miniconf"
 version = "0.8.0"
 source = "git+https://github.com/quartiq/miniconf#587a5bf6f498a9bd05d4e6fb76e7b108dd0f9a1d"
 dependencies = [
- "embedded-io",
+ "embedded-io 0.5.0",
  "heapless",
  "itoa",
  "log",
  "miniconf_derive",
- "minimq",
+ "minimq 0.8.0 (git+https://github.com/quartiq/minimq)",
  "serde",
  "serde-json-core",
  "smlang",
@@ -859,8 +865,24 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.7.0"
-source = "git+https://github.com/quartiq/minimq#cec9ce70a9091b4e20d3b09c0efe8341dc762f41"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b561c2c86a3509f7c514f546fb24755753a30fdcf67cce8d5f2f38688483cd31"
+dependencies = [
+ "bit_field",
+ "embedded-nal 0.7.0",
+ "embedded-time",
+ "heapless",
+ "num_enum",
+ "serde",
+ "smlang",
+ "varint-rs",
+]
+
+[[package]]
+name = "minimq"
+version = "0.8.0"
+source = "git+https://github.com/quartiq/minimq#da875e907ff1d3aa676d97df82a9361499f907cb"
 dependencies = [
  "bit_field",
  "embedded-nal 0.7.0",
@@ -874,13 +896,13 @@ dependencies = [
 
 [[package]]
 name = "minireq"
-version = "0.2.0"
-source = "git+https://github.com/quartiq/minireq#b7a4c90714e1695c953b355b26e05e967aea782e"
+version = "0.3.0"
+source = "git+https://github.com/quartiq/minireq#a02a613ed40f96441031564fb5644d53ee02a39a"
 dependencies = [
- "embedded-io",
+ "embedded-io 0.6.1",
  "heapless",
  "log",
- "minimq",
+ "minimq 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "smlang",
 ]
@@ -992,22 +1014,22 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.5.7"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf5395665662ef45796a4ff5486c5d41d29e0c09640af4c5f17fd94ee2c119c9"
+checksum = "683751d591e6d81200c39fb0d1032608b77724f34114db54f571ff1317b337c0"
 dependencies = [
  "num_enum_derive",
 ]
 
 [[package]]
 name = "num_enum_derive"
-version = "0.5.7"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b0498641e53dd6ac1a4f22547548caa6864cc4933784319cd1775271c5a46ce"
+checksum = "6c11e44798ad209ccdd91fc192f0526a369a01234f7373e1b141c96d7cee4f0e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.105",
+ "syn 2.0.29",
 ]
 
 [[package]]
