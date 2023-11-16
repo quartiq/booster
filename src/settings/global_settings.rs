@@ -122,10 +122,14 @@ impl encdec::DecodeOwned for MqttIdentifier {
 }
 
 /// Represents booster mainboard-specific configuration values.
-#[derive(Debug, Clone, Tree, Encode, DecodeOwned)]
+#[derive(Debug, Clone, Tree, Encode, Serialize, Deserialize, DecodeOwned)]
 pub struct BoosterMainBoardData {
     #[tree(skip)]
     version: SemVersion,
+
+    #[tree(skip)]
+    #[serde(skip)]
+    mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 
     pub ip: IpAddr,
     pub broker: IpAddr,
@@ -133,6 +137,12 @@ pub struct BoosterMainBoardData {
     pub netmask: IpAddr,
     pub id: MqttIdentifier,
     pub fan_speed: f32,
+}
+
+impl serial_settings::Settings for BoosterMainBoardData {
+    fn reset(&mut self) {
+        *self = Self::default(&self.mac.0)
+    }
 }
 
 impl BoosterMainBoardData {
@@ -153,6 +163,7 @@ impl BoosterMainBoardData {
         id[..name.len()].copy_from_slice(name.as_str().as_bytes());
 
         Self {
+            mac: smoltcp_nal::smoltcp::wire::EthernetAddress(eui48),
             version: EXPECTED_VERSION,
             ip: IpAddr::new(&[0, 0, 0, 0]),
             broker: IpAddr::new(&[10, 0, 0, 2]),

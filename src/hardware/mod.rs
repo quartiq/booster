@@ -9,11 +9,14 @@ pub mod booster_channels;
 pub mod chassis_fans;
 pub mod delay;
 pub mod external_mac;
+pub mod flash;
 pub mod metadata;
 pub mod net_interface;
 pub mod platform;
 pub mod rf_channel;
+pub mod serial_terminal;
 pub mod setup;
+pub mod usb;
 pub mod user_interface;
 
 pub const MONOTONIC_FREQUENCY: u32 = 1_000;
@@ -40,6 +43,9 @@ pub enum Mac {
     W5500(w5500::raw_device::RawDevice<w5500::bus::FourWire<Spi, SpiCs>>),
     Enc424j600(enc424j600::Enc424j600<Spi, SpiCs>),
 }
+
+pub type SerialTerminal =
+    serial_settings::SerialSettings<'static, serial_terminal::SerialSettingsPlatform>;
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<'static, Mac, SystemTimer>;
 

@@ -4,11 +4,15 @@ use super::{
     booster_channels::BoosterChannels,
     chassis_fans::ChassisFans,
     delay::AsmDelay,
+    flash::Flash,
     metadata::ApplicationMetadata,
     net_interface, platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
+    serial_terminal::SerialSettingsPlatform,
+    usb,
     user_interface::{UserButtons, UserLeds},
-    HardwareVersion, Mac, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ, I2C,
+    HardwareVersion, Mac, NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, CPU_FREQ,
+    I2C,
 };
 
 use crate::settings::BoosterSettings;
@@ -76,8 +80,8 @@ pub struct BoosterDevices {
     pub main_bus: MainBus,
     pub network_stack: NetworkStack,
     pub watchdog: hal::watchdog::IndependentWatchdog,
-    pub usb_device: UsbDevice<'static, UsbBus>,
-    pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
+    pub usb_device: usb::UsbDevice,
+    pub usb_serial: SerialTerminal,
     pub settings: BoosterSettings,
     pub metadata: &'static ApplicationMetadata,
     pub systick: Systick,
@@ -460,13 +464,48 @@ pub fn setup(
         let usb_device =
             // USB VID/PID registered at https://pid.codes/1209/3933/
             UsbDeviceBuilder::new(usb_bus.as_ref().unwrap(), UsbVidPid(0x1209, 0x3933))
-                .manufacturer("ARTIQ/Sinara")
-                .product("Booster")
-                .serial_number(serial_number.as_ref().unwrap().as_str())
+                .strings(&[usb_device::device::StringDescriptors::default()
+                    .manufacturer("ARTIQ/Sinara")
+                    .product("Booster")
+                    .serial_number(serial_number.as_ref().unwrap().as_str())
+
+                ]).unwrap()
                 .device_class(usbd_serial::USB_CLASS_CDC)
                 .build();
 
-        (usb_device, usb_serial)
+        (usb::UsbDevice::new(usb_device), usb_serial)
+    };
+
+    let serial_terminal = {
+        let flash = {
+            let flash = stm32f4xx_hal::flash::LockedFlash::new(device.FLASH);
+            const SECTOR_SIZE: usize = 128 * 1024;
+            Flash::new(flash, 7 * SECTOR_SIZE)
+        };
+
+        let settings_callback =
+            |maybe_settings: Option<crate::settings::global_settings::BoosterMainBoardData>| {
+                match maybe_settings {
+                    Some(mut s) => {
+                        s.mac = settings.mac;
+                        s
+                    }
+                    None => settings.properties,
+                }
+            };
+
+        let line = cortex_m::singleton!(:[u8; 256] = [0u8; 256]).unwrap();
+        let serialize = cortex_m::singleton!(:[u8; 512] = [0u8; 512]).unwrap();
+        let platform = SerialSettingsPlatform::new(metadata);
+
+        serial_settings::SerialSettings::new(
+            platform,
+            usb_serial,
+            flash,
+            settings_callback,
+            line,
+            serialize,
+        )
     };
 
     info!("Startup complete");
