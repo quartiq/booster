@@ -490,7 +490,7 @@ pub fn setup(
                         s.mac = settings.mac;
                         s
                     }
-                    None => settings.properties,
+                    None => settings.properties.clone(),
                 }
             };
 
@@ -506,6 +506,7 @@ pub fn setup(
             line,
             serialize,
         )
+        .unwrap()
     };
 
     info!("Startup complete");
@@ -519,7 +520,7 @@ pub fn setup(
         network_stack,
         settings,
         usb_device,
-        usb_serial,
+        usb_serial: serial_terminal,
         watchdog,
         metadata,
         systick,

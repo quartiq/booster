@@ -139,7 +139,7 @@ dependencies = [
  "dac7571",
  "debounced-pin",
  "embedded-io",
- "embedded-storage 0.3.0",
+ "embedded-storage",
  "enc424j600",
  "encdec",
  "enum-iterator",
@@ -488,12 +488,6 @@ dependencies = [
  "nb 1.1.0",
  "no-std-net 0.6.0",
 ]
-
-[[package]]
-name = "embedded-storage"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "723dce4e9f25b6e6c5f35628e144794e5b459216ed7da97b7c4b66cdb3fa82ca"
 
 [[package]]
 name = "embedded-storage"
@@ -1366,7 +1360,7 @@ source = "git+https://github.com/quartiq/stabilizer?branch=feature/serial-settin
 dependencies = [
  "cortex-m 0.7.7",
  "embedded-io",
- "embedded-storage 0.3.0",
+ "embedded-storage",
  "heapless 0.8.0",
  "menu 0.4.0",
  "miniconf",
@@ -1475,8 +1469,7 @@ dependencies = [
 [[package]]
 name = "stm32f4xx-hal"
 version = "0.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c35360daaceb356866a3f840e845dd09c1ef69aed52637520b4c5c409c10cdc0"
+source = "git+https://github.com/stm32-rs/stm32f4xx-hal?branch=master#2d8d882db949f0f4dfd74f690e4a5ab57621cd94"
 dependencies = [
  "bare-metal 1.0.0",
  "bitflags 2.2.1",
@@ -1486,7 +1479,7 @@ dependencies = [
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0-alpha.11",
  "embedded-hal-nb",
- "embedded-storage 0.2.0",
+ "embedded-storage",
  "fugit",
  "fugit-timer",
  "nb 1.1.0",
@@ -1494,6 +1487,7 @@ dependencies = [
  "stm32f4",
  "synopsys-usb-otg",
  "time",
+ "vcell",
  "void",
 ]
 
@@ -1652,7 +1646,7 @@ dependencies = [
 [[package]]
 name = "usbd-serial"
 version = "0.2.0"
-source = "git+https://github.com/rust-embedded-community/usbd-serial?branch=feature/embedded-io#1b2d0fc7049640761f55a71b765e63a835637151"
+source = "git+https://github.com/rust-embedded-community/usbd-serial?branch=rs/bugfix#4b5c090a064c30f5e95ccc19e4e54ec7ab929b29"
 dependencies = [
  "embedded-hal 0.2.7",
  "embedded-io",

@@ -18,7 +18,7 @@ impl serial_settings::Platform for SerialSettingsPlatform {
     type Settings = crate::settings::global_settings::BoosterMainBoardData;
     type Storage = crate::hardware::flash::Flash;
 
-    fn dfu(&mut self, mut interface: impl embedded_io::Write) {
+    fn dfu(&mut self, _interface: impl embedded_io::Write) {
         cortex_m::interrupt::disable();
 
         // Power off all output channels and reset the MCU.

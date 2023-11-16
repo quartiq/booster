@@ -121,15 +121,55 @@ impl encdec::DecodeOwned for MqttIdentifier {
     }
 }
 
+#[derive(Debug, Clone, Encode, DecodeOwned)]
+pub struct SerializedMainBoardData {
+    version: SemVersion,
+    pub ip: IpAddr,
+    pub broker: IpAddr,
+    pub gateway: IpAddr,
+    pub netmask: IpAddr,
+    pub id: MqttIdentifier,
+    pub fan_speed: f32,
+}
+
+impl From<BoosterMainBoardData> for SerializedMainBoardData {
+    fn from(d: BoosterMainBoardData) -> Self {
+        Self {
+            version: d.version,
+            ip: d.ip,
+            broker: d.broker,
+            gateway: d.gateway,
+            netmask: d.netmask,
+            id: d.id,
+            fan_speed: d.fan_speed,
+        }
+    }
+}
+
+impl SerializedMainBoardData {
+    fn with_mac(self, eui48: &[u8; 6]) -> BoosterMainBoardData {
+        BoosterMainBoardData {
+            mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
+            version: self.version,
+            ip: self.ip,
+            broker: self.broker,
+            gateway: self.gateway,
+            netmask: self.netmask,
+            id: self.id,
+            fan_speed: self.fan_speed,
+        }
+    }
+}
+
 /// Represents booster mainboard-specific configuration values.
-#[derive(Debug, Clone, Tree, Encode, Serialize, Deserialize, DecodeOwned)]
+#[derive(Debug, Clone, Tree, Serialize, Deserialize)]
 pub struct BoosterMainBoardData {
     #[tree(skip)]
     version: SemVersion,
 
     #[tree(skip)]
     #[serde(skip)]
-    mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 
     pub ip: IpAddr,
     pub broker: IpAddr,
@@ -163,7 +203,7 @@ impl BoosterMainBoardData {
         id[..name.len()].copy_from_slice(name.as_str().as_bytes());
 
         Self {
-            mac: smoltcp_nal::smoltcp::wire::EthernetAddress(eui48),
+            mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
             version: EXPECTED_VERSION,
             ip: IpAddr::new(&[0, 0, 0, 0]),
             broker: IpAddr::new(&[10, 0, 0, 2]),
@@ -183,8 +223,8 @@ impl BoosterMainBoardData {
     /// # Returns
     /// The configuration if deserialization was successful along with a bool indicating if the
     /// configuration was automatically upgraded. Otherwise, returns an error.
-    pub fn deserialize(data: &[u8; 64]) -> Result<(Self, bool), Error> {
-        let (mut config, _) = BoosterMainBoardData::decode_owned(data).unwrap();
+    pub fn deserialize(eui48: &[u8; 6], data: &[u8; 64]) -> Result<(Self, bool), Error> {
+        let (mut config, _) = SerializedMainBoardData::decode_owned(data).unwrap();
         let mut modified = false;
 
         // Check if the stored EEPROM version is older (or incompatible)
@@ -208,7 +248,7 @@ impl BoosterMainBoardData {
             return Err(Error::Invalid);
         }
 
-        Ok((config, modified))
+        Ok((config.with_mac(eui48), modified))
     }
 
     /// Serialize the booster config into a sinara configuration for storage into EEPROM.
@@ -217,7 +257,8 @@ impl BoosterMainBoardData {
     /// * `config` - The sinara configuration to serialize the booster configuration into.
     pub fn serialize_into(&self, config: &mut SinaraConfiguration) {
         let mut buffer: [u8; 64] = [0; 64];
-        let len = self.encode(&mut buffer).unwrap();
+        let serialized: SerializedMainBoardData = self.clone().into();
+        let len = serialized.encode(&mut buffer).unwrap();
         config.board_data[..len].copy_from_slice(&buffer[..len]);
     }
 
@@ -285,7 +326,7 @@ impl BoosterSettings {
 
         // Load the sinara configuration from EEPROM.
         let (board_data, write_back) = Self::load_config(&mut eeprom)
-            .and_then(|config| BoosterMainBoardData::deserialize(&config.board_data))
+            .and_then(|config| BoosterMainBoardData::deserialize(&mac, &config.board_data))
             .unwrap_or((BoosterMainBoardData::default(&mac), true));
 
         let mut settings = Self {

@@ -257,6 +257,7 @@ mod app {
             .lock(|watchdog| watchdog.check_in(WatchdogClient::Usb));
 
         c.local.usb.process(c.local.usb_terminal);
+        c.local.usb_terminal.process().unwrap();
 
         // Process any log output.
         LOGGER.process(c.local.usb_terminal);
