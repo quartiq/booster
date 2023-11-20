@@ -42,7 +42,7 @@ serde = {version = "1.0", features = ["derive"], default-features = false }
 menu = "0.3"
 rtt-logger = "0.2"
 bbqueue = "0.5"
-usbd-serial = "0.1.0"
+usbd-serial = "0.2.0"
 shared-bus = { version = "0.3", features = ["cortex-m"] }
 usb-device = "0.2.9"
 encdec = { version = "0.9", default-features = false }
