@@ -1486,7 +1486,7 @@ dependencies = [
 [[package]]
 name = "stm32f4xx-hal"
 version = "0.18.0"
-source = "git+https://github.com/stm32-rs/stm32f4xx-hal?branch=master#0ffa14c6deb10e0f25d3300aa2b1f03baaa8b047"
+source = "git+https://github.com/stm32-rs/stm32f4xx-hal?rev=4144b1dffdc530e41a08eece53d9b548ee546597#4144b1dffdc530e41a08eece53d9b548ee546597"
 dependencies = [
  "bare-metal 1.0.0",
  "cortex-m 0.7.7",
@@ -1664,7 +1664,7 @@ dependencies = [
 [[package]]
 name = "usbd-serial"
 version = "0.2.0"
-source = "git+https://github.com/rust-embedded-community/usbd-serial#6611dc092822c60b4482e28aab2fe084c1756410"
+source = "git+https://github.com/rust-embedded-community/usbd-serial?branch=rs/bugfix#096742c1c480f6f63c1a936a3c23ede7993c624d"
 dependencies = [
  "embedded-hal 0.2.7",
  "embedded-io",
