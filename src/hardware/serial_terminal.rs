@@ -50,6 +50,7 @@ impl serial_settings::Platform for SerialSettingsPlatform {
             "reboot" => {
                 cortex_m::interrupt::disable();
                 platform::shutdown_channels();
+                cortex_m::peripheral::SCB::sys_reset();
             }
             "dfu" => {
                 cortex_m::interrupt::disable();

@@ -1,4 +1,21 @@
 //! Booster NGFW NVM settings
+//!
+//! # Design
+//! Booster firmware maintained settings in an EEPROM on the main board until after v0.5.0. After
+//! v0.5.0, all global firmware settings for the device were moved to internal flash storage.
+//!
+//! In order to maintain backwards compatibility with existing Booster devices that are upgraded
+//! from v0.5.0 firmware and earlier, the settings loading process occurs as follows:
+//! 1. Settings are loaded from Booster mainboard EEPROM
+//! 2. Settings are then loaded from flash (if possible)
+//!
+//! Any further saves to settings are persisted to device flash, which will result in overriding
+//! the older EEPROM settings. This essentially freezes the EEPROM-based settings in time from the
+//! switch over.
+//!
+//! Settings are stored in flash because of the restrictive size of EEPROM on the device making it
+//! impossible to save domain names for a named broker into EEPROM, as the storage is only 128
+//! bytes, but a domain name can be up to 255 characters.
 
 use crate::{
     hardware::{flash::Flash, Eeprom},
@@ -327,7 +344,6 @@ impl BoosterMainBoardData {
 /// Booster device-wide configurable settings.
 pub struct BoosterSettings {
     pub properties: BoosterMainBoardData,
-    pub mac: MacAddress,
     eeprom: Eeprom,
 }
 
@@ -347,7 +363,6 @@ impl BoosterSettings {
 
         let mut settings = Self {
             properties: board_data,
-            mac: MacAddress(mac),
             eeprom,
         };
 
