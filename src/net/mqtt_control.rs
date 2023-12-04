@@ -74,7 +74,12 @@ struct ChannelBiasResponse {
 
 /// Represents a means of handling MQTT-based control interface.
 pub struct TelemetryClient {
-    mqtt: minimq::Minimq<'static, NetworkStackProxy, SystemTimer, minimq::broker::IpBroker>,
+    mqtt: minimq::Minimq<
+        'static,
+        NetworkStackProxy,
+        SystemTimer,
+        minimq::broker::NamedBroker<NetworkStackProxy>,
+    >,
     prefix: String<128>,
     telemetry_period: u64,
     meta_published: bool,
@@ -84,7 +89,12 @@ pub struct TelemetryClient {
 impl TelemetryClient {
     /// Construct the MQTT control manager.
     pub fn new(
-        mqtt: minimq::Minimq<'static, NetworkStackProxy, SystemTimer, minimq::broker::IpBroker>,
+        mqtt: minimq::Minimq<
+            'static,
+            NetworkStackProxy,
+            SystemTimer,
+            minimq::broker::NamedBroker<NetworkStackProxy>,
+        >,
         metadata: &'static ApplicationMetadata,
         prefix: &str,
     ) -> Self {

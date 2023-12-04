@@ -1,6 +1,7 @@
 //! Booster NGFW NVM settings
 
 use crate::{hardware::Eeprom, Error};
+use core::str::FromStr;
 use encdec::{Decode, DecodeOwned, Encode};
 use heapless::String;
 use smoltcp_nal::smoltcp;
@@ -137,10 +138,13 @@ impl From<BoosterMainBoardData> for SerializedMainBoardData {
         Self {
             version: d.version,
             ip: d.ip,
-            broker: d.broker,
+            broker: d
+                .broker
+                .parse()
+                .unwrap_or_else(|_| IpAddr::new(&[10, 0, 0, 2])),
             gateway: d.gateway,
             netmask: d.netmask,
-            id: d.id,
+            id: MqttIdentifier(d.id),
             fan_speed: d.fan_speed,
         }
     }
@@ -148,14 +152,16 @@ impl From<BoosterMainBoardData> for SerializedMainBoardData {
 
 impl SerializedMainBoardData {
     fn with_mac(self, eui48: &[u8; 6]) -> BoosterMainBoardData {
+        let mut broker = String::new();
+        write!(&mut broker, "{}", self.broker.0).unwrap();
         BoosterMainBoardData {
             mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
             version: self.version,
             ip: self.ip,
-            broker: self.broker,
+            broker,
             gateway: self.gateway,
             netmask: self.netmask,
-            id: self.id,
+            id: self.id.0,
             fan_speed: self.fan_speed,
         }
     }
@@ -172,10 +178,10 @@ pub struct BoosterMainBoardData {
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 
     pub ip: IpAddr,
-    pub broker: IpAddr,
+    pub broker: heapless::String<255>,
     pub gateway: IpAddr,
     pub netmask: IpAddr,
-    pub id: MqttIdentifier,
+    pub id: heapless::String<23>,
     pub fan_speed: f32,
 }
 
@@ -206,10 +212,10 @@ impl BoosterMainBoardData {
             mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
             version: EXPECTED_VERSION,
             ip: IpAddr::new(&[0, 0, 0, 0]),
-            broker: IpAddr::new(&[10, 0, 0, 2]),
+            broker: String::from_str("10.0.0.2").unwrap(),
             gateway: IpAddr::new(&[0, 0, 0, 0]),
             netmask: IpAddr::new(&[0, 0, 0, 0]),
-            id: MqttIdentifier(name),
+            id: name,
             fan_speed: DEFAULT_FAN_SPEED,
         }
     }
@@ -263,7 +269,7 @@ impl BoosterMainBoardData {
     }
 
     pub fn validate(&self) -> bool {
-        if !identifier_is_valid(&self.id.0) {
+        if !identifier_is_valid(&self.id) {
             log::error!("The ID must be 23 or less alpha-numeric characters (or '-')");
             return false;
         }
@@ -298,13 +304,6 @@ impl BoosterMainBoardData {
         };
 
         smoltcp::wire::IpCidr::new(smoltcp::wire::IpAddress::Ipv4(ip_addr), prefix)
-    }
-
-    pub fn broker(&self) -> minimq::embedded_nal::IpAddr {
-        let octets = self.broker.0 .0;
-        minimq::embedded_nal::IpAddr::V4(minimq::embedded_nal::Ipv4Addr::new(
-            octets[0], octets[1], octets[2], octets[3],
-        ))
     }
 }
 

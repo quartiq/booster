@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 * Network stack is randomly seeded on startup so that random ports are used.
 * Serial terminal replaced with `menu` for simplicity
+* The broker can now be specified using DNS
 
 ## [0.5.0] - 03-07-2023
 

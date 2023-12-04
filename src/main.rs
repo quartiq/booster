@@ -96,10 +96,9 @@ mod app {
             SharedResources {
                 main_bus: booster.main_bus,
                 net_devices: net::NetworkDevices::new(
-                    // TODO: Replace with hostname-based broker.
-                    booster.settings.properties.broker(),
+                    &booster.settings.properties.broker,
                     booster.network_stack,
-                    &booster.settings.properties.id.0,
+                    &booster.settings.properties.id,
                     settings,
                     clock,
                     booster.metadata,
