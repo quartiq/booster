@@ -261,8 +261,7 @@ pub fn setup(
         UserLeds::new(spi, csn, oen)
     };
 
-    // Read the EUI48 identifier and configure the ethernet MAC address.
-    let mut settings = {
+    let mut eeprom = {
         let i2c2 = {
             // Manually reset the I2C bus
             let mut scl = gpiob.pb10.into_open_drain_output();
@@ -280,9 +279,17 @@ pub fn setup(
             )
         };
 
-        let eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
-        BoosterSettings::new(eui)
+        microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap()
     };
+
+    let mac_address = {
+        let mut mac: [u8; 6] = [0; 6];
+        eeprom.read_eui48(&mut mac).unwrap();
+        mac
+    };
+
+    // Read the EUI48 identifier and configure the ethernet MAC address.
+    let mut settings = BoosterSettings::new(eeprom);
 
     let mut mac = {
         let mut spi = {
@@ -345,7 +352,7 @@ pub fn setup(
 
             let w5500 = w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
                 .initialize_macraw(w5500::MacAddress {
-                    octets: settings.mac.0,
+                    octets: mac_address,
                 })
                 .unwrap();
 
@@ -353,7 +360,7 @@ pub fn setup(
         } else {
             let mut mac = enc424j600::Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
             mac.init(&mut delay).expect("PHY initialization failed");
-            mac.write_mac_addr(settings.mac.as_bytes()).unwrap();
+            mac.write_mac_addr(&mac_address).unwrap();
 
             Mac::Enc424j600(mac)
         }
@@ -449,12 +456,15 @@ pub fn setup(
         {
             let mut serial_string: String<64> = String::new();
 
-            let octets = settings.mac.0;
-
             write!(
                 &mut serial_string,
                 "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
-                octets[0], octets[1], octets[2], octets[3], octets[4], octets[5]
+                mac_address[0],
+                mac_address[1],
+                mac_address[2],
+                mac_address[3],
+                mac_address[4],
+                mac_address[5]
             )
             .unwrap();
             serial_number.replace(serial_string);

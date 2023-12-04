@@ -29,8 +29,6 @@ use smoltcp_nal::smoltcp;
 
 use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
 
-use smoltcp_nal::smoltcp::wire::EthernetAddress as MacAddress;
-
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 use serde::{Deserialize, Serialize};
 
