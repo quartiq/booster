@@ -15,6 +15,7 @@ impl UsbDevice {
     }
 
     pub fn process(&mut self, terminal: &mut SerialTerminal) {
-        self.usb_device.poll(&mut [terminal.interface_mut()]);
+        self.usb_device
+            .poll(&mut [terminal.interface_mut().inner_mut()]);
     }
 }

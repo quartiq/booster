@@ -8,7 +8,6 @@ use super::{
     metadata::ApplicationMetadata,
     net_interface, platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
-    serial_terminal::SerialSettingsPlatform,
     usb,
     user_interface::{UserButtons, UserLeds},
     HardwareVersion, Mac, NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, CPU_FREQ,
@@ -263,7 +262,7 @@ pub fn setup(
     };
 
     // Read the EUI48 identifier and configure the ethernet MAC address.
-    let settings = {
+    let mut settings = {
         let i2c2 = {
             // Manually reset the I2C bus
             let mut scl = gpiob.pb10.into_open_drain_output();
@@ -477,34 +476,27 @@ pub fn setup(
     };
 
     let serial_terminal = {
-        let flash = {
+        let mut flash = {
             let flash = stm32f4xx_hal::flash::LockedFlash::new(device.FLASH);
             const SECTOR_SIZE: usize = 128 * 1024;
             Flash::new(flash, 7 * SECTOR_SIZE)
         };
 
-        let settings_callback =
-            |maybe_settings: Option<crate::settings::global_settings::BoosterMainBoardData>| {
-                match maybe_settings {
-                    Some(mut s) => {
-                        s.mac = settings.mac;
-                        s
-                    }
-                    None => settings.properties.clone(),
-                }
-            };
+        // Attempt to load flash settings
+        settings.properties.reload(&mut flash);
 
-        let line = cortex_m::singleton!(:[u8; 256] = [0u8; 256]).unwrap();
-        let serialize = cortex_m::singleton!(:[u8; 512] = [0u8; 512]).unwrap();
-        let platform = SerialSettingsPlatform::new(metadata);
+        let input_buffer = cortex_m::singleton!(:[u8; 256] = [0u8; 256]).unwrap();
+        let serialize_buffer = cortex_m::singleton!(:[u8; 512] = [0u8; 512]).unwrap();
 
-        serial_settings::SerialSettings::new(
-            platform,
-            usb_serial,
-            flash,
-            settings_callback,
-            line,
-            serialize,
+        serial_settings::Runner::new(
+            super::serial_terminal::SerialSettingsPlatform {
+                metadata,
+                interface: serial_settings::BestEffortInterface::new(usb_serial),
+                storage: flash,
+                settings: settings.properties.clone(),
+            },
+            input_buffer,
+            serialize_buffer,
         )
         .unwrap()
     };

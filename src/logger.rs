@@ -30,7 +30,11 @@ impl BufferedLog {
     /// * `terminal` - The serial terminal to write log data into.
     pub fn process(&self, terminal: &mut SerialTerminal) {
         while let Some(log) = self.logs.dequeue() {
-            terminal.interface_mut().write(log.as_bytes()).ok();
+            terminal
+                .interface_mut()
+                .inner_mut()
+                .write(log.as_bytes())
+                .ok();
         }
     }
 }

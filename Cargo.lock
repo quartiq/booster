@@ -155,6 +155,7 @@ dependencies = [
  "minireq",
  "mono-clock",
  "panic-persist",
+ "postcard",
  "rand_core",
  "rtt-logger",
  "rtt-target",
@@ -447,17 +448,17 @@ dependencies = [
 
 [[package]]
 name = "embedded-hal"
-version = "1.0.0-alpha.11"
+version = "1.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7724ebabcadfeb15920571dd727bc8ccde8586e52f2890bdb8182fdf42c3ff2"
+checksum = "3e57ec6ad0bc8eb967cf9c9f144177f5e8f2f6f02dad0b8b683f9f05f6b22def"
 
 [[package]]
 name = "embedded-hal-nb"
-version = "1.0.0-alpha.3"
+version = "1.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a09e4c3f8a54e60803405e1cc17e36c963ab32e654f8d6bb49d48cd8116360d7"
+checksum = "67c4325112d63ff5991e2841960a1320516c33ff7237e924eaab0772b1123703"
 dependencies = [
- "embedded-hal 1.0.0-alpha.11",
+ "embedded-hal 1.0.0-rc.2",
  "nb 1.1.0",
 ]
 
@@ -580,6 +581,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "enumflags2"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5998b4f30320c9d93aed72f63af821bfdac50465b75428fce77b48ec482c3939"
+dependencies = [
+ "enumflags2_derive",
+]
+
+[[package]]
+name = "enumflags2_derive"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f95e2801cd355d4a1a3e3953ce6ee5ae9603a5c833455343a8bfe3f44d418246"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.29",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -597,9 +618,9 @@ dependencies = [
 
 [[package]]
 name = "fugit"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ab17bb279def6720d058cb6c052249938e7f99260ab534879281a95367a87e5"
+checksum = "17186ad64927d5ac8f02c1e77ccefa08ccd9eaa314d5a4772278aa204a22f7e7"
 dependencies = [
  "gcd",
 ]
@@ -1356,16 +1377,12 @@ dependencies = [
 [[package]]
 name = "serial-settings"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/stabilizer?branch=feature/serial-settings-crate#05847bad3f5e261066eb0671f7562796ed49e195"
+source = "git+https://github.com/quartiq/stabilizer#0c9df9506912c0f4fa9b920762b800d734453e1c"
 dependencies = [
- "cortex-m 0.7.7",
  "embedded-io",
- "embedded-storage",
  "heapless 0.8.0",
  "menu 0.4.0",
  "miniconf",
- "postcard",
- "serde",
 ]
 
 [[package]]
@@ -1468,18 +1485,18 @@ dependencies = [
 
 [[package]]
 name = "stm32f4xx-hal"
-version = "0.17.1"
-source = "git+https://github.com/stm32-rs/stm32f4xx-hal?branch=master#2d8d882db949f0f4dfd74f690e4a5ab57621cd94"
+version = "0.18.0"
+source = "git+https://github.com/stm32-rs/stm32f4xx-hal?branch=master#0ffa14c6deb10e0f25d3300aa2b1f03baaa8b047"
 dependencies = [
  "bare-metal 1.0.0",
- "bitflags 2.2.1",
  "cortex-m 0.7.7",
  "cortex-m-rt",
  "embedded-dma",
  "embedded-hal 0.2.7",
- "embedded-hal 1.0.0-alpha.11",
+ "embedded-hal 1.0.0-rc.2",
  "embedded-hal-nb",
  "embedded-storage",
+ "enumflags2",
  "fugit",
  "fugit-timer",
  "nb 1.1.0",
@@ -1521,8 +1538,9 @@ dependencies = [
 
 [[package]]
 name = "synopsys-usb-otg"
-version = "0.3.2"
-source = "git+https://github.com/quartiq/synopsys-usb-otg?branch=feature/usb-device-bump#06bd4b0827f4ae7907ce3a2f9db1444c4ad10d1c"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e948d523b316939545d8b21a48c27aef150ce25321b9f95ff7978647a806a6fe"
 dependencies = [
  "cortex-m 0.7.7",
  "embedded-hal 0.2.7",
@@ -1646,7 +1664,7 @@ dependencies = [
 [[package]]
 name = "usbd-serial"
 version = "0.2.0"
-source = "git+https://github.com/rust-embedded-community/usbd-serial?branch=rs/bugfix#4b5c090a064c30f5e95ccc19e4e54ec7ab929b29"
+source = "git+https://github.com/rust-embedded-community/usbd-serial#6611dc092822c60b4482e28aab2fe084c1756410"
 dependencies = [
  "embedded-hal 0.2.7",
  "embedded-io",

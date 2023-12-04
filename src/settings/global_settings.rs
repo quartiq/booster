@@ -1,7 +1,11 @@
 //! Booster NGFW NVM settings
 
-use crate::{hardware::Eeprom, Error};
+use crate::{
+    hardware::{flash::Flash, Eeprom},
+    Error,
+};
 use core::str::FromStr;
+use embedded_storage::nor_flash::ReadNorFlash;
 use encdec::{Decode, DecodeOwned, Encode};
 use heapless::String;
 use smoltcp_nal::smoltcp;
@@ -218,6 +222,19 @@ impl BoosterMainBoardData {
             id: name,
             fan_speed: DEFAULT_FAN_SPEED,
         }
+    }
+
+    /// Reload device settings from on-board flash.
+    pub fn reload(&mut self, storage: &mut Flash) {
+        let mut buffer = [0u8; 512];
+        storage.read(0, &mut buffer).unwrap();
+        let Ok(mut settings) = postcard::from_bytes::<Self>(&buffer) else {
+            return;
+        };
+
+        settings.mac = self.mac;
+        settings.version = self.version;
+        *self = settings;
     }
 
     /// Construct booster configuration data from serialized `board_data` from a

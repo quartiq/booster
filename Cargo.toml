@@ -60,15 +60,11 @@ rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "1.4", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
 smoltcp-nal = { version = "0.4", features=["shared-stack"] }
-serial-settings = {git = "https://github.com/quartiq/stabilizer", branch = "feature/serial-settings-crate"}
+serial-settings = {git = "https://github.com/quartiq/stabilizer"}
+postcard = "1"
 
 [patch.crates-io.usbd-serial]
 git = "https://github.com/rust-embedded-community/usbd-serial"
-branch = "rs/bugfix"
-
-[patch.crates-io.synopsys-usb-otg]
-git = "https://github.com/quartiq/synopsys-usb-otg"
-branch = "feature/usb-device-bump"
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }

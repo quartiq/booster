@@ -44,8 +44,7 @@ pub enum Mac {
     Enc424j600(enc424j600::Enc424j600<Spi, SpiCs>),
 }
 
-pub type SerialTerminal =
-    serial_settings::SerialSettings<'static, serial_terminal::SerialSettingsPlatform>;
+pub type SerialTerminal = serial_settings::Runner<'static, serial_terminal::SerialSettingsPlatform>;
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<'static, Mac, SystemTimer>;
 
