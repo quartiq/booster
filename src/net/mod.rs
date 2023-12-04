@@ -68,6 +68,7 @@ impl NetworkDevices {
         clock: SystemTimer,
         metadata: &'static crate::hardware::metadata::ApplicationMetadata,
     ) -> Self {
+        log::info!("Using MQTT broker: `{broker}`");
         let shared =
             cortex_m::singleton!(: smoltcp_nal::shared::NetworkManager<'static, crate::hardware::Mac, crate::hardware::SystemTimer> = smoltcp_nal::shared::NetworkManager::new(stack))
                 .unwrap();

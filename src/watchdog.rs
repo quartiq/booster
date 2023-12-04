@@ -26,7 +26,7 @@ impl WatchdogManager {
     /// * `watchdog` - The inedpdent watchdog timer.
     pub fn new(mut watchdog: hal::watchdog::IndependentWatchdog) -> Self {
         watchdog.feed();
-        watchdog.start(4.secs());
+        //watchdog.start(4.secs());
 
         Self {
             watchdog,
@@ -43,7 +43,7 @@ impl WatchdogManager {
 
         // If all clients have checked in, service the watchdog.
         if self.check_ins.iter().all(|&x| x) {
-            self.watchdog.feed();
+            //self.watchdog.feed();
             self.check_ins = [false; 4];
         }
     }
