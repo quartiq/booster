@@ -134,7 +134,7 @@ pub fn setup(
 
     // Start the watchdog during the initialization process.
     let mut watchdog = hal::watchdog::IndependentWatchdog::new(device.IWDG);
-    //watchdog.start(30.secs());
+    watchdog.start(30.secs());
 
     let mut delay = AsmDelay::new(clocks.sysclk().to_Hz());
 
