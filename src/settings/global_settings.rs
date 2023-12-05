@@ -14,7 +14,7 @@
 //! switch over.
 //!
 //! Settings are stored in flash because of the restrictive size of EEPROM on the device making it
-//! impossible to save domain names for a named broker into EEPROM, as the storage is only 128
+//! impossible to save domain names for a named broker into EEPROM, as the available board data storage is only 64
 //! bytes, but a domain name can be up to 255 characters.
 
 use crate::{
@@ -250,6 +250,7 @@ impl BoosterMainBoardData {
         settings.mac = self.mac;
         settings.version = self.version;
         *self = settings;
+        log::info!("Loaded settings from Flash");
     }
 
     /// Construct booster configuration data from serialized `board_data` from a
@@ -286,6 +287,7 @@ impl BoosterMainBoardData {
             return Err(Error::Invalid);
         }
 
+        log::info!("Loaded settings from EEPROM");
         Ok((config.with_mac(eui48), modified))
     }
 
