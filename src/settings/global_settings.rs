@@ -1,8 +1,8 @@
 //! Booster NGFW NVM settings
 //!
 //! # Design
-//! Booster firmware maintained settings in an EEPROM on the main board until after v0.5.0. After
-//! v0.5.0, all global firmware settings for the device were moved to internal flash storage.
+//! Booster firmware maintains mainboard settings in an EEPROM on the main board until v0.5.0. After
+//! v0.5.0, main board settings are loaded from and stored to internal flash storage.
 //!
 //! In order to maintain backwards compatibility with existing Booster devices that are upgraded
 //! from v0.5.0 firmware and earlier, the settings loading process occurs as follows:
