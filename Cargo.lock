@@ -148,7 +148,7 @@ dependencies = [
  "max6639",
  "max6642",
  "mcp3221",
- "menu 0.3.2",
+ "menu",
  "microchip-24aa02e48",
  "miniconf",
  "minimq",
@@ -849,12 +849,6 @@ checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "menu"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b03d7f798bfe97329ad6df937951142eec93886b37d87010502dd25e8cc75fd5"
-
-[[package]]
-name = "menu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5208bd660042c7760f40d960ba0b1a9dc7a9c90775bea4c4637c3b666d2b53d"
@@ -1361,7 +1355,7 @@ source = "git+https://github.com/quartiq/stabilizer#0c9df9506912c0f4fa9b920762b8
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
- "menu 0.4.0",
+ "menu",
  "miniconf",
 ]
 
