@@ -25,6 +25,8 @@ exclude = [
 ]
 
 [dependencies]
+embedded-storage = "0.3"
+embedded-io = "0.6"
 serde_with = { version = "3.4", default-features = false, features = ["macros"] }
 serde-json-core = "0.5"
 cortex-m = "0.7.7"
@@ -42,9 +44,9 @@ serde = {version = "1.0", features = ["derive"], default-features = false }
 menu = "0.3"
 rtt-logger = "0.2"
 bbqueue = "0.5"
-usbd-serial = "0.1.0"
 shared-bus = { version = "0.3", features = ["cortex-m"] }
-usb-device = "0.2.9"
+usb-device = "0.3.0"
+usbd-serial = "0.2.0"
 encdec = { version = "0.9", default-features = false }
 crc-any = { version = "2.4.3", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
@@ -59,11 +61,19 @@ enum-iterator = { version = "1.4", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
 smoltcp-nal = { version = "0.4", features=["shared-stack"] }
 
+serial-settings = {git = "https://github.com/quartiq/stabilizer"}
+postcard = "1"
+
+[patch.crates-io.usbd-serial]
+git = "https://github.com/rust-embedded-community/usbd-serial"
+branch = "rs/bugfix"
+
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }
 
 [dependencies.stm32f4xx-hal]
-version = "0.17"
+git = "https://github.com/quartiq/stm32f4xx-hal"
+branch = "rs/synopsys-patch"
 features = ["stm32f407", "rt", "usb_fs"]
 
 [dependencies.ad5627]

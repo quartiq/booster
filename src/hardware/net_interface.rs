@@ -66,8 +66,9 @@ pub fn setup(
 
     let ip_address = settings.properties.ip_cidr();
 
-    let mut config =
-        smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(settings.mac));
+    let mut config = smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(
+        settings.properties.mac,
+    ));
     config.random_seed = random_seed;
 
     let mut interface =

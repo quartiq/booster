@@ -39,7 +39,7 @@ pub struct NetworkDevices {
         crate::RuntimeSettings,
         NetworkStackProxy,
         SystemTimer,
-        minireq::minimq::broker::IpBroker,
+        minireq::minimq::broker::NamedBroker<NetworkStackProxy>,
         4,
     >,
     pub control: minireq::Minireq<
@@ -47,7 +47,7 @@ pub struct NetworkDevices {
         MainBus,
         NetworkStackProxy,
         SystemTimer,
-        minireq::minimq::broker::IpBroker,
+        minireq::minimq::broker::NamedBroker<NetworkStackProxy>,
         mqtt_control::Error,
     >,
     stack: NetworkStackProxy,
@@ -61,13 +61,14 @@ impl NetworkDevices {
     /// * `stack` - The network stack to use for communications.
     /// * `identifier` - The unique identifier of this device.
     pub fn new(
-        broker: minimq::embedded_nal::IpAddr,
+        broker: &str,
         stack: NetworkStack,
         identifier: &str,
         settings: crate::RuntimeSettings,
         clock: SystemTimer,
         metadata: &'static crate::hardware::metadata::ApplicationMetadata,
     ) -> Self {
+        log::info!("Using MQTT broker: `{broker}`");
         let shared =
             cortex_m::singleton!(: smoltcp_nal::shared::NetworkManager<'static, crate::hardware::Mac, crate::hardware::SystemTimer> = smoltcp_nal::shared::NetworkManager::new(stack))
                 .unwrap();
@@ -81,7 +82,8 @@ impl NetworkDevices {
             let mut client_id: String<128> = String::new();
             write!(&mut client_id, "booster-{}-req", identifier).unwrap();
 
-            let broker = minireq::minimq::broker::IpBroker::new(broker);
+            let broker =
+                minireq::minimq::broker::NamedBroker::new(broker, shared.acquire_stack()).unwrap();
             let config = minireq::minimq::ConfigBuilder::new(broker, &mut store.settings)
                 .client_id(&client_id)
                 .unwrap();
@@ -104,7 +106,8 @@ impl NetworkDevices {
             let mut client_id: String<64> = String::new();
             write!(&mut client_id, "booster-{}-tlm", identifier).unwrap();
 
-            let broker = minireq::minimq::broker::IpBroker::new(broker);
+            let broker =
+                minireq::minimq::broker::NamedBroker::new(broker, shared.acquire_stack()).unwrap();
             let config = miniconf::minimq::ConfigBuilder::new(broker, &mut store.telemetry)
                 // The telemetry client doesn't do much in terms of receiving data, so reserve the
                 // buffer for transmission.
@@ -122,7 +125,8 @@ impl NetworkDevices {
             let mut client_id: String<128> = String::new();
             write!(&mut client_id, "booster-{}-settings", identifier).unwrap();
 
-            let broker = minireq::minimq::broker::IpBroker::new(broker);
+            let broker =
+                minireq::minimq::broker::NamedBroker::new(broker, shared.acquire_stack()).unwrap();
             let config = miniconf::minimq::ConfigBuilder::new(broker, &mut store.control)
                 .client_id(&client_id)
                 .unwrap();

@@ -4,11 +4,14 @@ use super::{
     booster_channels::BoosterChannels,
     chassis_fans::ChassisFans,
     delay::AsmDelay,
+    flash::Flash,
     metadata::ApplicationMetadata,
     net_interface, platform,
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
+    usb,
     user_interface::{UserButtons, UserLeds},
-    HardwareVersion, Mac, NetworkStack, SystemTimer, Systick, UsbBus, CPU_FREQ, I2C,
+    HardwareVersion, Mac, NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, CPU_FREQ,
+    I2C,
 };
 
 use crate::settings::BoosterSettings;
@@ -76,8 +79,8 @@ pub struct BoosterDevices {
     pub main_bus: MainBus,
     pub network_stack: NetworkStack,
     pub watchdog: hal::watchdog::IndependentWatchdog,
-    pub usb_device: UsbDevice<'static, UsbBus>,
-    pub usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
+    pub usb_device: usb::UsbDevice,
+    pub usb_serial: SerialTerminal,
     pub settings: BoosterSettings,
     pub metadata: &'static ApplicationMetadata,
     pub systick: Systick,
@@ -258,8 +261,7 @@ pub fn setup(
         UserLeds::new(spi, csn, oen)
     };
 
-    // Read the EUI48 identifier and configure the ethernet MAC address.
-    let settings = {
+    let mut eeprom = {
         let i2c2 = {
             // Manually reset the I2C bus
             let mut scl = gpiob.pb10.into_open_drain_output();
@@ -277,9 +279,17 @@ pub fn setup(
             )
         };
 
-        let eui = microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap();
-        BoosterSettings::new(eui)
+        microchip_24aa02e48::Microchip24AA02E48::new(i2c2).unwrap()
     };
+
+    let mac_address = {
+        let mut mac: [u8; 6] = [0; 6];
+        eeprom.read_eui48(&mut mac).unwrap();
+        mac
+    };
+
+    // Read the EUI48 identifier and configure the ethernet MAC address.
+    let mut settings = BoosterSettings::new(eeprom);
 
     let mut mac = {
         let mut spi = {
@@ -342,7 +352,7 @@ pub fn setup(
 
             let w5500 = w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
                 .initialize_macraw(w5500::MacAddress {
-                    octets: settings.mac.0,
+                    octets: mac_address,
                 })
                 .unwrap();
 
@@ -350,7 +360,7 @@ pub fn setup(
         } else {
             let mut mac = enc424j600::Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
             mac.init(&mut delay).expect("PHY initialization failed");
-            mac.write_mac_addr(settings.mac.as_bytes()).unwrap();
+            mac.write_mac_addr(&mac_address).unwrap();
 
             Mac::Enc424j600(mac)
         }
@@ -446,12 +456,15 @@ pub fn setup(
         {
             let mut serial_string: String<64> = String::new();
 
-            let octets = settings.mac.0;
-
             write!(
                 &mut serial_string,
                 "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
-                octets[0], octets[1], octets[2], octets[3], octets[4], octets[5]
+                mac_address[0],
+                mac_address[1],
+                mac_address[2],
+                mac_address[3],
+                mac_address[4],
+                mac_address[5]
             )
             .unwrap();
             serial_number.replace(serial_string);
@@ -460,13 +473,42 @@ pub fn setup(
         let usb_device =
             // USB VID/PID registered at https://pid.codes/1209/3933/
             UsbDeviceBuilder::new(usb_bus.as_ref().unwrap(), UsbVidPid(0x1209, 0x3933))
-                .manufacturer("ARTIQ/Sinara")
-                .product("Booster")
-                .serial_number(serial_number.as_ref().unwrap().as_str())
+                .strings(&[usb_device::device::StringDescriptors::default()
+                    .manufacturer("ARTIQ/Sinara")
+                    .product("Booster")
+                    .serial_number(serial_number.as_ref().unwrap().as_str())
+
+                ]).unwrap()
                 .device_class(usbd_serial::USB_CLASS_CDC)
                 .build();
 
-        (usb_device, usb_serial)
+        (usb::UsbDevice::new(usb_device), usb_serial)
+    };
+
+    let serial_terminal = {
+        let mut flash = {
+            let flash = stm32f4xx_hal::flash::LockedFlash::new(device.FLASH);
+            const SECTOR_SIZE: usize = 128 * 1024;
+            Flash::new(flash, 7 * SECTOR_SIZE)
+        };
+
+        // Attempt to load flash settings
+        settings.properties.reload(&mut flash);
+
+        let input_buffer = cortex_m::singleton!(:[u8; 256] = [0u8; 256]).unwrap();
+        let serialize_buffer = cortex_m::singleton!(:[u8; 512] = [0u8; 512]).unwrap();
+
+        serial_settings::Runner::new(
+            super::serial_terminal::SerialSettingsPlatform {
+                metadata,
+                interface: serial_settings::BestEffortInterface::new(usb_serial),
+                storage: flash,
+                settings: settings.properties.clone(),
+            },
+            input_buffer,
+            serialize_buffer,
+        )
+        .unwrap()
     };
 
     info!("Startup complete");
@@ -480,7 +522,7 @@ pub fn setup(
         network_stack,
         settings,
         usb_device,
-        usb_serial,
+        usb_serial: serial_terminal,
         watchdog,
         metadata,
         systick,

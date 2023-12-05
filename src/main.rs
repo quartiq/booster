@@ -13,19 +13,18 @@ mod hardware;
 mod linear_transformation;
 mod logger;
 mod net;
-mod serial_terminal;
 mod settings;
 mod watchdog;
 
 use logger::BufferedLog;
-use serial_terminal::SerialTerminal;
 use settings::BoosterSettings;
 use systick_monotonic::fugit::ExtU64;
 
 use hardware::{
     setup::MainBus,
+    usb::UsbDevice,
     user_interface::{ButtonEvent, Color, UserButtons, UserLeds},
-    Channel, SystemTimer,
+    Channel, SerialTerminal, SystemTimer,
 };
 
 use settings::runtime_settings::RuntimeSettings;
@@ -59,6 +58,7 @@ mod app {
     struct LocalResources {
         buttons: UserButtons,
         leds: UserLeds,
+        usb: UsbDevice,
         usb_terminal: SerialTerminal,
     }
 
@@ -96,10 +96,9 @@ mod app {
             SharedResources {
                 main_bus: booster.main_bus,
                 net_devices: net::NetworkDevices::new(
-                    // TODO: Replace with hostname-based broker.
-                    booster.settings.properties.broker(),
+                    &booster.settings.properties.broker,
                     booster.network_stack,
-                    &booster.settings.properties.id.0,
+                    &booster.settings.properties.id,
                     settings,
                     clock,
                     booster.metadata,
@@ -109,12 +108,8 @@ mod app {
             LocalResources {
                 buttons: booster.buttons,
                 leds: booster.leds,
-                usb_terminal: SerialTerminal::new(
-                    booster.usb_device,
-                    booster.usb_serial,
-                    booster.settings,
-                    booster.metadata,
-                ),
+                usb: booster.usb_device,
+                usb_terminal: booster.usb_serial,
             },
             init::Monotonics(booster.systick),
         )
@@ -253,18 +248,18 @@ mod app {
         });
     }
 
-    #[task(priority = 2, shared=[watchdog], local=[usb_terminal])]
+    #[task(priority = 2, shared=[watchdog], local=[usb, usb_terminal])]
     fn usb(mut c: usb::Context) {
         // Check in with the watchdog.
         c.shared
             .watchdog
             .lock(|watchdog| watchdog.check_in(WatchdogClient::Usb));
 
+        c.local.usb.process(c.local.usb_terminal);
+        c.local.usb_terminal.process().unwrap();
+
         // Process any log output.
         LOGGER.process(c.local.usb_terminal);
-
-        // Handle the USB serial terminal.
-        c.local.usb_terminal.process();
 
         // Schedule to run this task every 10ms.
         usb::spawn_after(10u64.millis()).unwrap();

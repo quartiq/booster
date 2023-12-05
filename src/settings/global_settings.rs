@@ -1,13 +1,33 @@
 //! Booster NGFW NVM settings
+//!
+//! # Design
+//! Booster firmware maintains mainboard settings in an EEPROM on the main board until v0.5.0. After
+//! v0.5.0, main board settings are loaded from and stored to internal flash storage.
+//!
+//! In order to maintain backwards compatibility with existing Booster devices that are upgraded
+//! from v0.5.0 firmware and earlier, the settings loading process occurs as follows:
+//! 1. Settings are loaded from Booster mainboard EEPROM
+//! 2. Settings are then loaded from flash (if possible)
+//!
+//! Any further saves to settings are persisted to device flash, which will result in overriding
+//! the older EEPROM settings. This essentially freezes the EEPROM-based settings in time from the
+//! switch over.
+//!
+//! Settings are stored in flash because of the restrictive size of EEPROM on the device making it
+//! impossible to save domain names for a named broker into EEPROM, as the available board data storage is only 64
+//! bytes, but a domain name can be up to 255 characters.
 
-use crate::{hardware::Eeprom, Error};
+use crate::{
+    hardware::{flash::Flash, Eeprom},
+    Error,
+};
+use core::str::FromStr;
+use embedded_storage::nor_flash::ReadNorFlash;
 use encdec::{Decode, DecodeOwned, Encode};
 use heapless::String;
 use smoltcp_nal::smoltcp;
 
 use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
-
-use smoltcp_nal::smoltcp::wire::EthernetAddress as MacAddress;
 
 use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
 use serde::{Deserialize, Serialize};
@@ -121,18 +141,73 @@ impl encdec::DecodeOwned for MqttIdentifier {
     }
 }
 
-/// Represents booster mainboard-specific configuration values.
-#[derive(Debug, Clone, Tree, Encode, DecodeOwned)]
-pub struct BoosterMainBoardData {
-    #[tree(skip)]
+#[derive(Debug, Clone, Encode, DecodeOwned)]
+pub struct SerializedMainBoardData {
     version: SemVersion,
-
     pub ip: IpAddr,
     pub broker: IpAddr,
     pub gateway: IpAddr,
     pub netmask: IpAddr,
     pub id: MqttIdentifier,
     pub fan_speed: f32,
+}
+
+impl From<BoosterMainBoardData> for SerializedMainBoardData {
+    fn from(d: BoosterMainBoardData) -> Self {
+        Self {
+            version: d.version,
+            ip: d.ip,
+            broker: d
+                .broker
+                .parse()
+                .unwrap_or_else(|_| IpAddr::new(&[10, 0, 0, 2])),
+            gateway: d.gateway,
+            netmask: d.netmask,
+            id: MqttIdentifier(d.id),
+            fan_speed: d.fan_speed,
+        }
+    }
+}
+
+impl SerializedMainBoardData {
+    fn with_mac(self, eui48: &[u8; 6]) -> BoosterMainBoardData {
+        let mut broker = String::new();
+        write!(&mut broker, "{}", self.broker.0).unwrap();
+        BoosterMainBoardData {
+            mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
+            version: self.version,
+            ip: self.ip,
+            broker,
+            gateway: self.gateway,
+            netmask: self.netmask,
+            id: self.id.0,
+            fan_speed: self.fan_speed,
+        }
+    }
+}
+
+/// Represents booster mainboard-specific configuration values.
+#[derive(Debug, Clone, Tree, Serialize, Deserialize)]
+pub struct BoosterMainBoardData {
+    #[tree(skip)]
+    version: SemVersion,
+
+    #[tree(skip)]
+    #[serde(skip)]
+    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+
+    pub ip: IpAddr,
+    pub broker: heapless::String<255>,
+    pub gateway: IpAddr,
+    pub netmask: IpAddr,
+    pub id: heapless::String<23>,
+    pub fan_speed: f32,
+}
+
+impl serial_settings::Settings for BoosterMainBoardData {
+    fn reset(&mut self) {
+        *self = Self::default(&self.mac.0)
+    }
 }
 
 impl BoosterMainBoardData {
@@ -153,14 +228,29 @@ impl BoosterMainBoardData {
         id[..name.len()].copy_from_slice(name.as_str().as_bytes());
 
         Self {
+            mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
             version: EXPECTED_VERSION,
             ip: IpAddr::new(&[0, 0, 0, 0]),
-            broker: IpAddr::new(&[10, 0, 0, 2]),
+            broker: String::from_str("10.0.0.2").unwrap(),
             gateway: IpAddr::new(&[0, 0, 0, 0]),
             netmask: IpAddr::new(&[0, 0, 0, 0]),
-            id: MqttIdentifier(name),
+            id: name,
             fan_speed: DEFAULT_FAN_SPEED,
         }
+    }
+
+    /// Reload device settings from on-board flash.
+    pub fn reload(&mut self, storage: &mut Flash) {
+        let mut buffer = [0u8; 512];
+        storage.read(0, &mut buffer).unwrap();
+        let Ok(mut settings) = postcard::from_bytes::<Self>(&buffer) else {
+            return;
+        };
+
+        settings.mac = self.mac;
+        settings.version = self.version;
+        *self = settings;
+        log::info!("Loaded settings from Flash");
     }
 
     /// Construct booster configuration data from serialized `board_data` from a
@@ -172,8 +262,8 @@ impl BoosterMainBoardData {
     /// # Returns
     /// The configuration if deserialization was successful along with a bool indicating if the
     /// configuration was automatically upgraded. Otherwise, returns an error.
-    pub fn deserialize(data: &[u8; 64]) -> Result<(Self, bool), Error> {
-        let (mut config, _) = BoosterMainBoardData::decode_owned(data).unwrap();
+    pub fn deserialize(eui48: &[u8; 6], data: &[u8; 64]) -> Result<(Self, bool), Error> {
+        let (mut config, _) = SerializedMainBoardData::decode_owned(data).unwrap();
         let mut modified = false;
 
         // Check if the stored EEPROM version is older (or incompatible)
@@ -197,7 +287,8 @@ impl BoosterMainBoardData {
             return Err(Error::Invalid);
         }
 
-        Ok((config, modified))
+        log::info!("Loaded settings from EEPROM");
+        Ok((config.with_mac(eui48), modified))
     }
 
     /// Serialize the booster config into a sinara configuration for storage into EEPROM.
@@ -206,12 +297,13 @@ impl BoosterMainBoardData {
     /// * `config` - The sinara configuration to serialize the booster configuration into.
     pub fn serialize_into(&self, config: &mut SinaraConfiguration) {
         let mut buffer: [u8; 64] = [0; 64];
-        let len = self.encode(&mut buffer).unwrap();
+        let serialized: SerializedMainBoardData = self.clone().into();
+        let len = serialized.encode(&mut buffer).unwrap();
         config.board_data[..len].copy_from_slice(&buffer[..len]);
     }
 
     pub fn validate(&self) -> bool {
-        if !identifier_is_valid(&self.id.0) {
+        if !identifier_is_valid(&self.id) {
             log::error!("The ID must be 23 or less alpha-numeric characters (or '-')");
             return false;
         }
@@ -247,19 +339,11 @@ impl BoosterMainBoardData {
 
         smoltcp::wire::IpCidr::new(smoltcp::wire::IpAddress::Ipv4(ip_addr), prefix)
     }
-
-    pub fn broker(&self) -> minimq::embedded_nal::IpAddr {
-        let octets = self.broker.0 .0;
-        minimq::embedded_nal::IpAddr::V4(minimq::embedded_nal::Ipv4Addr::new(
-            octets[0], octets[1], octets[2], octets[3],
-        ))
-    }
 }
 
 /// Booster device-wide configurable settings.
 pub struct BoosterSettings {
     pub properties: BoosterMainBoardData,
-    pub mac: MacAddress,
     eeprom: Eeprom,
 }
 
@@ -274,12 +358,11 @@ impl BoosterSettings {
 
         // Load the sinara configuration from EEPROM.
         let (board_data, write_back) = Self::load_config(&mut eeprom)
-            .and_then(|config| BoosterMainBoardData::deserialize(&config.board_data))
+            .and_then(|config| BoosterMainBoardData::deserialize(&mac, &config.board_data))
             .unwrap_or((BoosterMainBoardData::default(&mac), true));
 
         let mut settings = Self {
             properties: board_data,
-            mac: MacAddress(mac),
             eeprom,
         };
 
