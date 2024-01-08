@@ -47,7 +47,7 @@ shared-bus = { version = "0.3", features = ["cortex-m"] }
 usb-device = "0.3.0"
 usbd-serial = "0.2.0"
 encdec = { version = "0.9", default-features = false }
-crc-any = { version = "2.4.3", default-features = false }
+crc-any = { version = "2.4.4", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
 miniconf = { version = "0.9.0", features = ["mqtt-client"]}
 # Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
