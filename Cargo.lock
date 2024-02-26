@@ -1350,7 +1350,7 @@ dependencies = [
 [[package]]
 name = "serial-settings"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/stabilizer#0c9df9506912c0f4fa9b920762b800d734453e1c"
+source = "git+https://github.com/quartiq/stabilizer#87cb52a8cd25fafea640df6f0dc1f22bdb64edc7"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
