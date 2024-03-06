@@ -44,8 +44,8 @@ serde = {version = "1.0", features = ["derive"], default-features = false }
 rtt-logger = "0.2"
 bbqueue = "0.5"
 shared-bus = { version = "0.3", features = ["cortex-m"] }
-usb-device = "0.3.0"
-usbd-serial = "0.2.0"
+usb-device = "0.3.2"
+usbd-serial = "0.2.1"
 encdec = { version = "0.9", default-features = false }
 crc-any = { version = "2.4.3", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
@@ -62,10 +62,6 @@ smoltcp-nal = { version = "0.4", features=["shared-stack"] }
 
 serial-settings = {git = "https://github.com/quartiq/stabilizer"}
 postcard = "1"
-
-[patch.crates-io.usbd-serial]
-git = "https://github.com/rust-embedded-community/usbd-serial"
-branch = "rs/bugfix"
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }
