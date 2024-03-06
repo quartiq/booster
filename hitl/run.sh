@@ -30,7 +30,8 @@ mosquitto_pub -h mqtt.ber.quartiq.de -t cmnd/tasmota_4F64D0/POWER -m ON
 # Give booster a moment to power up after enabling the mains supply
 sleep 5
 
-cargo flash --chip STM32F407ZGTx --elf target/thumbv7em-none-eabihf/release/booster --probe 0483:3754:003C002F5632500A20313236
+probe-rs download --chip STM32F407ZGTx --log-file /dev/null --probe 0483:3754:003C002F5632500A20313236 target/thumbv7em-none-eabihf/release/booster 
+probe-rs reset --chip STM32F407ZGTx --log-file /dev/null --probe 0483:3754:003C002F5632500A20313236 --connect-under-reset
 
 # Sleep to allow flashing, booting, DHCP, MQTT
 sleep 30
