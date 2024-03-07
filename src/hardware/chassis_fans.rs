@@ -106,7 +106,7 @@ impl ChassisFans {
     /// when disabled.
     pub fn self_test(
         &mut self,
-        delay: &mut impl stm32f4xx_hal::hal::blocking::delay::DelayMs<u16>,
+        delay: &mut impl stm32f4xx_hal::hal_02::blocking::delay::DelayMs<u16>,
     ) -> bool {
         self.set_duty_cycles(1.0);
         delay.delay_ms(5000);

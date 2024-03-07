@@ -13,6 +13,7 @@ use super::{
     HardwareVersion, Mac, NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, CPU_FREQ,
     I2C,
 };
+use stm32f4xx_hal::hal_02::blocking::delay::DelayMs;
 
 use crate::settings::BoosterSettings;
 
@@ -83,7 +84,6 @@ pub struct BoosterDevices {
     pub usb_serial: SerialTerminal,
     pub settings: BoosterSettings,
     pub metadata: &'static ApplicationMetadata,
-    pub systick: Systick,
 }
 
 /// Configure Booster hardware peripherals and RF channels.
@@ -130,7 +130,8 @@ pub fn setup(
         .require_pll48clk()
         .freeze();
 
-    let systick = Systick::new(core.SYST, clocks.sysclk().to_Hz());
+    let mono_token = rtic_monotonics::create_systick_token!();
+    Systick::start(core.SYST, clocks.sysclk().to_Hz(), mono_token);
 
     // Start the watchdog during the initialization process.
     let mut watchdog = hal::watchdog::IndependentWatchdog::new(device.IWDG);
@@ -525,6 +526,5 @@ pub fn setup(
         usb_serial: serial_terminal,
         watchdog,
         metadata,
-        systick,
     }
 }

@@ -17,7 +17,7 @@ use serde::Serialize;
 const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
 
 /// The default telemetry period.
-pub const DEFAULT_TELEMETRY_PERIOD_SECS: u64 = 10;
+pub const DEFAULT_TELEMETRY_PERIOD_SECS: u32 = 10;
 
 pub enum Error {
     JsonDe(serde_json_core::de::Error),
@@ -81,7 +81,7 @@ pub struct TelemetryClient {
         minimq::broker::NamedBroker<NetworkStackProxy>,
     >,
     prefix: String<128>,
-    telemetry_period: u64,
+    telemetry_period: u32,
     meta_published: bool,
     metadata: &'static ApplicationMetadata,
 }
@@ -174,8 +174,8 @@ impl TelemetryClient {
         }
     }
 
-    /// Get the period between telemetry updates in CPU cycles.
-    pub fn telemetry_period_secs(&self) -> u64 {
+    /// Get the period between telemetry updates in seconds.
+    pub fn telemetry_period_secs(&self) -> u32 {
         self.telemetry_period
     }
 
@@ -186,7 +186,7 @@ impl TelemetryClient {
     ///
     /// # Args
     /// * `period` - The telemetry period in seconds.
-    pub fn set_telemetry_period(&mut self, period: u64) {
+    pub fn set_telemetry_period(&mut self, period: u32) {
         self.telemetry_period = period.clamp(1, period);
     }
 }

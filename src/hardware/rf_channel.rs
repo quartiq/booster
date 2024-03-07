@@ -19,7 +19,7 @@ use stm32f4xx_hal::{
     self as hal,
     adc::config::SampleTime,
     gpio::{Analog, Input, Output},
-    hal::blocking::delay::DelayMs,
+    hal_02::blocking::delay::DelayMs,
 };
 
 /// A structure representing power supply measurements of a channel.

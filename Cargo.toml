@@ -14,7 +14,7 @@ keywords = ["ethernet", "stm32f4", "adc", "physics"]
 repository = "https://github.com/quartiq/booster"
 readme = "README.md"
 documentation = "https://quartiq.de/booster-doc/"
-edition = "2018"
+edition = "2021"
 # keep MSRV in sync in ci.yaml, Cargo.toml
 rust-version = "1.72"
 build = "build.rs"
@@ -31,10 +31,12 @@ serde_with = { version = "3.4", default-features = false, features = ["macros"] 
 serde-json-core = "0.5"
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7"
-cortex-m-rtic = "1.1"
+fugit = "0.3"
+rtic-sync = "1"
+rtic = {version = "2.1", features = ["thumbv7-backend"] }
+rtic-monotonics = { version = "1.5", features = ["cortex-m-systick"] }
 rand_core = "0.6"
 mono-clock = "0.1"
-systick-monotonic = "1.0.1"
 cortex-m-log = { version = "0.8.0", features = ["log-integration"] }
 log = "0.4.20"
 heapless = { version = "0.7", features = ["serde"] }
@@ -67,9 +69,8 @@ postcard = "1"
 built = { version = "0.7", features = ["git2"], default-features = false }
 
 [dependencies.stm32f4xx-hal]
-git = "https://github.com/quartiq/stm32f4xx-hal"
-branch = "rs/synopsys-patch"
-features = ["stm32f407", "rt", "usb_fs"]
+version = "0.20.0"
+features = ["stm32f407", "usb_fs"]
 
 [dependencies.ad5627]
 path = "ad5627"
