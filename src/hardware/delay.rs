@@ -1,4 +1,4 @@
-use stm32f4xx_hal::hal::blocking::delay::{DelayMs, DelayUs};
+use stm32f4xx_hal::hal_02::blocking::delay::{DelayMs, DelayUs};
 
 #[derive(Clone)]
 pub struct AsmDelay {
