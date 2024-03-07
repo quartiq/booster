@@ -12,10 +12,7 @@ use embedded_hal::i2c::{ErrorType, I2c};
 pub const MAX_VOLTAGE: f32 = 2.5;
 
 /// The driver representing the programmable reference generator.
-pub struct Ad5627<I2C>
-where
-    I2C: I2c,
-{
+pub struct Ad5627<I2C> {
     i2c: I2C,
     address: u8,
 }
@@ -74,7 +71,12 @@ where
         Ok(device)
     }
 
-    fn write(&mut self, command: Command, dac: Dac, payload: [u8; 2]) -> Result<(), <I2C as ErrorType>::Error> {
+    fn write(
+        &mut self,
+        command: Command,
+        dac: Dac,
+        payload: [u8; 2],
+    ) -> Result<(), <I2C as ErrorType>::Error> {
         // Construct the command byte.
         let write: [u8; 3] = [((command as u8) << 3) | dac as u8, payload[0], payload[1]];
 
@@ -100,7 +102,11 @@ where
     ///
     /// # Returns
     /// The actual voltage programmed into the DAC after digitization.
-    pub fn set_voltage(&mut self, voltage: f32, dac: Dac) -> Result<f32, Error<<I2C as ErrorType>::Error>> {
+    pub fn set_voltage(
+        &mut self,
+        voltage: f32,
+        dac: Dac,
+    ) -> Result<f32, Error<<I2C as ErrorType>::Error>> {
         // Assuming a 1.25V internal reference with a 2x output stage gain, our full scale range is
         // 2.5V.
         if !(0.0..=crate::MAX_VOLTAGE).contains(&voltage) {

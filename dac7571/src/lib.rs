@@ -4,13 +4,10 @@
 //! This driver does not support any low-power operation modes.
 #![no_std]
 
-use embedded_hal::i2c::{I2c, ErrorType};
+use embedded_hal::i2c::{ErrorType, I2c};
 
 /// A driver for the DAC7571 digital to analog converter.
-pub struct Dac7571<I2C>
-where
-    I2C: I2c,
-{
+pub struct Dac7571<I2C> {
     i2c: I2C,
     address: u8,
     supply_voltage: f32,

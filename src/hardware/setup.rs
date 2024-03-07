@@ -1,4 +1,5 @@
 //! Booster hardware setup and configuration routines.
+use embedded_hal_bus::i2c::AtomicDevice;
 
 use super::{
     booster_channels::BoosterChannels,
@@ -13,7 +14,7 @@ use super::{
     HardwareVersion, Mac, NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, CPU_FREQ,
     I2C,
 };
-use stm32f4xx_hal::hal_02::blocking::delay::DelayMs;
+use stm32f4xx_hal::hal::delay::DelayNs;
 
 use crate::settings::BoosterSettings;
 
@@ -194,7 +195,8 @@ pub fn setup(
             )
         };
 
-        shared_bus::new_atomic_check!(I2C = i2c).unwrap()
+        cortex_m::singleton!(:core::cell::UnsafeCell<I2C> = core::cell::UnsafeCell::new(i2c))
+            .unwrap()
     };
 
     // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
@@ -213,7 +215,7 @@ pub fn setup(
 
         let mut mux = {
             tca9548::Tca9548::default(
-                i2c_bus_manager.acquire_i2c(),
+                AtomicDevice::new(&i2c_bus_manager),
                 &mut i2c_mux_reset,
                 &mut delay,
             )
@@ -411,14 +413,21 @@ pub fn setup(
             (led1, led2, led3)
         };
 
-        let fan1 =
-            max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pulldown)
-                .unwrap();
-        let fan2 = max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Float)
-            .unwrap();
-        let fan3 =
-            max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pullup)
-                .unwrap();
+        let fan1 = max6639::Max6639::new(
+            AtomicDevice::new(&i2c_bus_manager),
+            max6639::AddressPin::Pulldown,
+        )
+        .unwrap();
+        let fan2 = max6639::Max6639::new(
+            AtomicDevice::new(&i2c_bus_manager),
+            max6639::AddressPin::Float,
+        )
+        .unwrap();
+        let fan3 = max6639::Max6639::new(
+            AtomicDevice::new(&i2c_bus_manager),
+            max6639::AddressPin::Pullup,
+        )
+        .unwrap();
 
         ChassisFans::new(
             [fan1, fan2, fan3],

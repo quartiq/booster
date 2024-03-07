@@ -4,14 +4,14 @@ version = 3
 
 [[package]]
 name = "ad5627"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "embedded-hal 1.0.0",
 ]
 
 [[package]]
 name = "ads7924"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bit_field",
  "embedded-hal 1.0.0",
@@ -137,6 +137,7 @@ dependencies = [
  "crc-any",
  "dac7571",
  "debounced-pin",
+ "embedded-hal 1.0.0",
  "embedded-hal-bus",
  "embedded-io",
  "embedded-storage",
@@ -159,14 +160,12 @@ dependencies = [
  "rand_core",
  "rtic",
  "rtic-monotonics",
- "rtic-sync",
  "rtt-logger",
  "rtt-target",
  "serde",
  "serde-json-core",
  "serde_with",
  "serial-settings",
- "shared-bus 0.3.1",
  "smlang",
  "smoltcp-nal",
  "stm32f4xx-hal",
@@ -306,7 +305,7 @@ checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
 
 [[package]]
 name = "dac7571"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "embedded-hal 1.0.0",
 ]
@@ -435,23 +434,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
 
 [[package]]
-name = "embedded-hal-async"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c4c685bbef7fe13c3c6dd4da26841ed3980ef33e841cddfa15ce8a8fb3f1884"
-dependencies = [
- "embedded-hal 1.0.0",
-]
-
-[[package]]
 name = "embedded-hal-bus"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57b4e6ede84339ebdb418cd986e6320a34b017cdf99b5cc3efceec6450b06886"
 dependencies = [
  "critical-section 1.1.1",
  "embedded-hal 1.0.0",
- "embedded-hal-async",
+ "portable-atomic",
 ]
 
 [[package]]
@@ -878,7 +866,7 @@ checksum = "a3e378b66a060d48947b590737b30a1be76706c8dd7b8ba0f2fe3989c68a853f"
 
 [[package]]
 name = "max6639"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bit_field",
  "embedded-hal 1.0.0",
@@ -886,7 +874,7 @@ dependencies = [
 
 [[package]]
 name = "max6642"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bit_field",
  "embedded-hal 1.0.0",
@@ -894,7 +882,7 @@ dependencies = [
 
 [[package]]
 name = "mcp3221"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "embedded-hal 1.0.0",
 ]
@@ -913,7 +901,7 @@ checksum = "d5208bd660042c7760f40d960ba0b1a9dc7a9c90775bea4c4637c3b666d2b53d"
 
 [[package]]
 name = "microchip-24aa02e48"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "embedded-hal 1.0.0",
 ]
@@ -1307,21 +1295,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rtic-sync"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49b1200137ccb2bf272a1801fa6e27264535facd356cb2c1d5bc8e12aa211bad"
-dependencies = [
- "critical-section 1.1.1",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-hal-bus",
- "heapless 0.8.0",
- "portable-atomic",
- "rtic-common",
-]
-
-[[package]]
 name = "rtic-time"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1480,18 +1453,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shared-bus"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6b8d3f0e34309c22ca4a9a27d24fa493e31573485f3493802b75b9d706756a6"
-dependencies = [
- "atomic-polyfill 1.0.3",
- "cortex-m 0.7.7",
- "embedded-hal 0.2.7",
- "nb 1.1.0",
-]
-
-[[package]]
 name = "smlang"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1534,7 +1495,7 @@ dependencies = [
  "embedded-time",
  "heapless 0.7.16",
  "nanorand",
- "shared-bus 0.2.5",
+ "shared-bus",
  "smoltcp",
 ]
 
@@ -1634,7 +1595,7 @@ dependencies = [
 
 [[package]]
 name = "tca9548"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "embedded-hal 1.0.0",
 ]

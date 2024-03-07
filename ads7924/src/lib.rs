@@ -12,10 +12,7 @@ use embedded_hal::{
 };
 
 /// A driver for the ADS7924 4-channel analog-to-digital converter.
-pub struct Ads7924<I2C>
-where
-    I2C: I2c,
-{
+pub struct Ads7924<I2C> {
     i2c: I2C,
     address: u8,
     volts_per_lsb: f32,
@@ -153,10 +150,7 @@ where
         Ok(())
     }
 
-    fn reset(
-        &mut self,
-        delay: &mut impl DelayNs,
-    ) -> Result<(), Error<<I2C as ErrorType>::Error>> {
+    fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), Error<<I2C as ErrorType>::Error>> {
         self.write(Register::Reset, &[0xAA])?;
 
         // Wait a small delay to ensure the device is processing the reset request.

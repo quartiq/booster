@@ -2,16 +2,13 @@
 #![no_std]
 #![deny(warnings)]
 
-use embedded_hal::i2c::{I2c, ErrorType};
+use embedded_hal::i2c::{ErrorType, I2c};
 
 // The default address of the ADC.
 const DEVICE_ADDRESS: u8 = 0x4D;
 
 /// A driver for the MCP3221 external analog-to-digital converter.
-pub struct Mcp3221<I2C>
-where
-    I2C: I2c,
-{
+pub struct Mcp3221<I2C> {
     i2c: I2C,
     supply_voltage: f32,
 }

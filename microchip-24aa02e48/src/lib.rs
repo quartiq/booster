@@ -5,7 +5,7 @@
 #![no_std]
 #![deny(warnings)]
 
-use embedded_hal::i2c::{I2c, ErrorType};
+use embedded_hal::i2c::{ErrorType, I2c};
 
 /// The default I2C device address of the EUI-48.
 const DEVICE_ADDRESS: u8 = 0b101_0000;
@@ -20,10 +20,7 @@ const TOTAL_PAGES: usize = 32;
 const WRITABLE_PAGES: usize = 16;
 
 /// A driver for the 24AA02E48 EUI-48 2Kb EEPROM.
-pub struct Microchip24AA02E48<I2C>
-where
-    I2C: I2c,
-{
+pub struct Microchip24AA02E48<I2C> {
     i2c: I2C,
 }
 

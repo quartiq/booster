@@ -2,7 +2,7 @@
 
 use super::Channel;
 use bit_field::BitField;
-use hal::hal_02::digital::v2::InputPin;
+use hal::hal::digital::{ErrorType, InputPin};
 use stm32f4xx_hal as hal;
 
 use debounced_pin::{Debounce, DebounceState, DebouncedInputPin};
@@ -13,14 +13,14 @@ pub enum ButtonEvent {
     Standby,
 }
 
-type Button1 = hal::gpio::gpiof::PF14<hal::gpio::Input>;
+pub type Button1 = hal::gpio::gpiof::PF14<hal::gpio::Input>;
 
 type Button2 = hal::gpio::gpiof::PF15<hal::gpio::Input>;
 
 /// Represents the two user input buttons on the front panel.
 pub struct UserButtons {
-    button1: InputButton<Button1, <Button1 as InputPin>::Error>,
-    button2: InputButton<Button2, <Button2 as InputPin>::Error>,
+    button1: InputButton<Button1, <Button1 as ErrorType>::Error>,
+    button2: InputButton<Button2, <Button2 as ErrorType>::Error>,
 }
 
 impl UserButtons {

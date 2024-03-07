@@ -1,6 +1,6 @@
 [package]
 name = "ad5627"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Ryan Summers <ryan.summers@vertigo-designs.com>"]
 edition = "2018"
 description = "no_std driver for the AD5627 2-channel digital-to-analog converter (DAC)"

@@ -1,6 +1,6 @@
 [package]
 name = "microchip-24aa02e48"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Ryan Summers <ryan.summers@vertigo-designs.com>"]
 edition = "2018"
 description = "no_std driver for the Microchip 24AA02E48 EEPROM with EUI-48"

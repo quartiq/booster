@@ -3,7 +3,7 @@
 #![deny(warnings)]
 
 use bit_field::BitField;
-use embedded_hal::i2c::{I2c, ErrorType};
+use embedded_hal::i2c::{ErrorType, I2c};
 
 #[allow(dead_code)]
 #[doc(hidden)]

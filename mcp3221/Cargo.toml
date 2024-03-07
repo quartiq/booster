@@ -1,6 +1,6 @@
 [package]
 name = "mcp3221"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Ryan Summers <ryan.summers@vertigo-designs.com>"]
 edition = "2018"
 description = "no_std driver for the MCP3221 external analog-to-digital converter (ADC)"

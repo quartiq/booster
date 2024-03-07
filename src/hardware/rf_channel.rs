@@ -3,6 +3,7 @@
 use ad5627::{self, Ad5627};
 use ads7924::Ads7924;
 use dac7571::Dac7571;
+use embedded_hal_bus::i2c;
 use max6642::Max6642;
 use mcp3221::Mcp3221;
 use microchip_24aa02e48::Microchip24AA02E48;
@@ -19,7 +20,7 @@ use stm32f4xx_hal::{
     self as hal,
     adc::config::SampleTime,
     gpio::{Analog, Input, Output},
-    hal_02::blocking::delay::DelayMs,
+    hal::delay::DelayNs,
 };
 
 /// A structure representing power supply measurements of a channel.
@@ -156,7 +157,7 @@ impl Devices {
     ) -> Option<(Self, Microchip24AA02E48<I2cProxy>)> {
         // The ADS7924 and DAC7571 are present on the booster mainboard, so instantiation
         // and communication should never fail.
-        let mut dac7571 = Dac7571::default(manager.acquire_i2c());
+        let mut dac7571 = Dac7571::default(i2c::AtomicDevice::new(&manager));
 
         // Ensure the bias DAC is placing the RF amplifier in pinch off (disabled).
         dac7571
@@ -164,7 +165,7 @@ impl Devices {
             .expect("Bias DAC did not respond");
 
         // Verify we can communicate with the power monitor.
-        let mut ads7924 = Ads7924::default(manager.acquire_i2c(), delay)
+        let mut ads7924 = Ads7924::default(i2c::AtomicDevice::new(&manager), delay)
             .expect("Power monitor did not enumerate");
         ads7924
             .get_voltage(ads7924::Channel::Three)
@@ -177,11 +178,11 @@ impl Devices {
         assert!(ads7924.clear_alarm().expect("Failed to clear alarm") == 0);
 
         // Query devices on the RF module to verify they are present.
-        let ad5627 = Ad5627::default(manager.acquire_i2c()).ok()?;
-        let eui48 = Microchip24AA02E48::new(manager.acquire_i2c()).ok()?;
-        let mut max6642 = Max6642::att94(manager.acquire_i2c());
+        let ad5627 = Ad5627::default(i2c::AtomicDevice::new(&manager)).ok()?;
+        let eui48 = Microchip24AA02E48::new(i2c::AtomicDevice::new(&manager)).ok()?;
+        let mut max6642 = Max6642::att94(i2c::AtomicDevice::new(&manager));
         max6642.get_remote_temperature().ok()?;
-        let mut mcp3221 = Mcp3221::default(manager.acquire_i2c());
+        let mut mcp3221 = Mcp3221::default(i2c::AtomicDevice::new(&manager));
         mcp3221.get_voltage().ok()?;
 
         Some((

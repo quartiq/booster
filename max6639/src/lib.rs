@@ -6,13 +6,10 @@
 #![deny(warnings)]
 
 use bit_field::BitField;
-use embedded_hal::i2c::{I2c, ErrorType};
+use embedded_hal::i2c::{ErrorType, I2c};
 
 /// The driver representing the programmable reference generator.
-pub struct Max6639<I2C>
-where
-    I2C: I2c,
-{
+pub struct Max6639<I2C> {
     i2c: I2C,
     address: u8,
 }

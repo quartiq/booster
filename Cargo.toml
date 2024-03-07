@@ -32,7 +32,6 @@ serde-json-core = "0.5"
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7"
 fugit = "0.3"
-rtic-sync = "1"
 rtic = {version = "2.1", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "1.5", features = ["cortex-m-systick"] }
 rand_core = "0.6"
@@ -45,8 +44,7 @@ debounced-pin = {git = "https://github.com/quartiq/rust-debounced-pin"}
 serde = {version = "1.0", features = ["derive"], default-features = false }
 rtt-logger = "0.2"
 bbqueue = "0.5"
-shared-bus = { version = "0.3", features = ["cortex-m"] }
-embedded-hal-bus = "0.1"
+embedded-hal-bus = { path = "../embedded-hal/embedded-hal-bus" }
 usb-device = "0.3.2"
 usbd-serial = "0.2.1"
 encdec = { version = "0.9", default-features = false }
@@ -63,6 +61,7 @@ enum-iterator = { version = "1.4", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
 smoltcp-nal = { version = "0.4", features=["shared-stack"] }
 stm32f4xx-hal = {version = "0.20.0", features = ["stm32f407", "usb_fs"] }
+embedded-hal = "1"
 
 serial-settings = {git = "https://github.com/quartiq/stabilizer"}
 postcard = "1"
@@ -72,35 +71,35 @@ built = { version = "0.7", features = ["git2"], default-features = false }
 
 [dependencies.ad5627]
 path = "ad5627"
-version = "0.1"
+version = "0.2"
 
 [dependencies.ads7924]
 path = "ads7924"
-version = "0.1"
+version = "0.2"
 
 [dependencies.dac7571]
 path = "dac7571"
-version = "0.1"
+version = "0.2"
 
 [dependencies.max6639]
 path = "max6639"
-version = "0.1"
+version = "0.2"
 
 [dependencies.max6642]
 path = "max6642"
-version = "0.1"
+version = "0.2"
 
 [dependencies.mcp3221]
 path = "mcp3221"
-version = "0.1"
+version = "0.2"
 
 [dependencies.microchip-24aa02e48]
 path = "microchip-24aa02e48"
-version = "0.1"
+version = "0.2"
 
 [dependencies.tca9548]
 path = "tca9548"
-version = "0.1"
+version = "0.2"
 
 [profile.dev]
 # Note: Opt-level 1 is required to avoid issues with stack overflow during hardware configuration.

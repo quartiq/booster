@@ -6,17 +6,10 @@
 #![no_std]
 #![deny(warnings)]
 
-use embedded_hal::{
-    delay::DelayNs,
-    i2c::I2c,
-    digital::OutputPin,
-};
+use embedded_hal::{delay::DelayNs, digital::OutputPin, i2c::I2c};
 
 /// The driver for the TCA9548 I2C bus multiplexer.
-pub struct Tca9548<I2C>
-where
-    I2C: I2c,
-{
+pub struct Tca9548<I2C> {
     i2c: I2C,
     address: u8,
 }
