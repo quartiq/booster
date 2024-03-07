@@ -1,17 +1,21 @@
-use stm32f4xx_hal::hal_02::blocking::delay::{DelayMs, DelayUs};
+use stm32f4xx_hal::{hal::delay::DelayNs, hal_02::blocking::delay::DelayUs};
 
 #[derive(Clone)]
 pub struct AsmDelay {
     frequency_us: u32,
-    frequency_ms: u32,
 }
 
 impl AsmDelay {
     pub fn new(freq: u32) -> AsmDelay {
         AsmDelay {
             frequency_us: (freq / 1_000_000),
-            frequency_ms: (freq / 1_000),
         }
+    }
+}
+
+impl DelayNs for AsmDelay {
+    fn delay_ns(&mut self, ns: u32) {
+        cortex_m::asm::delay(self.frequency_us * (ns / 1000))
     }
 }
 
@@ -21,14 +25,5 @@ where
 {
     fn delay_us(&mut self, us: U) {
         cortex_m::asm::delay(self.frequency_us * us.into())
-    }
-}
-
-impl<U> DelayMs<U> for AsmDelay
-where
-    U: Into<u32>,
-{
-    fn delay_ms(&mut self, ms: U) {
-        cortex_m::asm::delay(self.frequency_ms * ms.into())
     }
 }

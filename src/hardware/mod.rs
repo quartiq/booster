@@ -48,8 +48,8 @@ pub type SerialTerminal = serial_settings::Runner<'static, serial_terminal::Seri
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<'static, Mac, SystemTimer>;
 
-pub type I2cBusManager = shared_bus::BusManagerAtomicCheck<I2C>;
-pub type I2cProxy = shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2C>>;
+pub type I2cBusManager = core::cell::UnsafeCell<I2C>;
+pub type I2cProxy = embedded_hal_bus::i2c::AtomicDevice<'static, I2C>;
 pub type I2cError = hal::i2c::Error;
 
 pub type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;
