@@ -6,15 +6,15 @@ use core::convert::TryInto;
 
 use bit_field::BitField;
 
-use embedded_hal::blocking::{
-    delay::DelayUs,
-    i2c::{Write, WriteRead},
+use embedded_hal::{
+    delay::DelayNs,
+    i2c::{ErrorType, I2c},
 };
 
 /// A driver for the ADS7924 4-channel analog-to-digital converter.
 pub struct Ads7924<I2C>
 where
-    I2C: Write + WriteRead,
+    I2C: I2c,
 {
     i2c: I2C,
     address: u8,
@@ -85,8 +85,8 @@ impl<E> From<E> for Error<E> {
 
 impl<I2C> Ads7924<I2C>
 where
-    I2C: Write + WriteRead,
-    <I2C as Write>::Error: Into<<I2C as WriteRead>::Error>,
+    I2C: I2c,
+    <I2C as ErrorType>::Error: Into<<I2C as ErrorType>::Error>,
 {
     /// Create a new ADC driver.
     ///
@@ -99,11 +99,11 @@ where
         i2c: I2C,
         address: u8,
         avdd: f32,
-        delay: &mut impl DelayUs<u16>,
-    ) -> Result<Self, Error<<I2C as WriteRead>::Error>> {
+        delay: &mut impl DelayNs,
+    ) -> Result<Self, Error<<I2C as ErrorType>::Error>> {
         let mut ads7924 = Ads7924 {
-            i2c: i2c,
-            address: address,
+            i2c,
+            address,
             volts_per_lsb: avdd / 0x1000 as f32,
         };
 
@@ -132,8 +132,8 @@ where
     /// * `delay` - A means of delaying during initialization.
     pub fn default(
         i2c: I2C,
-        delay: &mut impl DelayUs<u16>,
-    ) -> Result<Self, Error<<I2C as WriteRead>::Error>> {
+        delay: &mut impl DelayNs,
+    ) -> Result<Self, Error<<I2C as ErrorType>::Error>> {
         Ads7924::new(i2c, 0x49, 3.434, delay)
     }
 
@@ -141,7 +141,7 @@ where
         &mut self,
         mode: OperationMode,
         channel: Option<Channel>,
-    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
+    ) -> Result<(), Error<<I2C as ErrorType>::Error>> {
         let mut mode_control: [u8; 1] = [0];
         if let Some(channel) = channel {
             mode_control[0].set_bits(0..3, channel as u8);
@@ -155,12 +155,12 @@ where
 
     fn reset(
         &mut self,
-        delay: &mut impl DelayUs<u16>,
-    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
+        delay: &mut impl DelayNs,
+    ) -> Result<(), Error<<I2C as ErrorType>::Error>> {
         self.write(Register::Reset, &[0xAA])?;
 
         // Wait a small delay to ensure the device is processing the reset request.
-        delay.delay_us(500_u16);
+        delay.delay_us(500_u32);
 
         Ok(())
     }
@@ -169,7 +169,7 @@ where
         &mut self,
         register: Register,
         data: &[u8],
-    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
+    ) -> Result<(), Error<<I2C as ErrorType>::Error>> {
         if data.len() > 2 {
             return Err(Error::Size);
         }
@@ -193,7 +193,7 @@ where
         &mut self,
         register: Register,
         data: &mut [u8],
-    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
+    ) -> Result<(), Error<<I2C as ErrorType>::Error>> {
         let mut command_byte = register as u8;
 
         // Set the INC bit in the command byte if reading more than 1 register.
@@ -217,7 +217,7 @@ where
         channel: Channel,
         low_threshold: f32,
         high_threshold: f32,
-    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
+    ) -> Result<(), Error<<I2C as ErrorType>::Error>> {
         if high_threshold < low_threshold || low_threshold < 0.0 || high_threshold < 0.0 {
             return Err(Error::Bounds);
         }
@@ -262,7 +262,7 @@ where
     /// # Returns
     /// A bit mask of which channel caused the alarm. The position of the bit corresponds with the
     /// channel number.
-    pub fn clear_alarm(&mut self) -> Result<u8, Error<<I2C as WriteRead>::Error>> {
+    pub fn clear_alarm(&mut self) -> Result<u8, Error<<I2C as ErrorType>::Error>> {
         // Clearing the alarm is completed by reading the interrupt control register.
         let mut alarm_status: [u8; 1] = [0];
         self.read(Register::IntCntrl, &mut alarm_status)?;
@@ -285,7 +285,7 @@ where
     pub fn get_voltage(
         &mut self,
         channel: Channel,
-    ) -> Result<f32, Error<<I2C as WriteRead>::Error>> {
+    ) -> Result<f32, Error<<I2C as ErrorType>::Error>> {
         let upper_data_register = match channel {
             Channel::Zero => Register::Data0Upper,
             Channel::One => Register::Data1Upper,
@@ -313,7 +313,7 @@ where
     ///
     /// # Returns
     /// The analog measurements of all channel in volts.
-    pub fn get_voltages(&mut self) -> Result<[f32; 4], Error<<I2C as WriteRead>::Error>> {
+    pub fn get_voltages(&mut self) -> Result<[f32; 4], Error<<I2C as ErrorType>::Error>> {
         // First, disable Autoscan mode.
         self.set_mode(OperationMode::Idle, None)?;
 

@@ -7,17 +7,15 @@
 #![deny(warnings)]
 
 use embedded_hal::{
-    blocking::{
-        delay::DelayUs,
-        i2c::{Read, Write},
-    },
-    digital::v2::OutputPin,
+    delay::DelayNs,
+    i2c::I2c,
+    digital::OutputPin,
 };
 
 /// The driver for the TCA9548 I2C bus multiplexer.
 pub struct Tca9548<I2C>
 where
-    I2C: Write + Read,
+    I2C: I2c,
 {
     i2c: I2C,
     address: u8,
@@ -42,7 +40,7 @@ pub enum Bus {
 
 impl<I2C> Tca9548<I2C>
 where
-    I2C: Write + Read,
+    I2C: I2c,
 {
     /// Construct a new I2C bus mux.
     ///
@@ -59,14 +57,14 @@ where
     ) -> Result<Self, Error>
     where
         RST: OutputPin,
-        DELAY: DelayUs<u8>,
+        DELAY: DelayNs,
         RST::Error: core::fmt::Debug,
     {
         let mut device = Tca9548 { i2c, address };
 
         // Reset the device.
         reset.set_low().unwrap();
-        delay.delay_us(10_u8);
+        delay.delay_us(10_u32);
         reset.set_high().unwrap();
 
         // Select none of the I2C buses.
@@ -84,7 +82,7 @@ where
     pub fn default<RST, DELAY>(i2c: I2C, reset: &mut RST, delay: &mut DELAY) -> Result<Self, Error>
     where
         RST: OutputPin,
-        DELAY: DelayUs<u8>,
+        DELAY: DelayNs,
         RST::Error: core::fmt::Debug,
     {
         Tca9548::new(i2c, 0x70, reset, delay)

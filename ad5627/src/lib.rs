@@ -6,7 +6,7 @@
 #![no_std]
 #![deny(warnings)]
 
-use embedded_hal::blocking::i2c::Write;
+use embedded_hal::i2c::{ErrorType, I2c};
 
 /// The maximum voltage that the DAC can output.
 pub const MAX_VOLTAGE: f32 = 2.5;
@@ -14,7 +14,7 @@ pub const MAX_VOLTAGE: f32 = 2.5;
 /// The driver representing the programmable reference generator.
 pub struct Ad5627<I2C>
 where
-    I2C: Write,
+    I2C: I2c,
 {
     i2c: I2C,
     address: u8,
@@ -55,14 +55,14 @@ impl<E> From<E> for Error<E> {
 
 impl<I2C> Ad5627<I2C>
 where
-    I2C: Write,
+    I2C: I2c,
 {
     /// Construct a driver for the DAC.
     ///
     /// # Args
     /// * `i2c` - The I2C bus to communicate with the DAC.
     /// * `address` - The 7-bit I2C address of the device.
-    pub fn new(i2c: I2C, address: u8) -> Result<Self, I2C::Error> {
+    pub fn new(i2c: I2C, address: u8) -> Result<Self, <I2C as ErrorType>::Error> {
         let mut device = Ad5627 { i2c, address };
 
         // Reset the DAC outputs.
@@ -74,7 +74,7 @@ where
         Ok(device)
     }
 
-    fn write(&mut self, command: Command, dac: Dac, payload: [u8; 2]) -> Result<(), I2C::Error> {
+    fn write(&mut self, command: Command, dac: Dac, payload: [u8; 2]) -> Result<(), <I2C as ErrorType>::Error> {
         // Construct the command byte.
         let write: [u8; 3] = [((command as u8) << 3) | dac as u8, payload[0], payload[1]];
 
@@ -88,7 +88,7 @@ where
     ///
     /// # Args
     /// * `i2c` - The I2C bus to communicate with the DAC.
-    pub fn default(i2c: I2C) -> Result<Self, I2C::Error> {
+    pub fn default(i2c: I2C) -> Result<Self, <I2C as ErrorType>::Error> {
         Ad5627::new(i2c, 0b0001110)
     }
 
@@ -100,7 +100,7 @@ where
     ///
     /// # Returns
     /// The actual voltage programmed into the DAC after digitization.
-    pub fn set_voltage(&mut self, voltage: f32, dac: Dac) -> Result<f32, Error<I2C::Error>> {
+    pub fn set_voltage(&mut self, voltage: f32, dac: Dac) -> Result<f32, Error<<I2C as ErrorType>::Error>> {
         // Assuming a 1.25V internal reference with a 2x output stage gain, our full scale range is
         // 2.5V.
         if !(0.0..=crate::MAX_VOLTAGE).contains(&voltage) {

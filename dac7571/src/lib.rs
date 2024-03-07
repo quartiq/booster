@@ -4,12 +4,12 @@
 //! This driver does not support any low-power operation modes.
 #![no_std]
 
-use embedded_hal::blocking::i2c::Write;
+use embedded_hal::i2c::{I2c, ErrorType};
 
 /// A driver for the DAC7571 digital to analog converter.
 pub struct Dac7571<I2C>
 where
-    I2C: Write,
+    I2C: I2c,
 {
     i2c: I2C,
     address: u8,
@@ -31,7 +31,7 @@ impl<E> From<E> for Error<E> {
 
 impl<I2C> Dac7571<I2C>
 where
-    I2C: Write,
+    I2C: I2c,
 {
     /// Construct a new DAC7571 driver.
     ///
@@ -65,7 +65,7 @@ where
     ///
     /// # Returns
     /// The voltage nominal DAC output voltage.
-    pub fn set_voltage(&mut self, voltage: f32) -> Result<f32, Error<I2C::Error>> {
+    pub fn set_voltage(&mut self, voltage: f32) -> Result<f32, Error<<I2C as ErrorType>::Error>> {
         if voltage >= self.supply_voltage || voltage < 0.0 {
             return Err(Error::Bounds);
         }

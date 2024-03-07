@@ -39,11 +39,12 @@ cortex-m-log = { version = "0.8.0", features = ["log-integration"] }
 log = "0.4.20"
 heapless = { version = "0.7", features = ["serde"] }
 bit_field = "0.10.2"
-debounced-pin = "0.3.0"
+debounced-pin = {git = "https://github.com/quartiq/rust-debounced-pin"}
 serde = {version = "1.0", features = ["derive"], default-features = false }
 rtt-logger = "0.2"
 bbqueue = "0.5"
 shared-bus = { version = "0.3", features = ["cortex-m"] }
+embedded-hal-bus = "0.1"
 usb-device = "0.3.2"
 usbd-serial = "0.2.1"
 encdec = { version = "0.9", default-features = false }
@@ -59,17 +60,13 @@ rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "1.4", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
 smoltcp-nal = { version = "0.4", features=["shared-stack"] }
+stm32f4xx-hal = {version = "0.20.0", features = ["stm32f407", "usb_fs"] }
 
 serial-settings = {git = "https://github.com/quartiq/stabilizer"}
 postcard = "1"
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }
-
-[dependencies.stm32f4xx-hal]
-git = "https://github.com/quartiq/stm32f4xx-hal"
-branch = "rs/synopsys-patch"
-features = ["stm32f407", "rt", "usb_fs"]
 
 [dependencies.ad5627]
 path = "ad5627"

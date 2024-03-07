@@ -3,7 +3,7 @@
 #![deny(warnings)]
 
 use bit_field::BitField;
-use embedded_hal::blocking::i2c::{Write, WriteRead};
+use embedded_hal::i2c::{I2c, ErrorType};
 
 #[allow(dead_code)]
 #[doc(hidden)]
@@ -58,8 +58,8 @@ pub struct Max6642<I2C> {
 
 impl<I2C> Max6642<I2C>
 where
-    I2C: Write + WriteRead,
-    <I2C as Write>::Error: Into<<I2C as WriteRead>::Error>,
+    I2C: I2c,
+    <I2C as ErrorType>::Error: Into<<I2C as ErrorType>::Error>,
 {
     /// Construct a new driver for the MAX6642-ATT94 variant.
     ///
@@ -78,7 +78,7 @@ where
         Max6642 { i2c, address }
     }
 
-    fn read(&mut self, command: Command) -> Result<u8, Error<<I2C as WriteRead>::Error>> {
+    fn read(&mut self, command: Command) -> Result<u8, Error<<I2C as ErrorType>::Error>> {
         let mut result: [u8; 1] = [0; 1];
         self.i2c
             .write_read(self.address, &[command as u8], &mut result)?;
@@ -91,14 +91,12 @@ where
         &mut self,
         command: Command,
         value: u8,
-    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
-        if command.is_writable() == false {
+    ) -> Result<(), Error<<I2C as ErrorType>::Error>> {
+        if !command.is_writable() {
             return Err(Error::InvalidCommand);
         }
 
-        self.i2c
-            .write(self.address, &[command as u8, value])
-            .map_err(|err| err.into())?;
+        self.i2c.write(self.address, &[command as u8, value])?;
 
         Ok(())
     }
@@ -107,7 +105,7 @@ where
     ///
     /// # Returns
     /// The temperature of the remote diode in degrees celsius.
-    pub fn get_remote_temperature(&mut self) -> Result<f32, Error<<I2C as WriteRead>::Error>> {
+    pub fn get_remote_temperature(&mut self) -> Result<f32, Error<<I2C as ErrorType>::Error>> {
         let temp_c = self.read(Command::ReadRemoteTemperature)?;
         if temp_c > 130 {
             return Err(Error::DiodeFault);

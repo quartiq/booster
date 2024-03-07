@@ -6,12 +6,12 @@
 #![deny(warnings)]
 
 use bit_field::BitField;
-use embedded_hal::blocking::i2c::{Write, WriteRead};
+use embedded_hal::i2c::{I2c, ErrorType};
 
 /// The driver representing the programmable reference generator.
 pub struct Max6639<I2C>
 where
-    I2C: Write + WriteRead,
+    I2C: I2c,
 {
     i2c: I2C,
     address: u8,
@@ -77,8 +77,8 @@ pub enum Fan {
 
 impl<I2C> Max6639<I2C>
 where
-    I2C: Write + WriteRead,
-    <I2C as Write>::Error: Into<<I2C as WriteRead>::Error>,
+    I2C: I2c,
+    <I2C as ErrorType>::Error: Into<<I2C as ErrorType>::Error>,
 {
     /// Create a new MAX6639 driver.
     ///
@@ -88,7 +88,7 @@ where
     pub fn new(
         i2c: I2C,
         address_pin: AddressPin,
-    ) -> Result<Self, Error<<I2C as WriteRead>::Error>> {
+    ) -> Result<Self, Error<<I2C as ErrorType>::Error>> {
         let mut device = Max6639 {
             i2c,
             address: address_pin as u8,
@@ -112,7 +112,7 @@ where
         &mut self,
         register: Register,
         value: u8,
-    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
+    ) -> Result<(), Error<<I2C as ErrorType>::Error>> {
         let write_data: [u8; 2] = [register as u8, value];
 
         self.i2c
@@ -122,7 +122,7 @@ where
         Ok(())
     }
 
-    fn read(&mut self, register: Register) -> Result<u8, Error<<I2C as WriteRead>::Error>> {
+    fn read(&mut self, register: Register) -> Result<u8, Error<<I2C as ErrorType>::Error>> {
         let mut result: [u8; 1] = [0; 1];
 
         self.i2c
@@ -144,7 +144,7 @@ where
         &mut self,
         fan: Fan,
         duty_cycle: f32,
-    ) -> Result<(), Error<<I2C as WriteRead>::Error>> {
+    ) -> Result<(), Error<<I2C as ErrorType>::Error>> {
         if duty_cycle < 0.0 || duty_cycle > 1.0 {
             return Err(Error::Bounds);
         }
@@ -177,7 +177,7 @@ where
     ///
     /// # Return
     /// True if a fan fault was detected. False otherwise.
-    pub fn check_fan_fault(&mut self, fan: Fan) -> Result<bool, Error<<I2C as WriteRead>::Error>> {
+    pub fn check_fan_fault(&mut self, fan: Fan) -> Result<bool, Error<<I2C as ErrorType>::Error>> {
         // Note that this register read will erase all status indications.
         let status_register = self.read(Register::Status)?;
 
@@ -194,7 +194,7 @@ where
     ///
     /// # Returns
     /// The current fan speed in RPMs (revolutions per minute).
-    pub fn current_rpms(&mut self, fan: Fan) -> Result<u16, Error<<I2C as WriteRead>::Error>> {
+    pub fn current_rpms(&mut self, fan: Fan) -> Result<u16, Error<<I2C as ErrorType>::Error>> {
         let tach_reg = match fan {
             Fan::Fan1 => Register::Fan1TachCount,
             Fan::Fan2 => Register::Fan2TachCount,
