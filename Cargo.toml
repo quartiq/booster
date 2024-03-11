@@ -56,7 +56,7 @@ w5500 = "0.4.1"
 smlang= "0.6"
 minireq = "0.3.0"
 rtt-target = {version = "0.3", features=["cortex-m"]}
-enum-iterator = { version = "1.4", default-features = false }
+enum-iterator = { version = "2.0", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
 smoltcp-nal = { version = "0.4", features=["shared-stack"] }
 
