@@ -16,15 +16,16 @@ mod net;
 mod settings;
 mod watchdog;
 
+use fugit::ExtU32;
 use logger::BufferedLog;
+use rtic_monotonics::Monotonic;
 use settings::BoosterSettings;
-use systick_monotonic::fugit::ExtU64;
 
 use hardware::{
     setup::MainBus,
     usb::UsbDevice,
     user_interface::{ButtonEvent, Color, UserButtons, UserLeds},
-    Channel, SerialTerminal, SystemTimer,
+    Channel, SerialTerminal, SystemTimer, Systick,
 };
 
 use settings::runtime_settings::RuntimeSettings;
@@ -62,13 +63,10 @@ mod app {
         usb_terminal: SerialTerminal,
     }
 
-    #[monotonic(binds = SysTick, default = true, priority = 4)]
-    type Monotonic = hardware::Systick;
-
     #[init]
-    fn init(c: init::Context) -> (SharedResources, LocalResources, init::Monotonics) {
+    fn init(c: init::Context) -> (SharedResources, LocalResources) {
         // Configure booster hardware.
-        let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
+        let clock = SystemTimer::new(|| Systick::now().ticks());
         let mut booster = hardware::setup::setup(c.core, c.device, clock);
 
         let mut settings = RuntimeSettings::default();
@@ -111,111 +109,118 @@ mod app {
                 usb: booster.usb_device,
                 usb_terminal: booster.usb_serial,
             },
-            init::Monotonics(booster.systick),
         )
     }
 
     #[task(priority = 3, local=[leds], shared=[main_bus, watchdog])]
-    fn channel_monitor(mut c: channel_monitor::Context) {
-        // Check in with the watchdog.
-        c.shared
-            .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::Monitor));
-
-        // Check all of the channels.
-        let mut fans_enabled = false;
-
+    async fn channel_monitor(mut c: channel_monitor::Context) {
         let leds = c.local.leds;
-        for idx in enum_iterator::all::<Channel>() {
-            let status = c.shared.main_bus.lock(|main_bus| {
-                main_bus
-                    .channels
-                    .channel_mut(idx)
-                    .map(|(channel, _)| {
-                        if channel.context().is_powered() {
-                            fans_enabled = true;
-                        }
+        loop {
+            // Check in with the watchdog.
+            c.shared
+                .watchdog
+                .lock(|watchdog| watchdog.check_in(WatchdogClient::Monitor));
 
-                        channel.update()
-                    })
-                    // Clear all LEDs for this channel.
-                    .unwrap_or_default()
-            });
+            // Check all of the channels.
+            let mut fans_enabled = false;
 
-            // Echo the measured values to the LEDs on the user interface for this channel.
-            leds.set_led(Color::Green, idx, status.powered);
-            leds.set_led(Color::Yellow, idx, status.rf_disabled);
-            leds.set_led(Color::Red, idx, status.blocked);
-        }
-
-        // Update the fan speeds.
-        if fans_enabled {
-            c.shared.main_bus.lock(|main_bus| main_bus.fans.turn_on());
-        } else {
-            c.shared.main_bus.lock(|main_bus| main_bus.fans.turn_off());
-        }
-
-        // Propagate the updated LED values to the user interface.
-        leds.update();
-
-        // Schedule to run this task periodically at 10Hz.
-        channel_monitor::spawn_after(100u64.millis()).unwrap();
-    }
-
-    #[task(priority = 1, shared=[main_bus, net_devices])]
-    fn telemetry(mut c: telemetry::Context) {
-        // Gather telemetry for all of the channels.
-        // And broadcast the measured data over the telemetry interface.
-        for idx in enum_iterator::all::<Channel>() {
-            (&mut c.shared.main_bus, &mut c.shared.net_devices).lock(|main_bus, net_devices| {
-                main_bus.channels.channel_mut(idx).map(|(ch, adc)| {
-                    net_devices
-                        .telemetry
-                        .report_telemetry(idx, &ch.get_status(adc))
-                })
-            });
-        }
-
-        let telemetry_period = c
-            .shared
-            .net_devices
-            .lock(|net_devices| net_devices.telemetry.telemetry_period_secs());
-
-        telemetry::spawn_after(telemetry_period.secs()).unwrap();
-    }
-
-    #[task(priority = 2, local=[buttons], shared=[main_bus, watchdog])]
-    fn button(mut c: button::Context) {
-        // Check in with the watchdog.
-        c.shared
-            .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::Button));
-
-        if let Some(event) = c.local.buttons.update() {
             for idx in enum_iterator::all::<Channel>() {
-                c.shared.main_bus.lock(|main_bus| {
+                let status = c.shared.main_bus.lock(|main_bus| {
                     main_bus
                         .channels
                         .channel_mut(idx)
-                        .map(|(channel, _)| match event {
-                            ButtonEvent::InterlockReset => {
-                                // It is possible to attempt to re-enable the channel before it was
-                                // fully disabled. Ignore this transient error - the user may need
-                                // to press twice.
-                                channel.interlock_reset().ok();
+                        .map(|(channel, _)| {
+                            if channel.context().is_powered() {
+                                fans_enabled = true;
                             }
-                            ButtonEvent::Standby => channel.standby(),
-                        })
-                });
-            }
-        }
 
-        // Schedule to run this task every 3ms.
-        button::spawn_after(3u64.millis()).unwrap();
+                            channel.update()
+                        })
+                        // Clear all LEDs for this channel.
+                        .unwrap_or_default()
+                });
+
+                // Echo the measured values to the LEDs on the user interface for this channel.
+                leds.set_led(Color::Green, idx, status.powered);
+                leds.set_led(Color::Yellow, idx, status.rf_disabled);
+                leds.set_led(Color::Red, idx, status.blocked);
+            }
+
+            // Update the fan speeds.
+            if fans_enabled {
+                c.shared.main_bus.lock(|main_bus| main_bus.fans.turn_on());
+            } else {
+                c.shared.main_bus.lock(|main_bus| main_bus.fans.turn_off());
+            }
+
+            // Propagate the updated LED values to the user interface.
+            leds.update();
+
+            // Schedule to run this task periodically at 10Hz.
+            Systick::delay(100u32.millis()).await;
+        }
+    }
+
+    #[task(priority = 1, shared=[main_bus, net_devices])]
+    async fn telemetry(mut c: telemetry::Context) {
+        loop {
+            // Gather telemetry for all of the channels.
+            // And broadcast the measured data over the telemetry interface.
+            for idx in enum_iterator::all::<Channel>() {
+                (&mut c.shared.main_bus, &mut c.shared.net_devices).lock(
+                    |main_bus, net_devices| {
+                        main_bus.channels.channel_mut(idx).map(|(ch, adc)| {
+                            net_devices
+                                .telemetry
+                                .report_telemetry(idx, &ch.get_status(adc))
+                        })
+                    },
+                );
+            }
+
+            let telemetry_period = c
+                .shared
+                .net_devices
+                .lock(|net_devices| net_devices.telemetry.telemetry_period_secs());
+
+            Systick::delay(telemetry_period.secs()).await;
+        }
+    }
+
+    #[task(priority = 2, local=[buttons], shared=[main_bus, watchdog])]
+    async fn button(mut c: button::Context) {
+        loop {
+            // Check in with the watchdog.
+            c.shared
+                .watchdog
+                .lock(|watchdog| watchdog.check_in(WatchdogClient::Button));
+
+            if let Some(event) = c.local.buttons.update() {
+                for idx in enum_iterator::all::<Channel>() {
+                    c.shared.main_bus.lock(|main_bus| {
+                        main_bus
+                            .channels
+                            .channel_mut(idx)
+                            .map(|(channel, _)| match event {
+                                ButtonEvent::InterlockReset => {
+                                    // It is possible to attempt to re-enable the channel before it was
+                                    // fully disabled. Ignore this transient error - the user may need
+                                    // to press twice.
+                                    channel.interlock_reset().ok();
+                                }
+                                ButtonEvent::Standby => channel.standby(),
+                            })
+                    });
+                }
+            }
+
+            // Schedule to run this task every 3ms.
+            Systick::delay(3u32.millis()).await;
+        }
     }
 
     #[task(priority = 1, shared=[net_devices, main_bus])]
-    fn update_settings(mut c: update_settings::Context) {
+    async fn update_settings(mut c: update_settings::Context) {
         let all_settings = c
             .shared
             .net_devices
@@ -249,20 +254,22 @@ mod app {
     }
 
     #[task(priority = 2, shared=[watchdog], local=[usb, usb_terminal])]
-    fn usb(mut c: usb::Context) {
-        // Check in with the watchdog.
-        c.shared
-            .watchdog
-            .lock(|watchdog| watchdog.check_in(WatchdogClient::Usb));
+    async fn usb(mut c: usb::Context) {
+        loop {
+            // Check in with the watchdog.
+            c.shared
+                .watchdog
+                .lock(|watchdog| watchdog.check_in(WatchdogClient::Usb));
 
-        c.local.usb.process(c.local.usb_terminal);
-        c.local.usb_terminal.process().unwrap();
+            c.local.usb.process(c.local.usb_terminal);
+            c.local.usb_terminal.process().unwrap();
 
-        // Process any log output.
-        LOGGER.process(c.local.usb_terminal);
+            // Process any log output.
+            LOGGER.process(c.local.usb_terminal);
 
-        // Schedule to run this task every 10ms.
-        usb::spawn_after(10u64.millis()).unwrap();
+            // Schedule to run this task every 10ms.
+            Systick::delay(10u32.millis()).await;
+        }
     }
 
     #[idle(shared=[main_bus, net_devices, watchdog])]

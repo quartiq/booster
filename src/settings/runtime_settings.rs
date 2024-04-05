@@ -17,7 +17,7 @@ pub struct RuntimeSettings {
     pub fan_speed: f32,
 
     /// The configured telemetry period in seconds.
-    pub telemetry_period: u64,
+    pub telemetry_period: u32,
 }
 
 impl Default for RuntimeSettings {
