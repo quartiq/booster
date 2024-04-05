@@ -27,7 +27,7 @@ exclude = [
 [dependencies]
 embedded-storage = "0.3"
 embedded-io = "0.6"
-serde_with = { version = "3.4", default-features = false, features = ["macros"] }
+serde_with = { version = "3.7", default-features = false, features = ["macros"] }
 serde-json-core = "0.5"
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7"
@@ -38,7 +38,7 @@ rtic-monotonics = { version = "1.5", features = ["cortex-m-systick"] }
 rand_core = "0.6"
 mono-clock = "0.1"
 cortex-m-log = { version = "0.8.0", features = ["log-integration"] }
-log = "0.4.20"
+log = "0.4.21"
 heapless = { version = "0.7", features = ["serde"] }
 bit_field = "0.10.2"
 debounced-pin = "0.3.0"
@@ -58,7 +58,7 @@ w5500 = "0.4.1"
 smlang= "0.6"
 minireq = "0.3.0"
 rtt-target = {version = "0.3", features=["cortex-m"]}
-enum-iterator = { version = "1.4", default-features = false }
+enum-iterator = { version = "2.0", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
 smoltcp-nal = { version = "0.4", features=["shared-stack"] }
 
