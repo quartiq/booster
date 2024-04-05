@@ -66,7 +66,7 @@ mod app {
     #[init]
     fn init(c: init::Context) -> (SharedResources, LocalResources) {
         // Configure booster hardware.
-        let clock = SystemTimer::new(|| Systick::now().ticks() as u32);
+        let clock = SystemTimer::new(|| Systick::now().ticks());
         let mut booster = hardware::setup::setup(c.core, c.device, clock);
 
         let mut settings = RuntimeSettings::default();
