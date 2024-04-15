@@ -866,8 +866,7 @@ dependencies = [
 [[package]]
 name = "menu"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5208bd660042c7760f40d960ba0b1a9dc7a9c90775bea4c4637c3b666d2b53d"
+source = "git+https://github.com/rust-embedded-community/menu?rev=7ba884993fea57c3661d0f9d7c3cdca639a48701#7ba884993fea57c3661d0f9d7c3cdca639a48701"
 
 [[package]]
 name = "microchip-24aa02e48"
@@ -1378,12 +1377,13 @@ dependencies = [
 [[package]]
 name = "serial-settings"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/stabilizer#3529c1b13345cd341a3af04b11fd28cdba7af016"
+source = "git+https://github.com/quartiq/stabilizer#f9f2d4bb7cd2f700412907f1dbc3b71df4050b44"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
  "menu",
  "miniconf",
+ "yafnv",
 ]
 
 [[package]]
@@ -1706,4 +1706,13 @@ dependencies = [
  "embedded-hal 0.2.7",
  "embedded-nal 0.6.0",
  "nb 1.1.0",
+]
+
+[[package]]
+name = "yafnv"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "804f6944df20b02a525b3cb607bcd90b43b6ef77c8943958781190847a052b70"
+dependencies = [
+ "num-traits",
 ]
