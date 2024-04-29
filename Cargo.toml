@@ -60,7 +60,7 @@ minireq = "0.3.0"
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "2.0", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
-smoltcp-nal = { version = "0.4", features=["shared-stack"] }
+smoltcp-nal = { version = "0.5", features=["shared-stack"] }
 
 serial-settings = {git = "https://github.com/quartiq/stabilizer"}
 postcard = "1"
