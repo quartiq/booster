@@ -53,7 +53,7 @@ crc-any = { version = "2.4.4", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
 miniconf = { version = "0.9.0", features = ["mqtt-client"]}
 # Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
-minimq = "0.8.0"
+minimq = "0.9.0"
 w5500 = "0.4.1"
 smlang= "0.6"
 minireq = "0.3.0"
