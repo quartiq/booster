@@ -13,6 +13,10 @@ impl Flash {
             flash,
         }
     }
+
+    pub fn range(&self) -> core::ops::Range<u32> {
+        0..(self.capacity() as u32)
+    }
 }
 
 impl embedded_storage::nor_flash::ErrorType for Flash {
@@ -27,7 +31,7 @@ impl embedded_storage::nor_flash::ReadNorFlash for Flash {
     }
 
     fn capacity(&self) -> usize {
-        self.flash.capacity()
+        self.flash.capacity() - (self.base as usize)
     }
 }
 

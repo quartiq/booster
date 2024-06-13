@@ -17,12 +17,8 @@
 //! impossible to save domain names for a named broker into EEPROM, as the available board data storage is only 64
 //! bytes, but a domain name can be up to 255 characters.
 
-use crate::{
-    hardware::{flash::Flash, Eeprom},
-    Error,
-};
+use crate::{hardware::Eeprom, Error};
 use core::str::FromStr;
-use embedded_storage::nor_flash::ReadNorFlash;
 use encdec::{Decode, DecodeOwned, Encode};
 use heapless::String;
 use smoltcp_nal::smoltcp;
@@ -204,7 +200,7 @@ pub struct BoosterMainBoardData {
     pub fan_speed: f32,
 }
 
-impl serial_settings::Settings for BoosterMainBoardData {
+impl serial_settings::Settings<1> for BoosterMainBoardData {
     fn reset(&mut self) {
         *self = Self::default(&self.mac.0)
     }
@@ -237,20 +233,6 @@ impl BoosterMainBoardData {
             id: name,
             fan_speed: DEFAULT_FAN_SPEED,
         }
-    }
-
-    /// Reload device settings from on-board flash.
-    pub fn reload(&mut self, storage: &mut Flash) {
-        let mut buffer = [0u8; 512];
-        storage.read(0, &mut buffer).unwrap();
-        let Ok(mut settings) = postcard::from_bytes::<Self>(&buffer) else {
-            return;
-        };
-
-        settings.mac = self.mac;
-        settings.version = self.version;
-        *self = settings;
-        log::info!("Loaded settings from Flash");
     }
 
     /// Construct booster configuration data from serialized `board_data` from a

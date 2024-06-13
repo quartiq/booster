@@ -1,6 +1,7 @@
 //! Booster NGFW NVM settings
 
 pub mod channel_settings;
+pub mod flash;
 pub mod global_settings;
 pub mod runtime_settings;
 mod sinara;

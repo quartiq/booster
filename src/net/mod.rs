@@ -34,12 +34,12 @@ impl Default for MqttStorage {
 /// potential pre-emption when using the `shared` network stack.
 pub struct NetworkDevices {
     pub telemetry: mqtt_control::TelemetryClient,
-    pub settings: miniconf::MqttClient<
+    pub settings_client: miniconf_mqtt::MqttClient<
         'static,
         crate::RuntimeSettings,
         NetworkStackProxy,
         SystemTimer,
-        minireq::minimq::broker::NamedBroker<NetworkStackProxy>,
+        miniconf_mqtt::minimq::broker::NamedBroker<NetworkStackProxy>,
         4,
     >,
     pub control: minireq::Minireq<
@@ -64,7 +64,6 @@ impl NetworkDevices {
         broker: &str,
         stack: NetworkStack,
         identifier: &str,
-        settings: crate::RuntimeSettings,
         clock: SystemTimer,
         metadata: &'static crate::hardware::metadata::ApplicationMetadata,
     ) -> Self {
@@ -108,10 +107,10 @@ impl NetworkDevices {
 
             let broker =
                 minireq::minimq::broker::NamedBroker::new(broker, shared.acquire_stack()).unwrap();
-            let config = miniconf::minimq::ConfigBuilder::new(broker, &mut store.telemetry)
+            let config = miniconf_mqtt::minimq::ConfigBuilder::new(broker, &mut store.telemetry)
                 // The telemetry client doesn't do much in terms of receiving data, so reserve the
                 // buffer for transmission.
-                .rx_buffer(miniconf::minimq::config::BufferConfig::Maximum(100))
+                .rx_buffer(miniconf_mqtt::minimq::config::BufferConfig::Maximum(100))
                 .client_id(&client_id)
                 .unwrap();
             mqtt_control::TelemetryClient::new(
@@ -121,23 +120,22 @@ impl NetworkDevices {
             )
         };
 
-        let settings = {
+        let settings_client = {
             let mut client_id: String<128> = String::new();
             write!(&mut client_id, "booster-{}-settings", identifier).unwrap();
 
             let broker =
                 minireq::minimq::broker::NamedBroker::new(broker, shared.acquire_stack()).unwrap();
-            let config = miniconf::minimq::ConfigBuilder::new(broker, &mut store.control)
+            let config = miniconf_mqtt::minimq::ConfigBuilder::new(broker, &mut store.control)
                 .client_id(&client_id)
                 .unwrap();
-            miniconf::MqttClient::new(shared.acquire_stack(), &prefix, clock, settings, config)
-                .unwrap()
+            miniconf_mqtt::MqttClient::new(shared.acquire_stack(), &prefix, clock, config).unwrap()
         };
 
         Self {
             telemetry,
             control,
-            settings,
+            settings_client,
             stack: shared.acquire_stack(),
         }
     }

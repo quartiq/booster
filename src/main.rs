@@ -28,6 +28,7 @@ use hardware::{
     Channel, SerialTerminal, SystemTimer, Systick,
 };
 
+use settings::global_settings::BoosterMainBoardData;
 use settings::runtime_settings::RuntimeSettings;
 use watchdog::{WatchdogClient, WatchdogManager};
 
@@ -53,6 +54,7 @@ mod app {
         main_bus: MainBus,
         net_devices: net::NetworkDevices,
         watchdog: WatchdogManager,
+        runtime_settings: RuntimeSettings,
     }
 
     #[local]
@@ -61,6 +63,7 @@ mod app {
         leds: UserLeds,
         usb: UsbDevice,
         usb_terminal: SerialTerminal,
+        global_settings: BoosterMainBoardData,
     }
 
     #[init]
@@ -97,13 +100,14 @@ mod app {
                     &booster.settings.properties.broker,
                     booster.network_stack,
                     &booster.settings.properties.id,
-                    settings,
                     clock,
                     booster.metadata,
                 ),
                 watchdog: watchdog_manager,
+                runtime_settings: settings,
             },
             LocalResources {
+                global_settings: booster.settings.properties,
                 buttons: booster.buttons,
                 leds: booster.leds,
                 usb: booster.usb_device,
@@ -219,19 +223,14 @@ mod app {
         }
     }
 
-    #[task(priority = 1, shared=[net_devices, main_bus])]
+    #[task(priority = 1, shared=[net_devices, main_bus, runtime_settings])]
     async fn update_settings(mut c: update_settings::Context) {
-        let all_settings = c
-            .shared
-            .net_devices
-            .lock(|net_devices| net_devices.settings.settings().clone());
-
         for idx in enum_iterator::all::<Channel>() {
-            c.shared.main_bus.lock(|main_bus| {
+            (&mut c.shared.main_bus, &mut c.shared.runtime_settings).lock(|main_bus, settings| {
                 main_bus
                     .channels
                     .channel_mut(idx)
-                    .zip(all_settings.channel[idx as usize].as_ref().as_ref())
+                    .zip(settings.channel[idx as usize].as_ref().as_ref())
                     .map(|((channel, _), settings)| {
                         channel.handle_settings(settings).unwrap_or_else(|err| {
                             log::warn!("Settings failure on {:?}: {:?}", idx, err)
@@ -241,19 +240,20 @@ mod app {
         }
 
         // Update the fan speed.
-        c.shared
-            .main_bus
-            .lock(|main_bus| main_bus.fans.set_default_duty_cycle(all_settings.fan_speed));
+        (&mut c.shared.main_bus, &mut c.shared.runtime_settings)
+            .lock(|main_bus, settings| main_bus.fans.set_default_duty_cycle(settings.fan_speed));
 
         // Update the telemetry rate.
-        c.shared.net_devices.lock(|net_devices| {
-            net_devices
-                .telemetry
-                .set_telemetry_period(all_settings.telemetry_period)
-        });
+        (&mut c.shared.net_devices, &mut c.shared.runtime_settings).lock(
+            |net_devices, settings| {
+                net_devices
+                    .telemetry
+                    .set_telemetry_period(settings.telemetry_period)
+            },
+        );
     }
 
-    #[task(priority = 2, shared=[watchdog], local=[usb, usb_terminal])]
+    #[task(priority = 2, shared=[watchdog], local=[usb, usb_terminal, global_settings])]
     async fn usb(mut c: usb::Context) {
         loop {
             // Check in with the watchdog.
@@ -262,7 +262,10 @@ mod app {
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::Usb));
 
             c.local.usb.process(c.local.usb_terminal);
-            c.local.usb_terminal.process().unwrap();
+            c.local
+                .usb_terminal
+                .process(c.local.global_settings)
+                .unwrap();
 
             // Process any log output.
             LOGGER.process(c.local.usb_terminal);
@@ -272,7 +275,7 @@ mod app {
         }
     }
 
-    #[idle(shared=[main_bus, net_devices, watchdog])]
+    #[idle(shared=[main_bus, net_devices, watchdog, runtime_settings])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
             // Check in with the watchdog.
@@ -281,29 +284,18 @@ mod app {
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::Idle));
 
             // Handle the Miniconf settings interface.
-            let mut republish = false;
-            match c.shared.net_devices.lock(|net| {
-                net.settings.handled_update(|path, old, new| {
-                    let result = RuntimeSettings::handle_update(path, old, new);
-                    if result.is_err() {
-                        republish = true;
-                    }
-                    result
-                })
-            }) {
-                Ok(true) => update_settings::spawn().unwrap(),
+            match (&mut c.shared.net_devices, &mut c.shared.runtime_settings)
+                .lock(|net, runtime_settings| net.settings_client.update(runtime_settings))
+            {
+                Ok(true) => {
+                    update_settings::spawn().unwrap();
+                }
                 Ok(false) => {}
                 Err(minimq::Error::Network(smoltcp_nal::NetworkError::TcpConnectionFailure(
                     smoltcp_nal::smoltcp::socket::tcp::ConnectError::Unaddressable,
                 ))) => {}
                 other => log::warn!("Miniconf update failure: {:?}", other),
-            }
-
-            if republish {
-                c.shared
-                    .net_devices
-                    .lock(|net| net.settings.force_republish());
-            }
+            };
 
             // Handle the MQTT control interface.
             let main_bus = &mut c.shared.main_bus;
