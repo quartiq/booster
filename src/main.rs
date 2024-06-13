@@ -283,7 +283,6 @@ mod app {
                 .watchdog
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::Idle));
 
-            // TODO: Handle out-of-range settings
             // Handle the Miniconf settings interface.
             match (&mut c.shared.net_devices, &mut c.shared.runtime_settings)
                 .lock(|net, runtime_settings| net.settings_client.update(runtime_settings))
