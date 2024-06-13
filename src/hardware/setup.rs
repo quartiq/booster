@@ -292,7 +292,11 @@ pub fn setup(
     let mut flash = {
         let flash = stm32f4xx_hal::flash::LockedFlash::new(device.FLASH);
         const SECTOR_SIZE: usize = 128 * 1024;
-        Flash::new(flash, 6 * SECTOR_SIZE)
+        const NUM_SECTORS: usize = 8;
+
+        // sequential-storage requires 2 flash sectors for storage. We allocate them at the end of
+        // flash.
+        Flash::new(flash, (NUM_SECTORS - 2) * SECTOR_SIZE)
     };
 
     // Read the EUI48 identifier and configure the ethernet MAC address.
