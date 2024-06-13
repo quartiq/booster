@@ -289,8 +289,15 @@ pub fn setup(
         mac
     };
 
+    let mut flash = {
+        let flash = stm32f4xx_hal::flash::LockedFlash::new(device.FLASH);
+        const SECTOR_SIZE: usize = 128 * 1024;
+        Flash::new(flash, 6 * SECTOR_SIZE)
+    };
+
     // Read the EUI48 identifier and configure the ethernet MAC address.
     let mut settings = BoosterSettings::new(eeprom);
+    crate::settings::flash::load_from_flash(&mut settings.properties, &mut flash);
 
     let mut mac = {
         let mut spi = {
@@ -487,20 +494,11 @@ pub fn setup(
     };
 
     let serial_terminal = {
-        let mut flash = {
-            let flash = stm32f4xx_hal::flash::LockedFlash::new(device.FLASH);
-            const SECTOR_SIZE: usize = 128 * 1024;
-            Flash::new(flash, 7 * SECTOR_SIZE)
-        };
-
-        // Attempt to load flash settings
-        settings.properties.reload(&mut flash);
-
         let input_buffer = cortex_m::singleton!(:[u8; 256] = [0u8; 256]).unwrap();
         let serialize_buffer = cortex_m::singleton!(:[u8; 512] = [0u8; 512]).unwrap();
 
         serial_settings::Runner::new(
-            super::serial_terminal::SerialSettingsPlatform {
+            crate::settings::flash::SerialSettingsPlatform {
                 metadata,
                 interface: serial_settings::BestEffortInterface::new(usb_serial),
                 storage: flash,
@@ -508,6 +506,7 @@ pub fn setup(
             },
             input_buffer,
             serialize_buffer,
+            &mut settings.properties,
         )
         .unwrap()
     };

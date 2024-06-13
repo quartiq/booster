@@ -9,7 +9,7 @@ use miniconf::Tree;
 
 #[derive(Clone, Tree)]
 pub struct RuntimeSettings {
-    #[tree(depth(3))]
+    #[tree(depth = 3)]
     pub channel: [Option<ChannelSettings>; 8],
 
     /// The normalized fan speed. 1.0 corresponds to 100% on and 0.0 corresponds to completely

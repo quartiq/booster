@@ -1,9 +1,70 @@
 //! Booster NGFW Application
-use super::flash::Flash;
-use super::{platform, UsbBus};
+
+use heapless::{String, Vec};
+use miniconf::{JsonCoreSlash, Postcard, TreeKey};
+use sequential_storage::map;
+
+use crate::hardware::{flash::Flash, platform, UsbBus};
 use crate::settings::global_settings::BoosterMainBoardData;
 use core::fmt::Write;
-use embedded_storage::nor_flash::NorFlash;
+
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+pub struct SettingsItem {
+    // We only make these owned vec/string to get around lifetime limitations.
+    pub path: String<64>,
+    pub data: Vec<u8, 256>,
+}
+
+impl map::StorageItem for SettingsItem {
+    type Key = String<64>;
+    type Error = postcard::Error;
+
+    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
+        Ok(postcard::to_slice(self, buffer)?.len())
+    }
+
+    fn deserialize_from(buffer: &[u8]) -> Result<Self, Self::Error> {
+        postcard::from_bytes(buffer)
+    }
+
+    fn key(&self) -> Self::Key {
+        self.path.clone()
+    }
+}
+
+pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
+    structure: &mut T,
+    storage: &mut Flash,
+) {
+    // Loop over flash and read settings
+    let mut buffer = [0u8; 512];
+    for path in T::iter_paths::<String<64>>("/") {
+        let path = path.unwrap();
+
+        // Try to fetch the setting from flash.
+        let item = match map::fetch_item::<SettingsItem, _>(
+            storage,
+            storage.range(),
+            &mut buffer,
+            path.clone(),
+        ) {
+            Err(e) => {
+                log::warn!("Failed to fetch `{path}` from flash: {e:?}");
+                continue;
+            }
+            Ok(Some(item)) => item,
+            _ => continue,
+        };
+
+        log::info!("Loading initial `{path}` from flash");
+
+        let flavor = postcard::de_flavors::Slice::new(&item.data);
+        if let Err(e) = structure.set_postcard_by_key(path.split('/').skip(1), flavor) {
+            log::warn!("Failed to deserialize `{path}` from flash: {e:?}");
+        }
+    }
+    log::info!("Loaded settings from Flash");
+}
 
 pub struct SerialSettingsPlatform {
     pub metadata: &'static crate::hardware::metadata::ApplicationMetadata,
@@ -26,21 +87,52 @@ impl<F> From<postcard::Error> for Error<F> {
     }
 }
 
-impl serial_settings::Platform for SerialSettingsPlatform {
+impl serial_settings::Platform<1> for SerialSettingsPlatform {
     type Interface = serial_settings::BestEffortInterface<usbd_serial::SerialPort<'static, UsbBus>>;
 
     type Settings = crate::settings::global_settings::BoosterMainBoardData;
 
     type Error = Error<<Flash as embedded_storage::nor_flash::ErrorType>::Error>;
 
-    fn save(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error> {
-        let serialized = postcard::to_slice(self.settings(), buffer)?;
-        self.storage
-            .erase(0, serialized.len() as u32)
-            .map_err(Self::Error::Flash)?;
-        self.storage
-            .write(0, serialized)
-            .map_err(Self::Error::Flash)?;
+    fn save(&mut self, buffer: &mut [u8], settings: &Self::Settings) -> Result<(), Self::Error> {
+        for path in Self::Settings::iter_paths::<String<64>>("/") {
+            let mut item = SettingsItem {
+                path: path.unwrap(),
+                ..Default::default()
+            };
+
+            item.data.resize(item.data.capacity(), 0).unwrap();
+
+            let flavor = postcard::ser_flavors::Slice::new(&mut item.data);
+
+            let len = match settings.get_postcard_by_key(item.path.split('/').skip(1), flavor) {
+                Err(e) => {
+                    log::warn!("Failed to save `{}` to flash: {e:?}", item.path);
+                    continue;
+                }
+                Ok(slice) => slice.len(),
+            };
+            item.data.truncate(len);
+
+            let range = self.storage.range();
+
+            // Check if the settings has changed from what's currently in flash (or if it doesn't
+            // yet exist).
+            if map::fetch_item::<SettingsItem, _>(
+                &mut self.storage,
+                range.clone(),
+                buffer,
+                item.path.clone(),
+            )
+            .unwrap()
+            .map(|old| old.data != item.data)
+            .unwrap_or(true)
+            {
+                log::info!("Storing `{}` to flash", item.path);
+                map::store_item(&mut self.storage, range, buffer, item).unwrap();
+            }
+        }
+
         Ok(())
     }
 
@@ -121,15 +213,5 @@ impl serial_settings::Platform for SerialSettingsPlatform {
     /// Return a mutable reference to the `Interface`.
     fn interface_mut(&mut self) -> &mut Self::Interface {
         &mut self.interface
-    }
-
-    /// Return a reference to the `Settings`
-    fn settings(&self) -> &Self::Settings {
-        &self.settings
-    }
-
-    /// Return a mutable reference to the `Settings`.
-    fn settings_mut(&mut self) -> &mut Self::Settings {
-        &mut self.settings
     }
 }
