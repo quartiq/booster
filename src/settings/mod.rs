@@ -1,7 +1,5 @@
 //! Booster NGFW NVM settings
 
-use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
-use crate::net::mqtt_control::DEFAULT_TELEMETRY_PERIOD_SECS;
 use core::fmt::Write;
 use core::str::FromStr;
 use heapless::String;
@@ -68,19 +66,11 @@ impl serial_settings::Settings<5> for Settings {
         )
         .unwrap();
 
-        *self = Self {
-            mac: self.mac,
-            ip: IpAddr::new(&[0, 0, 0, 0]),
-            broker: heapless::String::from_str("10.0.0.2").unwrap(),
-            gateway: IpAddr::new(&[0, 0, 0, 0]),
-            netmask: IpAddr::new(&[0, 0, 0, 0]),
-            id: name,
-            booster: RuntimeSettings {
-                fan_speed: DEFAULT_FAN_SPEED,
-                telemetry_period: DEFAULT_TELEMETRY_PERIOD_SECS,
-                channel: self.booster.channel,
-            },
-        };
-        // TODO: Reset each channel config.
+        self.booster.reset();
+        self.ip = IpAddr::new(&[0, 0, 0, 0]);
+        self.broker = heapless::String::from_str("10.0.0.2").unwrap();
+        self.gateway = IpAddr::new(&[0, 0, 0, 0]);
+        self.netmask = IpAddr::new(&[0, 0, 0, 0]);
+        self.id = name;
     }
 }
