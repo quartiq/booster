@@ -15,7 +15,7 @@ use super::{
 };
 use stm32f4xx_hal::hal_02::blocking::delay::DelayMs;
 
-use crate::settings::eeprom::main_board::BoosterSettings;
+use crate::settings::eeprom::main_board::BoosterMainBoardData;
 
 use stm32f4xx_hal as hal;
 
@@ -311,12 +311,7 @@ pub fn setup(
             settings
         };
 
-        let eeprom_settings = {
-            // TODO: No need to store the EEPROM with the BoosterSettings anymore. We just want to
-            // load the mainboard data from EEPROM as the initial values.
-            let settings = BoosterSettings::new(eeprom);
-            settings.properties
-        };
+        let eeprom_settings = BoosterMainBoardData::load(&mut eeprom);
 
         let mut settings = crate::settings::Settings {
             mac: eeprom_settings.mac,

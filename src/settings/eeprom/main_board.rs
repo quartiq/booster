@@ -25,10 +25,7 @@ use smoltcp_nal::smoltcp;
 
 use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
 
-use super::{
-    sinara::{BoardId as SinaraBoardId, SinaraConfiguration},
-    SemVersion,
-};
+use super::{sinara::SinaraConfiguration, SemVersion};
 use serde::{Deserialize, Serialize};
 
 use core::fmt::Write;
@@ -204,6 +201,23 @@ pub struct BoosterMainBoardData {
 }
 
 impl BoosterMainBoardData {
+    pub fn load(eeprom: &mut Eeprom) -> Self {
+        let mut mac: [u8; 6] = [0; 6];
+        eeprom.read_eui48(&mut mac).unwrap();
+
+        let sinara_config = {
+            // Read the sinara-config from memory.
+            let mut sinara_config: [u8; 256] = [0; 256];
+            eeprom.read(0, &mut sinara_config).unwrap();
+
+            SinaraConfiguration::try_deserialize(sinara_config)
+        };
+
+        sinara_config
+            .and_then(|config| Self::deserialize(&mac, &config.board_data).map(|result| result.0))
+            .unwrap_or_else(|_| Self::default(&mac))
+    }
+
     /// Generate default booster configuration data given the device EUI48.
     ///
     /// # Args
@@ -268,82 +282,5 @@ impl BoosterMainBoardData {
 
         log::info!("Loaded settings from EEPROM");
         Ok((config.with_mac(eui48), modified))
-    }
-
-    /// Serialize the booster config into a sinara configuration for storage into EEPROM.
-    ///
-    /// # Args
-    /// * `config` - The sinara configuration to serialize the booster configuration into.
-    pub fn serialize_into(&self, config: &mut SinaraConfiguration) {
-        let mut buffer: [u8; 64] = [0; 64];
-        let serialized: SerializedMainBoardData = self.clone().into();
-        let len = serialized.encode(&mut buffer).unwrap();
-        config.board_data[..len].copy_from_slice(&buffer[..len]);
-    }
-}
-
-/// Booster device-wide configurable settings.
-pub struct BoosterSettings {
-    pub properties: BoosterMainBoardData,
-    eeprom: Eeprom,
-}
-
-impl BoosterSettings {
-    /// Load booster settings from external EEPROM storage.
-    ///
-    /// # Args
-    /// * `eeprom` - The EEPROM used to store the configuration.
-    pub fn new(mut eeprom: Eeprom) -> Self {
-        let mut mac: [u8; 6] = [0; 6];
-        eeprom.read_eui48(&mut mac).unwrap();
-
-        // Load the sinara configuration from EEPROM.
-        let (board_data, write_back) = Self::load_config(&mut eeprom)
-            .and_then(|config| BoosterMainBoardData::deserialize(&mac, &config.board_data))
-            .unwrap_or((BoosterMainBoardData::default(&mac), true));
-
-        let mut settings = Self {
-            properties: board_data,
-            eeprom,
-        };
-
-        if write_back {
-            settings.save();
-        }
-
-        settings
-    }
-
-    /// Save the configuration settings to EEPROM for retrieval.
-    pub fn save(&mut self) {
-        let mut config = match Self::load_config(&mut self.eeprom) {
-            Err(_) => SinaraConfiguration::default(SinaraBoardId::Mainboard),
-            Ok(config) => config,
-        };
-
-        let board_data: BoosterMainBoardData = self.properties.clone();
-        board_data.serialize_into(&mut config);
-        config.update_crc32();
-        self.save_config(&config);
-    }
-
-    /// Load device settings from EEPROM.
-    ///
-    /// # Returns
-    /// Ok(settings) if the settings loaded successfully. Otherwise, Err(settings), where `settings`
-    /// are default values.
-    fn load_config(eeprom: &mut Eeprom) -> Result<SinaraConfiguration, Error> {
-        // Read the sinara-config from memory.
-        let mut sinara_config: [u8; 256] = [0; 256];
-        eeprom.read(0, &mut sinara_config).unwrap();
-
-        SinaraConfiguration::try_deserialize(sinara_config)
-    }
-
-    fn save_config(&mut self, config: &SinaraConfiguration) {
-        // Save the updated configuration to EEPROM.
-        let mut serialized = [0u8; 128];
-        config.serialize_into(&mut serialized);
-        self.eeprom.write(0, &serialized).unwrap();
     }
 }

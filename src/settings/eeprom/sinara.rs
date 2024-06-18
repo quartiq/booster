@@ -5,7 +5,7 @@ use core::convert::TryInto;
 
 /// The sinara configuration board ID.
 pub enum BoardId {
-    Mainboard = 21,
+    _Mainboard = 21,
     RfChannel = 22,
 }
 
@@ -211,7 +211,7 @@ impl SinaraConfiguration {
     /// * `mainboard` - Specified true if the sinara configuration is for the booster mainboard.
     pub fn default(board_id: BoardId) -> SinaraConfiguration {
         let name = match board_id {
-            BoardId::Mainboard => "Booster",
+            BoardId::_Mainboard => "Booster",
             BoardId::RfChannel => "Booster_Ch",
         };
 

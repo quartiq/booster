@@ -201,8 +201,6 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
                 // the device. This will allow RF channels to re-enable.
                 platform::clear_reset_flags();
             }
-
-            // TODO: Add command to save RF channel transforms to EEPROM.
             other => {
                 writeln!(
                     self.interface_mut(),
