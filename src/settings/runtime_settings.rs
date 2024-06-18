@@ -1,10 +1,10 @@
 //! Booster NGFW runtime settings
 
-use super::channel_settings::ChannelSettings;
+use super::eeprom::rf_channel::ChannelSettings;
 use crate::{hardware, net};
 use miniconf::Tree;
 
-#[derive(Clone, Tree)]
+#[derive(Clone, Debug, Tree)]
 pub struct RuntimeSettings {
     #[tree(depth = 3)]
     pub channel: [Option<ChannelSettings>; 8],

@@ -10,12 +10,12 @@ use super::{
     rf_channel::{AdcPin, ChannelPins as RfChannelPins},
     usb,
     user_interface::{UserButtons, UserLeds},
-    HardwareVersion, Mac, NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, CPU_FREQ,
-    I2C,
+    Channel, HardwareVersion, Mac, NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus,
+    CPU_FREQ, I2C,
 };
 use stm32f4xx_hal::hal_02::blocking::delay::DelayMs;
 
-use crate::settings::BoosterSettings;
+use crate::settings::eeprom::main_board::BoosterSettings;
 
 use stm32f4xx_hal as hal;
 
@@ -82,7 +82,7 @@ pub struct BoosterDevices {
     pub watchdog: hal::watchdog::IndependentWatchdog,
     pub usb_device: usb::UsbDevice,
     pub usb_serial: SerialTerminal,
-    pub settings: BoosterSettings,
+    pub settings: crate::settings::Settings,
     pub metadata: &'static ApplicationMetadata,
 }
 
@@ -199,7 +199,7 @@ pub fn setup(
 
     // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
     // bus with all of the Booster peripheral devices.
-    let channels = {
+    let mut channels = {
         let pins = [
             channel_pins!(gpiod, gpioe, gpiog, pd0, pd8, pe8, pe0, pg8, gpioa, pa0, pa1),
             channel_pins!(gpiod, gpioe, gpiog, pd1, pd9, pe9, pe1, pg9, gpioa, pa2, pa3),
@@ -300,8 +300,37 @@ pub fn setup(
     };
 
     // Read the EUI48 identifier and configure the ethernet MAC address.
-    let mut settings = BoosterSettings::new(eeprom);
-    crate::settings::flash::load_from_flash(&mut settings.properties, &mut flash);
+    let mut settings = {
+        let runtime_settings = {
+            let mut settings = crate::settings::runtime_settings::RuntimeSettings::default();
+            for idx in enum_iterator::all::<Channel>() {
+                settings.channel[idx as usize] = channels
+                    .channel_mut(idx)
+                    .map(|(channel, _)| *channel.context().settings())
+            }
+            settings
+        };
+
+        let eeprom_settings = {
+            // TODO: No need to store the EEPROM with the BoosterSettings anymore. We just want to
+            // load the mainboard data from EEPROM as the initial values.
+            let settings = BoosterSettings::new(eeprom);
+            settings.properties
+        };
+
+        let mut settings = crate::settings::Settings {
+            mac: eeprom_settings.mac,
+            ip: eeprom_settings.ip,
+            broker: eeprom_settings.broker,
+            gateway: eeprom_settings.gateway,
+            netmask: eeprom_settings.netmask,
+            id: eeprom_settings.id,
+            booster: runtime_settings,
+        };
+
+        crate::settings::flash::load_from_flash(&mut settings, &mut flash);
+        settings
+    };
 
     let mut mac = {
         let mut spi = {
@@ -434,7 +463,7 @@ pub fn setup(
         ChassisFans::new(
             [fan1, fan2, fan3],
             main_board_leds,
-            settings.properties.fan_speed,
+            settings.booster.fan_speed,
         )
     };
 
@@ -461,8 +490,14 @@ pub fn setup(
         );
 
         usb_bus.replace(hal::otg_fs::UsbBus::new(usb, &mut endpoint_memory[..]));
+        let read_store = cortex_m::singleton!(: [u8; 128] = [0; 128]).unwrap();
+        let write_store = cortex_m::singleton!(: [u8; 1024] = [0; 1024]).unwrap();
 
-        let usb_serial = usbd_serial::SerialPort::new(usb_bus.as_ref().unwrap());
+        let usb_serial = usbd_serial::SerialPort::new_with_store(
+            usb_bus.as_ref().unwrap(),
+            &mut read_store[..],
+            &mut write_store[..],
+        );
 
         // Generate a device serial number from the MAC address.
         {
@@ -506,11 +541,10 @@ pub fn setup(
                 metadata,
                 interface: serial_settings::BestEffortInterface::new(usb_serial),
                 storage: flash,
-                settings: settings.properties.clone(),
             },
             input_buffer,
             serialize_buffer,
-            &mut settings.properties,
+            &mut settings,
         )
         .unwrap()
     };

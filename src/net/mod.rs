@@ -36,7 +36,7 @@ pub struct NetworkDevices {
     pub telemetry: mqtt_control::TelemetryClient,
     pub settings_client: miniconf_mqtt::MqttClient<
         'static,
-        crate::RuntimeSettings,
+        crate::settings::runtime_settings::RuntimeSettings,
         NetworkStackProxy,
         SystemTimer,
         miniconf_mqtt::minimq::broker::NamedBroker<NetworkStackProxy>,

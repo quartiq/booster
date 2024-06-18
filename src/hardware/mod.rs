@@ -44,7 +44,7 @@ pub enum Mac {
 }
 
 pub type SerialTerminal =
-    serial_settings::Runner<'static, crate::settings::flash::SerialSettingsPlatform, 1>;
+    serial_settings::Runner<'static, crate::settings::flash::SerialSettingsPlatform, 5>;
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<'static, Mac, SystemTimer>;
 
@@ -54,6 +54,9 @@ pub type I2cError = hal::i2c::Error;
 
 pub type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;
 pub type Eeprom = microchip_24aa02e48::Microchip24AA02E48<I2C2>;
+
+pub type SerialPort =
+    usbd_serial::SerialPort<'static, crate::hardware::UsbBus, &'static mut [u8], &'static mut [u8]>;
 
 /// Indicates a booster RF channel.
 #[derive(Sequence, Copy, Clone, Debug, Serialize, Deserialize)]

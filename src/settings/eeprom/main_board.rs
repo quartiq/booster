@@ -25,7 +25,10 @@ use smoltcp_nal::smoltcp;
 
 use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
 
-use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
+use super::{
+    sinara::{BoardId as SinaraBoardId, SinaraConfiguration},
+    SemVersion,
+};
 use serde::{Deserialize, Serialize};
 
 use core::fmt::Write;
@@ -200,12 +203,6 @@ pub struct BoosterMainBoardData {
     pub fan_speed: f32,
 }
 
-impl serial_settings::Settings<1> for BoosterMainBoardData {
-    fn reset(&mut self) {
-        *self = Self::default(&self.mac.0)
-    }
-}
-
 impl BoosterMainBoardData {
     /// Generate default booster configuration data given the device EUI48.
     ///
@@ -282,44 +279,6 @@ impl BoosterMainBoardData {
         let serialized: SerializedMainBoardData = self.clone().into();
         let len = serialized.encode(&mut buffer).unwrap();
         config.board_data[..len].copy_from_slice(&buffer[..len]);
-    }
-
-    pub fn validate(&self) -> bool {
-        if !identifier_is_valid(&self.id) {
-            log::error!("The ID must be 23 or less alpha-numeric characters (or '-')");
-            return false;
-        }
-
-        if smoltcp::wire::IpAddress::Ipv4(self.netmask.0)
-            .prefix_len()
-            .is_none()
-        {
-            log::error!("Netmasks must contain no trailing bits");
-            return false;
-        }
-
-        true
-    }
-
-    /// Get the IP address of the device.
-    ///
-    /// # Note
-    /// The IP address will be unspecified if DHCP is to be used.
-    pub fn ip_cidr(&self) -> smoltcp::wire::IpCidr {
-        let ip_addr = self.ip.0;
-
-        let prefix = if !ip_addr.is_unspecified() {
-            let netmask = smoltcp::wire::IpAddress::Ipv4(self.netmask.0);
-
-            netmask.prefix_len().unwrap_or_else(|| {
-                log::error!("Invalid netmask found. Assuming no mask.");
-                0
-            })
-        } else {
-            0
-        };
-
-        smoltcp::wire::IpCidr::new(smoltcp::wire::IpAddress::Ipv4(ip_addr), prefix)
     }
 }
 

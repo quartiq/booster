@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Serial terminal replaced with `menu` for simplicity
 * The broker can now be specified using DNS
 * Updated to RTIC v2 and async support. MSRV bumped to 1.75.0
+* All settings, including RF channel settings, are now exposed via the USB interface
 
 ## [0.5.0] - 03-07-2023
 

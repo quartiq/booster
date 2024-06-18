@@ -4,8 +4,7 @@ use heapless::{String, Vec};
 use miniconf::{JsonCoreSlash, Postcard, TreeKey};
 use sequential_storage::map;
 
-use crate::hardware::{flash::Flash, platform, UsbBus};
-use crate::settings::global_settings::BoosterMainBoardData;
+use crate::hardware::{flash::Flash, platform};
 use core::fmt::Write;
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -68,11 +67,10 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
 
 pub struct SerialSettingsPlatform {
     pub metadata: &'static crate::hardware::metadata::ApplicationMetadata,
-    pub settings: BoosterMainBoardData,
     pub storage: Flash,
 
     /// The interface to read/write data to/from serially (via text) to the user.
-    pub interface: serial_settings::BestEffortInterface<usbd_serial::SerialPort<'static, UsbBus>>,
+    pub interface: serial_settings::BestEffortInterface<crate::hardware::SerialPort>,
 }
 
 #[derive(Debug)]
@@ -87,15 +85,18 @@ impl<F> From<postcard::Error> for Error<F> {
     }
 }
 
-impl serial_settings::Platform<1> for SerialSettingsPlatform {
-    type Interface = serial_settings::BestEffortInterface<usbd_serial::SerialPort<'static, UsbBus>>;
+impl serial_settings::Platform<5> for SerialSettingsPlatform {
+    type Interface = serial_settings::BestEffortInterface<crate::hardware::SerialPort>;
 
-    type Settings = crate::settings::global_settings::BoosterMainBoardData;
+    type Settings = crate::settings::Settings;
 
     type Error = Error<<Flash as embedded_storage::nor_flash::ErrorType>::Error>;
 
     fn save(&mut self, buffer: &mut [u8], settings: &Self::Settings) -> Result<(), Self::Error> {
         for path in Self::Settings::iter_paths::<String<64>>("/") {
+            // TODO: Should we reserve the RF transforms to exist in RF channel EEPROM? These are
+            // likely hardware- and channel-specific.
+
             let mut item = SettingsItem {
                 path: path.unwrap(),
                 ..Default::default()
@@ -200,6 +201,8 @@ impl serial_settings::Platform<1> for SerialSettingsPlatform {
                 // the device. This will allow RF channels to re-enable.
                 platform::clear_reset_flags();
             }
+
+            // TODO: Add command to save RF channel transforms to EEPROM.
             other => {
                 writeln!(
                     self.interface_mut(),
