@@ -92,13 +92,15 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
 
     type Error = Error<<Flash as embedded_storage::nor_flash::ErrorType>::Error>;
 
-    fn save(&mut self, buffer: &mut [u8], settings: &Self::Settings) -> Result<(), Self::Error> {
-        for path in Self::Settings::iter_paths::<String<64>>("/") {
-            // TODO: Should we reserve the RF transforms to exist in RF channel EEPROM? These are
-            // likely hardware- and channel-specific.
-
+    fn save(
+        &mut self,
+        buffer: &mut [u8],
+        key: Option<&str>,
+        settings: &Self::Settings,
+    ) -> Result<(), Self::Error> {
+        let mut save_setting = |path| -> Result<(), Self::Error> {
             let mut item = SettingsItem {
-                path: path.unwrap(),
+                path,
                 ..Default::default()
             };
 
@@ -109,7 +111,7 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
             let len = match settings.get_postcard_by_key(item.path.split('/').skip(1), flavor) {
                 Err(e) => {
                     log::warn!("Failed to save `{}` to flash: {e:?}", item.path);
-                    continue;
+                    return Ok(());
                 }
                 Ok(slice) => slice.len(),
             };
@@ -131,6 +133,18 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
             {
                 log::info!("Storing `{}` to flash", item.path);
                 map::store_item(&mut self.storage, range, buffer, item).unwrap();
+            }
+
+            Ok(())
+        };
+
+        if let Some(path) = key {
+            save_setting(path.into()).unwrap()
+        } else {
+            for path in Self::Settings::iter_paths::<String<64>>("/") {
+                // TODO: Should we reserve the RF transforms to exist in RF channel EEPROM? These are
+                // likely hardware- and channel-specific.
+                save_setting(path.unwrap()).unwrap();
             }
         }
 
