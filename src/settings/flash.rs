@@ -143,7 +143,8 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
         } else {
             for path in Self::Settings::iter_paths::<String<64>>("/") {
                 // TODO: Should we reserve the RF transforms to exist in RF channel EEPROM? These are
-                // likely hardware- and channel-specific.
+                // likely hardware- and channel-specific. Tracking issue is
+                // https://github.com/quartiq/booster/issues/404
                 save_setting(path.unwrap()).unwrap();
             }
         }
