@@ -73,6 +73,35 @@ pub struct SerialSettingsPlatform {
     pub interface: serial_settings::BestEffortInterface<crate::hardware::SerialPort>,
 }
 
+impl SerialSettingsPlatform {
+    pub fn save_item(&mut self, buffer: &mut [u8], key: String<64>, value: Vec<u8, 256>) {
+        let mut item = SettingsItem {
+            path: key,
+            data: value,
+        };
+
+        item.data.resize(item.data.capacity(), 0).unwrap();
+
+        let range = self.storage.range();
+
+        // Check if the settings has changed from what's currently in flash (or if it doesn't
+        // yet exist).
+        if map::fetch_item::<SettingsItem, _>(
+            &mut self.storage,
+            range.clone(),
+            buffer,
+            item.path.clone(),
+        )
+        .unwrap()
+        .map(|old| old.data != item.data)
+        .unwrap_or(true)
+        {
+            log::info!("Storing `{}` to flash", item.path);
+            map::store_item(&mut self.storage, range, buffer, item).unwrap();
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Error<F> {
     Postcard(postcard::Error),
@@ -98,54 +127,28 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
         key: Option<&str>,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error> {
-        let mut save_setting = |path| -> Result<(), Self::Error> {
-            let mut item = SettingsItem {
-                path,
-                ..Default::default()
-            };
-
-            item.data.resize(item.data.capacity(), 0).unwrap();
-
-            let flavor = postcard::ser_flavors::Slice::new(&mut item.data);
-
-            let len = match settings.get_postcard_by_key(item.path.split('/').skip(1), flavor) {
+        let mut save_setting = |path: String<64>| {
+            let mut data = Vec::new();
+            let flavor = postcard::ser_flavors::Slice::new(&mut data);
+            let len = match settings.get_postcard_by_key(path.split('/').skip(1), flavor) {
                 Err(e) => {
-                    log::warn!("Failed to save `{}` to flash: {e:?}", item.path);
-                    return Ok(());
+                    log::warn!("Failed to save `{}` to flash: {e:?}", path);
+                    return;
                 }
                 Ok(slice) => slice.len(),
             };
-            item.data.truncate(len);
-
-            let range = self.storage.range();
-
-            // Check if the settings has changed from what's currently in flash (or if it doesn't
-            // yet exist).
-            if map::fetch_item::<SettingsItem, _>(
-                &mut self.storage,
-                range.clone(),
-                buffer,
-                item.path.clone(),
-            )
-            .unwrap()
-            .map(|old| old.data != item.data)
-            .unwrap_or(true)
-            {
-                log::info!("Storing `{}` to flash", item.path);
-                map::store_item(&mut self.storage, range, buffer, item).unwrap();
-            }
-
-            Ok(())
+            data.truncate(len);
+            self.save_item(buffer, path, data)
         };
 
         if let Some(path) = key {
-            save_setting(path.into()).unwrap()
+            save_setting(path.into());
         } else {
             for path in Self::Settings::iter_paths::<String<64>>("/") {
                 // TODO: Should we reserve the RF transforms to exist in RF channel EEPROM? These are
                 // likely hardware- and channel-specific. Tracking issue is
                 // https://github.com/quartiq/booster/issues/404
-                save_setting(path.unwrap()).unwrap();
+                save_setting(path.unwrap());
             }
         }
 

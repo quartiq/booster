@@ -236,7 +236,23 @@ pub fn read_bias(
 /// A [minireq::Response] containing no data, which indicates the success of the command
 /// processing.
 pub fn save_settings(
+    _main_bus: &mut MainBus,
+    _topic: &str,
+    _request: &[u8],
+    _buffer: &mut [u8],
+) -> Result<usize, Error> {
+    unreachable!();
+}
+
+use crate::settings::eeprom::rf_channel::ChannelSettings;
+use crate::settings::flash::SerialSettingsPlatform;
+use crate::settings::Settings;
+use heapless::Vec;
+use miniconf::{Postcard, TreeKey};
+
+pub fn save_settings_to_flash(
     main_bus: &mut MainBus,
+    settings_platform: &mut SerialSettingsPlatform,
     _topic: &str,
     request: &[u8],
     _buffer: &mut [u8],
@@ -248,6 +264,31 @@ pub fn save_settings(
     };
 
     channel.context_mut().save_configuration();
+
+    let settings = channel.context().settings();
+
+    let mut buf = [0u8; 256];
+    for (ch_indices, _) in ChannelSettings::iter_indices() {
+        let (root_indices, _) = Settings::indices(["booster", "channel"]).unwrap();
+        let mut path = String::<64>::new();
+        let channel_key = [request.channel as usize];
+        let channel_indices = root_indices[..2]
+            .iter()
+            .cloned()
+            .chain(channel_key.iter().cloned());
+        let all_indices = channel_indices.chain(ch_indices.iter().cloned());
+        Settings::path(all_indices, &mut path, "/").unwrap();
+
+        let mut data = Vec::new();
+        let flavor = postcard::ser_flavors::Slice::new(&mut data);
+        let len = settings
+            .get_postcard_by_key(ch_indices, flavor)
+            .unwrap()
+            .len();
+        data.truncate(len);
+
+        settings_platform.save_item(&mut buf[..], path, data);
+    }
 
     Ok(0)
 }

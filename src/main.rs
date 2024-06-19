@@ -53,6 +53,7 @@ mod app {
         net_devices: net::NetworkDevices,
         watchdog: WatchdogManager,
         settings: Settings,
+        usb_terminal: SerialTerminal,
     }
 
     #[local]
@@ -60,7 +61,6 @@ mod app {
         buttons: UserButtons,
         leds: UserLeds,
         usb: UsbDevice,
-        usb_terminal: SerialTerminal,
     }
 
     #[init]
@@ -93,12 +93,12 @@ mod app {
                 ),
                 watchdog: watchdog_manager,
                 settings: booster.settings,
+                usb_terminal: booster.usb_serial,
             },
             LocalResources {
                 buttons: booster.buttons,
                 leds: booster.leds,
                 usb: booster.usb_device,
-                usb_terminal: booster.usb_serial,
             },
         )
     }
@@ -241,7 +241,7 @@ mod app {
         });
     }
 
-    #[task(priority = 2, shared=[watchdog, settings], local=[usb, usb_terminal])]
+    #[task(priority = 2, shared=[watchdog, settings, usb_terminal], local=[usb])]
     async fn usb(mut c: usb::Context) {
         loop {
             // Check in with the watchdog.
@@ -249,22 +249,21 @@ mod app {
                 .watchdog
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::Usb));
 
-            c.local.usb.process(c.local.usb_terminal);
-            c.shared.settings.lock(|settings| {
-                if c.local.usb_terminal.process(settings).unwrap() {
+            (&mut c.shared.usb_terminal, &mut c.shared.settings).lock(|terminal, settings| {
+                c.local.usb.process(terminal);
+                if terminal.process(settings).unwrap() {
                     update_settings::spawn().unwrap();
                 }
+                // Process any log output.
+                LOGGER.process(terminal);
             });
-
-            // Process any log output.
-            LOGGER.process(c.local.usb_terminal);
 
             // Schedule to run this task every 10ms.
             Systick::delay(10u32.millis()).await;
         }
     }
 
-    #[idle(shared=[main_bus, net_devices, watchdog, settings])]
+    #[idle(shared=[main_bus, net_devices, watchdog, settings, usb_terminal])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
             // Check in with the watchdog.
@@ -287,12 +286,25 @@ mod app {
             };
 
             // Handle the MQTT control interface.
-            let main_bus = &mut c.shared.main_bus;
             c.shared
                 .net_devices
                 .lock(|net| {
                     match net.control.poll(|handler, topic, data, output| {
-                        main_bus.lock(|bus| handler(bus, topic, data, output))
+                        if topic.ends_with("save") {
+                            (&mut c.shared.main_bus, &mut c.shared.usb_terminal).lock(|bus, usb| {
+                                crate::net::mqtt_control::save_settings_to_flash(
+                                    bus,
+                                    usb.platform_mut(),
+                                    topic,
+                                    data,
+                                    output,
+                                )
+                            })
+                        } else {
+                            c.shared
+                                .main_bus
+                                .lock(|bus| handler(bus, topic, data, output))
+                        }
                     }) {
                         Err(minireq::Error::Mqtt(minireq::minimq::Error::Network(
                             smoltcp_nal::NetworkError::TcpConnectionFailure(
