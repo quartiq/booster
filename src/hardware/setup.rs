@@ -299,33 +299,33 @@ pub fn setup(
         Flash::new(flash, (NUM_SECTORS - 2) * SECTOR_SIZE)
     };
 
-    // Read the EUI48 identifier and configure the ethernet MAC address.
-    let mut settings = {
-        let runtime_settings = {
-            let mut settings = crate::settings::runtime_settings::RuntimeSettings::default();
-            for idx in enum_iterator::all::<Channel>() {
-                settings.channel[idx as usize] = channels
-                    .channel_mut(idx)
-                    .map(|(channel, _)| *channel.context().settings())
-            }
-            settings
-        };
+    // Load initial runtime setings from RF channel EEPROM. We'll potentially overwrite these with
+    // data loaded from flash later.
+    let mut runtime_settings = crate::settings::runtime_settings::RuntimeSettings::default();
+    for idx in enum_iterator::all::<Channel>() {
+        runtime_settings.channel[idx as usize] = channels
+            .channel_mut(idx)
+            .map(|(channel, _)| *channel.context().settings())
+    }
 
-        let eeprom_settings = BoosterMainBoardData::load(&mut eeprom);
+    // Load initial main-board settings from EEPROM
+    let eeprom_settings = BoosterMainBoardData::load(&mut eeprom);
+    runtime_settings.fan_speed = eeprom_settings.fan_speed;
 
-        let mut settings = crate::settings::Settings {
-            mac: eeprom_settings.mac,
-            ip: eeprom_settings.ip,
-            broker: eeprom_settings.broker,
-            gateway: eeprom_settings.gateway,
-            netmask: eeprom_settings.netmask,
-            id: eeprom_settings.id,
-            booster: runtime_settings,
-        };
-
-        crate::settings::flash::load_from_flash(&mut settings, &mut flash);
-        settings
+    let mut settings = crate::settings::Settings {
+        mac: eeprom_settings.mac,
+        ip: eeprom_settings.ip,
+        broker: eeprom_settings.broker,
+        gateway: eeprom_settings.gateway,
+        id: eeprom_settings.id,
+        booster: runtime_settings,
     };
+
+    // Now that we've initialized settings from EEPROM, we'll potentially overwrite them using
+    // values stored in flash. This helps preserve backwards compatibility with older Booster
+    // firmware versions that didn't store settings in flash. We no longer persist settings to
+    // EEPROM, so flash will have the latest and greatest settings data.
+    crate::settings::flash::load_from_flash(&mut settings, &mut flash);
 
     let mut mac = {
         let mut spi = {

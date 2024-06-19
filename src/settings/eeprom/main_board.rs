@@ -18,7 +18,6 @@
 //! bytes, but a domain name can be up to 255 characters.
 
 use crate::{hardware::Eeprom, Error};
-use core::str::FromStr;
 use encdec::{Decode, DecodeOwned, Encode};
 use heapless::String;
 use smoltcp_nal::smoltcp;
@@ -29,7 +28,6 @@ use super::{sinara::SinaraConfiguration, SemVersion};
 use serde::{Deserialize, Serialize};
 
 use core::fmt::Write;
-use miniconf::Tree;
 use serde_with::DeserializeFromStr;
 
 /// The expected semver of the BoosterChannelSettings. This version must be updated whenever the
@@ -148,34 +146,26 @@ pub struct SerializedMainBoardData {
     pub fan_speed: f32,
 }
 
-impl From<BoosterMainBoardData> for SerializedMainBoardData {
-    fn from(d: BoosterMainBoardData) -> Self {
-        Self {
-            version: d.version,
-            ip: d.ip,
-            broker: d
-                .broker
-                .parse()
-                .unwrap_or_else(|_| IpAddr::new(&[10, 0, 0, 2])),
-            gateway: d.gateway,
-            netmask: d.netmask,
-            id: MqttIdentifier(d.id),
-            fan_speed: d.fan_speed,
-        }
-    }
-}
-
 impl SerializedMainBoardData {
     fn with_mac(self, eui48: &[u8; 6]) -> BoosterMainBoardData {
         let mut broker = String::new();
         write!(&mut broker, "{}", self.broker.0).unwrap();
+        let netmask = smoltcp::wire::IpAddress::Ipv4(self.netmask.0);
+
+        let ipcidr = smoltcp::wire::IpCidr::new(
+            smoltcp::wire::IpAddress::Ipv4(self.ip.0),
+            netmask.prefix_len().unwrap_or(0),
+        );
+
+        let mut ip = String::new();
+        write!(&mut ip, "{}", ipcidr).unwrap();
+
         BoosterMainBoardData {
             mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
-            version: self.version,
-            ip: self.ip,
+            _version: self.version,
+            ip,
             broker,
             gateway: self.gateway,
-            netmask: self.netmask,
             id: self.id.0,
             fan_speed: self.fan_speed,
         }
@@ -183,20 +173,14 @@ impl SerializedMainBoardData {
 }
 
 /// Represents booster mainboard-specific configuration values.
-#[derive(Debug, Clone, Tree, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct BoosterMainBoardData {
-    #[tree(skip)]
-    version: SemVersion,
-
-    #[tree(skip)]
-    #[serde(skip)]
+    _version: SemVersion,
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-
-    pub ip: IpAddr,
-    pub broker: heapless::String<255>,
+    pub ip: String<18>,
+    pub broker: String<255>,
     pub gateway: IpAddr,
-    pub netmask: IpAddr,
-    pub id: heapless::String<23>,
+    pub id: String<23>,
     pub fan_speed: f32,
 }
 
@@ -205,15 +189,10 @@ impl BoosterMainBoardData {
         let mut mac: [u8; 6] = [0; 6];
         eeprom.read_eui48(&mut mac).unwrap();
 
-        let sinara_config = {
-            // Read the sinara-config from memory.
-            let mut sinara_config: [u8; 256] = [0; 256];
-            eeprom.read(0, &mut sinara_config).unwrap();
+        let mut sinara_config: [u8; 256] = [0; 256];
+        eeprom.read(0, &mut sinara_config).unwrap();
 
-            SinaraConfiguration::try_deserialize(sinara_config)
-        };
-
-        sinara_config
+        SinaraConfiguration::try_deserialize(sinara_config)
             .and_then(|config| Self::deserialize(&mac, &config.board_data).map(|result| result.0))
             .unwrap_or_else(|_| Self::default(&mac))
     }
@@ -236,11 +215,10 @@ impl BoosterMainBoardData {
 
         Self {
             mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
-            version: EXPECTED_VERSION,
-            ip: IpAddr::new(&[0, 0, 0, 0]),
-            broker: String::from_str("10.0.0.2").unwrap(),
+            _version: EXPECTED_VERSION,
+            ip: "0.0.0.0/0".parse().unwrap(),
+            broker: "mqtt".parse().unwrap(),
             gateway: IpAddr::new(&[0, 0, 0, 0]),
-            netmask: IpAddr::new(&[0, 0, 0, 0]),
             id: name,
             fan_speed: DEFAULT_FAN_SPEED,
         }
@@ -259,20 +237,19 @@ impl BoosterMainBoardData {
         let (mut config, _) = SerializedMainBoardData::decode_owned(data).unwrap();
         let mut modified = false;
 
-        // Check if the stored EEPROM version is older (or incompatible)
+        // Check if the stored EEPROM version is some future version that we don't understand.
         if !EXPECTED_VERSION.is_compatible_with(&config.version) {
+            return Err(Error::Invalid);
+        }
+
+        if EXPECTED_VERSION > config.version {
             // If the stored config is compatible with the new version (e.g. older), we can upgrade
             // the config version in a backward compatible manner by adding in new parameters and
             // writing it back.
-            if config.version.is_compatible_with(&EXPECTED_VERSION) {
-                log::info!("Adding default fan speed setting");
-                config.fan_speed = DEFAULT_FAN_SPEED;
-                config.version = EXPECTED_VERSION;
-                modified = true;
-            } else {
-                // The version stored in EEPROM is some future version that we don't understand.
-                return Err(Error::Invalid);
-            }
+            log::info!("Adding default fan speed setting");
+            config.fan_speed = DEFAULT_FAN_SPEED;
+            config.version = EXPECTED_VERSION;
+            modified = true;
         }
 
         // Validate configuration parameters.

@@ -21,11 +21,11 @@ pub struct Settings {
     #[tree(skip)]
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 
-    pub ip: IpAddr,
-    pub broker: heapless::String<255>,
+    #[tree(validate=Self::validate_ip)]
+    pub ip: String<18>,
+    pub broker: String<255>,
     pub gateway: IpAddr,
-    pub netmask: IpAddr,
-    pub id: heapless::String<23>,
+    pub id: String<23>,
 }
 
 impl Settings {
@@ -34,28 +34,23 @@ impl Settings {
     /// # Note
     /// The IP address will be unspecified if DHCP is to be used.
     pub fn ip_cidr(&self) -> smoltcp::wire::IpCidr {
-        let ip_addr = self.ip.0;
+        self.ip.parse().unwrap()
+    }
 
-        let prefix = if !ip_addr.is_unspecified() {
-            let netmask = smoltcp::wire::IpAddress::Ipv4(self.netmask.0);
-
-            netmask.prefix_len().unwrap_or_else(|| {
-                log::error!("Invalid netmask found. Assuming no mask.");
-                0
-            })
-        } else {
-            0
-        };
-
-        smoltcp::wire::IpCidr::new(smoltcp::wire::IpAddress::Ipv4(ip_addr), prefix)
+    fn validate_ip(&mut self, new: String<18>) -> Result<String<18>, &'static str> {
+        match smoltcp::wire::IpCidr::from_str(&new) {
+            Ok(smoltcp::wire::IpCidr::Ipv4(_)) => Ok(new),
+            Ok(_) => Err("IPv6 addresses are not supported"),
+            Err(_) => Err("Please provide a valid IPv4 CIDR (i.e. 192.168.1.1/12"),
+        }
     }
 }
 
 impl serial_settings::Settings<5> for Settings {
     fn reset(&mut self) {
-        let mut name: String<23> = String::new();
+        self.id.clear();
         write!(
-            &mut name,
+            &mut self.id,
             "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
             self.mac.0[0],
             self.mac.0[1],
@@ -67,10 +62,8 @@ impl serial_settings::Settings<5> for Settings {
         .unwrap();
 
         self.booster.reset();
-        self.ip = IpAddr::new(&[0, 0, 0, 0]);
-        self.broker = heapless::String::from_str("10.0.0.2").unwrap();
+        self.ip = "0.0.0.0/0".parse().unwrap();
+        self.broker = "mqtt".parse().unwrap();
         self.gateway = IpAddr::new(&[0, 0, 0, 0]);
-        self.netmask = IpAddr::new(&[0, 0, 0, 0]);
-        self.id = name;
     }
 }

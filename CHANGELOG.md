@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * The broker can now be specified using DNS
 * Updated to RTIC v2 and async support. MSRV bumped to 1.75.0
 * All settings, including RF channel settings, are now exposed via the USB interface
+    * This means that MQTT is no longer required for basic device operation. Any settings saved on
+    the device will remain there, but newer settings saved via the USB interface will be stored in
+    mainboard flash and will overwrite EEPROM-based settings during device boot. Reversion to older
+    firmware variants will still be able to use existing EEPROM settings, but the EEPROM contents
+    are no longer modified when settings are changed.
 
 ## [0.5.0] - 03-07-2023
 
