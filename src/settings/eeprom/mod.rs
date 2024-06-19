@@ -7,9 +7,7 @@ use encdec::{Decode, DecodeOwned, Encode};
 use serde::{Deserialize, Serialize};
 
 /// A semantic version control for recording software versions.
-#[derive(
-    Encode, DecodeOwned, Serialize, Deserialize, Debug, PartialEq, Eq, Copy, Clone,
-)]
+#[derive(Encode, DecodeOwned, Serialize, Deserialize, Debug, PartialEq, Eq, Copy, Clone)]
 pub struct SemVersion {
     major: u8,
     minor: u8,
