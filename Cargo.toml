@@ -14,7 +14,7 @@ keywords = ["ethernet", "stm32f4", "adc", "physics"]
 repository = "https://github.com/quartiq/booster"
 readme = "README.md"
 documentation = "https://quartiq.de/booster-doc/"
-edition = "2018"
+edition = "2021"
 # keep MSRV in sync in ci.yaml, Cargo.toml
 rust-version = "1.72"
 build = "build.rs"
@@ -27,16 +27,19 @@ exclude = [
 [dependencies]
 embedded-storage = "0.3"
 embedded-io = "0.6"
-serde_with = { version = "3.4", default-features = false, features = ["macros"] }
+serde_with = { version = "3.8", default-features = false, features = ["macros"] }
 serde-json-core = "0.5"
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7"
-cortex-m-rtic = "1.1"
+fugit = "0.3"
+rtic-sync = "1"
+sequential-storage = "0.6"
+rtic = {version = "2.1", features = ["thumbv7-backend"] }
+rtic-monotonics = { version = "1.5", features = ["cortex-m-systick"] }
 rand_core = "0.6"
 mono-clock = "0.1"
-systick-monotonic = "1.0.1"
 cortex-m-log = { version = "0.8.0", features = ["log-integration"] }
-log = "0.4.20"
+log = "0.4.21"
 heapless = { version = "0.8", features = ["serde"] }
 bit_field = "0.10.2"
 debounced-pin = "0.3.0"
@@ -44,36 +47,32 @@ serde = {version = "1.0", features = ["derive"], default-features = false }
 rtt-logger = "0.2"
 bbqueue = "0.5"
 shared-bus = { version = "0.3", features = ["cortex-m"] }
-usb-device = "0.3.0"
-usbd-serial = "0.2.0"
+usb-device = "0.3.2"
+usbd-serial = "0.2.2"
 encdec = { version = "0.9", default-features = false }
-crc-any = { version = "2.4.3", default-features = false }
+crc-any = { version = "2.5.0", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-miniconf = { version = "0.9.0", features = ["mqtt-client"]}
+miniconf = { version = "0.11.0", features = ["json-core", "derive", "postcard"]}
+miniconf_mqtt = "0.11"
 # Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
-minimq = "0.8.0"
+minimq = "0.9.0"
 w5500 = "0.4.1"
 smlang= "0.6"
-minireq = "0.3.0"
+minireq = "0.4"
 rtt-target = {version = "0.3", features=["cortex-m"]}
-enum-iterator = { version = "1.4", default-features = false }
+enum-iterator = { version = "2.1", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
-smoltcp-nal = { version = "0.4", features=["shared-stack"] }
+smoltcp-nal = { version = "0.5", features=["shared-stack"] }
 
 serial-settings = {git = "https://github.com/quartiq/stabilizer"}
 postcard = "1"
-
-[patch.crates-io.usbd-serial]
-git = "https://github.com/rust-embedded-community/usbd-serial"
-branch = "rs/bugfix"
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }
 
 [dependencies.stm32f4xx-hal]
-git = "https://github.com/quartiq/stm32f4xx-hal"
-branch = "rs/synopsys-patch"
-features = ["stm32f407", "rt", "usb_fs"]
+version = "0.20.0"
+features = ["stm32f407", "usb_fs"]
 
 [dependencies.ad5627]
 path = "ad5627"

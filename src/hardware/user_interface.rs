@@ -2,7 +2,7 @@
 
 use super::Channel;
 use bit_field::BitField;
-use hal::hal::digital::v2::InputPin;
+use hal::hal_02::digital::v2::InputPin;
 use stm32f4xx_hal as hal;
 
 use debounced_pin::{Debounce, DebounceState, DebouncedInputPin};

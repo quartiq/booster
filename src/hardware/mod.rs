@@ -14,13 +14,12 @@ pub mod metadata;
 pub mod net_interface;
 pub mod platform;
 pub mod rf_channel;
-pub mod serial_terminal;
 pub mod setup;
 pub mod usb;
 pub mod user_interface;
 
 pub const MONOTONIC_FREQUENCY: u32 = 1_000;
-pub type Systick = systick_monotonic::Systick<MONOTONIC_FREQUENCY>;
+pub type Systick = rtic_monotonics::systick::Systick;
 pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 
 pub const CPU_FREQ: u32 = 168_000_000;
@@ -44,7 +43,8 @@ pub enum Mac {
     Enc424j600(enc424j600::Enc424j600<Spi, SpiCs>),
 }
 
-pub type SerialTerminal = serial_settings::Runner<'static, serial_terminal::SerialSettingsPlatform>;
+pub type SerialTerminal =
+    serial_settings::Runner<'static, crate::settings::flash::SerialSettingsPlatform, 1>;
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<'static, Mac, SystemTimer>;
 

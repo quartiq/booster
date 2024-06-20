@@ -13,6 +13,7 @@ use super::{
     HardwareVersion, Mac, NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, CPU_FREQ,
     I2C,
 };
+use stm32f4xx_hal::hal_02::blocking::delay::DelayMs;
 
 use crate::settings::BoosterSettings;
 
@@ -83,7 +84,6 @@ pub struct BoosterDevices {
     pub usb_serial: SerialTerminal,
     pub settings: BoosterSettings,
     pub metadata: &'static ApplicationMetadata,
-    pub systick: Systick,
 }
 
 /// Configure Booster hardware peripherals and RF channels.
@@ -130,7 +130,8 @@ pub fn setup(
         .require_pll48clk()
         .freeze();
 
-    let systick = Systick::new(core.SYST, clocks.sysclk().to_Hz());
+    let mono_token = rtic_monotonics::create_systick_token!();
+    Systick::start(core.SYST, clocks.sysclk().to_Hz(), mono_token);
 
     // Start the watchdog during the initialization process.
     let mut watchdog = hal::watchdog::IndependentWatchdog::new(device.IWDG);
@@ -288,8 +289,19 @@ pub fn setup(
         mac
     };
 
+    let mut flash = {
+        let flash = stm32f4xx_hal::flash::LockedFlash::new(device.FLASH);
+        const SECTOR_SIZE: usize = 128 * 1024;
+        const NUM_SECTORS: usize = 8;
+
+        // sequential-storage requires 2 flash sectors for storage. We allocate them at the end of
+        // flash.
+        Flash::new(flash, (NUM_SECTORS - 2) * SECTOR_SIZE)
+    };
+
     // Read the EUI48 identifier and configure the ethernet MAC address.
     let mut settings = BoosterSettings::new(eeprom);
+    crate::settings::flash::load_from_flash(&mut settings.properties, &mut flash);
 
     let mut mac = {
         let mut spi = {
@@ -486,20 +498,11 @@ pub fn setup(
     };
 
     let serial_terminal = {
-        let mut flash = {
-            let flash = stm32f4xx_hal::flash::LockedFlash::new(device.FLASH);
-            const SECTOR_SIZE: usize = 128 * 1024;
-            Flash::new(flash, 7 * SECTOR_SIZE)
-        };
-
-        // Attempt to load flash settings
-        settings.properties.reload(&mut flash);
-
         let input_buffer = cortex_m::singleton!(:[u8; 256] = [0u8; 256]).unwrap();
         let serialize_buffer = cortex_m::singleton!(:[u8; 512] = [0u8; 512]).unwrap();
 
         serial_settings::Runner::new(
-            super::serial_terminal::SerialSettingsPlatform {
+            crate::settings::flash::SerialSettingsPlatform {
                 metadata,
                 interface: serial_settings::BestEffortInterface::new(usb_serial),
                 storage: flash,
@@ -507,6 +510,7 @@ pub fn setup(
             },
             input_buffer,
             serialize_buffer,
+            &mut settings.properties,
         )
         .unwrap()
     };
@@ -525,6 +529,5 @@ pub fn setup(
         usb_serial: serial_terminal,
         watchdog,
         metadata,
-        systick,
     }
 }
