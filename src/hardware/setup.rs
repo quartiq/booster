@@ -130,8 +130,7 @@ pub fn setup(
         .require_pll48clk()
         .freeze();
 
-    let mono_token = rtic_monotonics::create_systick_token!();
-    Systick::start(core.SYST, clocks.sysclk().to_Hz(), mono_token);
+    Systick::start(core.SYST, clocks.sysclk().to_Hz());
 
     // Start the watchdog during the initialization process.
     let mut watchdog = hal::watchdog::IndependentWatchdog::new(device.IWDG);
