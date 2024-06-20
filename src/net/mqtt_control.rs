@@ -10,8 +10,11 @@ use minimq::{DeferredPublication, Publication};
 use super::NetworkStackProxy;
 
 use core::fmt::Write;
-use heapless::String;
+use heapless::{String, Vec};
 use serde::Serialize;
+
+use crate::settings::{eeprom::rf_channel::ChannelSettings, flash::SerialSettingsPlatform};
+use miniconf::{Postcard, TreeKey};
 
 /// Default metadata message if formatting errors occur.
 const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
@@ -205,7 +208,6 @@ impl TelemetryClient {
 /// A [minireq::Response] containing a serialized [ChannelBiasResponse].
 pub fn read_bias(
     main_bus: &mut MainBus,
-    _topic: &str,
     request: &[u8],
     output: &mut [u8],
 ) -> Result<usize, Error> {
@@ -222,40 +224,19 @@ pub fn read_bias(
     Ok(serde_json_core::to_slice(&response, output)?)
 }
 
-/// Persist channel settings to EEPROM.
+/// Persist channel settings.
 ///
 /// # Note
-/// This is a handler function for the control interface.
+/// This is a handler function for the MQTT control interface.
 ///
 /// # Args
 /// * `main_bus` - The main I2C bus to communicate with RF channels.
-/// * `_topic` - Unused, but reserved for the incoming topic of the request.
+/// * `settings_platform` - The serial settings interface to persist flash settings.
 /// * `request` - The serialized [ChannelRequest] to process.
-///
-/// # Returns
-/// A [minireq::Response] containing no data, which indicates the success of the command
-/// processing.
-pub fn save_settings(
-    _main_bus: &mut MainBus,
-    _topic: &str,
-    _request: &[u8],
-    _buffer: &mut [u8],
-) -> Result<usize, Error> {
-    unreachable!();
-}
-
-use crate::settings::eeprom::rf_channel::ChannelSettings;
-use crate::settings::flash::SerialSettingsPlatform;
-use crate::settings::Settings;
-use heapless::Vec;
-use miniconf::{Postcard, TreeKey};
-
 pub fn save_settings_to_flash(
     main_bus: &mut MainBus,
     settings_platform: &mut SerialSettingsPlatform,
-    _topic: &str,
     request: &[u8],
-    _buffer: &mut [u8],
 ) -> Result<usize, Error> {
     let request: ChannelRequest = serde_json_core::from_slice(request)?.0;
 

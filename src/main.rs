@@ -289,22 +289,21 @@ mod app {
             c.shared
                 .net_devices
                 .lock(|net| {
-                    match net.control.poll(|handler, topic, data, output| {
-                        if topic.ends_with("save") {
+                    match net.control.poll(|command, data, output| match command {
+                        "read-bias" => c
+                            .shared
+                            .main_bus
+                            .lock(|bus| crate::net::mqtt_control::read_bias(bus, data, output)),
+                        "save" => {
                             (&mut c.shared.main_bus, &mut c.shared.usb_terminal).lock(|bus, usb| {
                                 crate::net::mqtt_control::save_settings_to_flash(
                                     bus,
                                     usb.platform_mut(),
-                                    topic,
                                     data,
-                                    output,
                                 )
                             })
-                        } else {
-                            c.shared
-                                .main_bus
-                                .lock(|bus| handler(bus, topic, data, output))
                         }
+                        _ => unreachable!(),
                     }) {
                         Err(minireq::Error::Mqtt(minireq::minimq::Error::Network(
                             smoltcp_nal::NetworkError::TcpConnectionFailure(
