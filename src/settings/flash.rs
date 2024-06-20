@@ -75,12 +75,10 @@ pub struct SerialSettingsPlatform {
 
 impl SerialSettingsPlatform {
     pub fn save_item(&mut self, buffer: &mut [u8], key: String<64>, value: Vec<u8, 256>) {
-        let mut item = SettingsItem {
+        let item = SettingsItem {
             path: key,
             data: value,
         };
-
-        item.data.resize(item.data.capacity(), 0).unwrap();
 
         let range = self.storage.range();
 
