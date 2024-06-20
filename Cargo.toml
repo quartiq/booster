@@ -35,7 +35,7 @@ fugit = "0.3"
 rtic-sync = "1"
 sequential-storage = "0.6"
 rtic = {version = "2.1", features = ["thumbv7-backend"] }
-rtic-monotonics = { version = "1.5", features = ["cortex-m-systick"] }
+rtic-monotonics = { version = "2.0", features = ["cortex-m-systick"] }
 rand_core = "0.6"
 mono-clock = "0.1"
 cortex-m-log = { version = "0.8.0", features = ["log-integration"] }
