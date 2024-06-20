@@ -58,8 +58,7 @@ miniconf_mqtt = "0.11"
 minimq = "0.9.0"
 w5500 = "0.4.1"
 smlang= "0.6"
-#minireq = "0.4"
-minireq = {git = "https://github.com/quartiq/minireq", branch = "feature/default-handler" }
+minireq = {git = "https://github.com/quartiq/minireq"}
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "2.1", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }

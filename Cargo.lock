@@ -937,7 +937,7 @@ dependencies = [
 [[package]]
 name = "minireq"
 version = "0.4.0"
-source = "git+https://github.com/quartiq/minireq?branch=feature/default-handler#7c0bf1a8f999b1b36a57c74f2e4d34bf8534b587"
+source = "git+https://github.com/quartiq/minireq#ab28a95aa40227e1f3cb32772bdf422e221cae6a"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",

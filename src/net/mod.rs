@@ -86,8 +86,8 @@ impl NetworkDevices {
 
             let mut control = minireq::Minireq::new(&prefix, mqtt).unwrap();
 
-            control.register("save").unwrap();
-            control.register("read-bias").unwrap();
+            control.subscribe("save").unwrap();
+            control.subscribe("read-bias").unwrap();
 
             control
         };
