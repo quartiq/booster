@@ -266,23 +266,20 @@ pub fn save_settings_to_flash(
     channel.context_mut().save_configuration();
 
     let settings = channel.context().settings();
+    let mut root_path: String<64> = "/booster/channel".parse().unwrap();
+    write!(&mut root_path, "/{}", request.channel as usize);
 
     let mut buf = [0u8; 256];
-    for (ch_indices, _) in ChannelSettings::iter_indices() {
-        let (root_indices, _) = Settings::indices(["booster", "channel"]).unwrap();
-        let mut path = String::<64>::new();
-        let channel_key = [request.channel as usize];
-        let channel_indices = root_indices[..2]
-            .iter()
-            .cloned()
-            .chain(channel_key.iter().cloned());
-        let all_indices = channel_indices.chain(ch_indices.iter().cloned());
-        Settings::path(all_indices, &mut path, "/").unwrap();
+    for channel_path in ChannelSettings::iter_paths::<String<64>>("/") {
+        let channel_path = channel_path.unwrap();
+        let mut path = root_path.clone();
+        path.push_str(&channel_path).unwrap();
 
         let mut data = Vec::new();
+        data.resize(data.len(), 0);
         let flavor = postcard::ser_flavors::Slice::new(&mut data);
         let len = settings
-            .get_postcard_by_key(ch_indices, flavor)
+            .get_postcard_by_key(channel_path.split("/").skip(1), flavor)
             .unwrap()
             .len();
         data.truncate(len);
