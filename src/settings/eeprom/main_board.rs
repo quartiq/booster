@@ -45,17 +45,17 @@ fn identifier_is_valid(id: &str) -> bool {
 #[derive(DeserializeFromStr, Copy, Clone, Debug)]
 pub struct IpAddr(pub smoltcp_nal::smoltcp::wire::Ipv4Address);
 
-impl Serialize for IpAddr {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut display: String<16> = String::new();
-        write!(&mut display, "{}", self).unwrap();
-        serializer.serialize_str(&display)
-    }
-}
-
 impl IpAddr {
     pub fn new(bytes: &[u8]) -> Self {
         Self(smoltcp::wire::Ipv4Address::from_bytes(bytes))
+    }
+}
+
+impl Serialize for IpAddr {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut display: String<16> = String::new();
+        write!(&mut display, "{}", self.0).unwrap();
+        serializer.serialize_str(&display)
     }
 }
 
@@ -93,6 +93,33 @@ impl encdec::DecodeOwned for IpAddr {
     fn decode_owned(buff: &[u8]) -> Result<(Self::Output, usize), Self::Error> {
         let (data, size) = <[u8; 4]>::decode_owned(buff)?;
         Ok((Self::new(&data[..]), size))
+    }
+}
+
+#[derive(DeserializeFromStr, Copy, Clone, Debug)]
+pub struct Cidr(pub smoltcp_nal::smoltcp::wire::Ipv4Cidr);
+
+impl Serialize for Cidr {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut display: String<20> = String::new();
+        write!(&mut display, "{}", self.0).unwrap();
+        serializer.serialize_str(&display)
+    }
+}
+
+impl core::str::FromStr for Cidr {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(
+            smoltcp::wire::Ipv4Cidr::from_str(s).map_err(|_| "Invalid CIDR format")?,
+        ))
+    }
+}
+
+impl core::fmt::Display for Cidr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -152,18 +179,12 @@ impl SerializedMainBoardData {
         write!(&mut broker, "{}", self.broker.0).unwrap();
         let netmask = smoltcp::wire::IpAddress::Ipv4(self.netmask.0);
 
-        let ipcidr = smoltcp::wire::IpCidr::new(
-            smoltcp::wire::IpAddress::Ipv4(self.ip.0),
-            netmask.prefix_len().unwrap_or(0),
-        );
-
-        let mut ip = String::new();
-        write!(&mut ip, "{}", ipcidr).unwrap();
+        let ipcidr = smoltcp::wire::Ipv4Cidr::new(self.ip.0, netmask.prefix_len().unwrap_or(0));
 
         BoosterMainBoardData {
             mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
             _version: self.version,
-            ip,
+            ip: Cidr(ipcidr),
             broker,
             gateway: self.gateway,
             id: self.id.0,
@@ -177,7 +198,7 @@ impl SerializedMainBoardData {
 pub struct BoosterMainBoardData {
     _version: SemVersion,
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-    pub ip: String<18>,
+    pub ip: Cidr,
     pub broker: String<255>,
     pub gateway: IpAddr,
     pub id: String<23>,
@@ -218,7 +239,7 @@ impl BoosterMainBoardData {
             _version: EXPECTED_VERSION,
             ip: "0.0.0.0/0".parse().unwrap(),
             broker: "mqtt".parse().unwrap(),
-            gateway: IpAddr::new(&[0, 0, 0, 0]),
+            gateway: "0.0.0.0".parse().unwrap(),
             id: name,
             fan_speed: DEFAULT_FAN_SPEED,
         }
