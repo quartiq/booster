@@ -28,17 +28,7 @@ pub struct Settings {
 impl serial_settings::Settings<5> for Settings {
     fn reset(&mut self) {
         self.id.clear();
-        write!(
-            &mut self.id,
-            "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
-            self.mac.0[0],
-            self.mac.0[1],
-            self.mac.0[2],
-            self.mac.0[3],
-            self.mac.0[4],
-            self.mac.0[5]
-        )
-        .unwrap();
+        write!(&mut self.id, "{}", self.mac).unwrap();
 
         self.booster.reset();
         self.ip = "0.0.0.0/0".parse().unwrap();

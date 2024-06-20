@@ -139,7 +139,7 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
         };
 
         if let Some(path) = key {
-            save_setting(path.into()).unwrap()
+            save_setting(path.parse().unwrap()).unwrap()
         } else {
             for path in Self::Settings::iter_paths::<String<64>>("/") {
                 // TODO: Should we reserve the RF transforms to exist in RF channel EEPROM? These are

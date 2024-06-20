@@ -224,18 +224,14 @@ impl BoosterMainBoardData {
     /// * `eui48` - The EUI48 identifier of the booster mainboard.
     pub fn default(eui48: &[u8; 6]) -> Self {
         let mut name: String<23> = String::new();
-        write!(
-            &mut name,
-            "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
-            eui48[0], eui48[1], eui48[2], eui48[3], eui48[4], eui48[5]
-        )
-        .unwrap();
+        let mac = smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48);
+        write!(&mut name, "{}", mac).unwrap();
 
         let mut id: [u8; 23] = [0; 23];
         id[..name.len()].copy_from_slice(name.as_str().as_bytes());
 
         Self {
-            mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
+            mac,
             _version: EXPECTED_VERSION,
             ip: "0.0.0.0/0".parse().unwrap(),
             broker: "mqtt".parse().unwrap(),
