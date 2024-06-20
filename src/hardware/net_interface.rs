@@ -1,6 +1,5 @@
 //! Smoltcp network storage and configuration
 
-use crate::BoosterSettings;
 use smoltcp_nal::smoltcp;
 
 use super::Mac;
@@ -56,7 +55,7 @@ impl TcpSocketStorage {
 /// * `random_seed` - A random seed for the network stack.
 pub fn setup(
     device: &mut Mac,
-    settings: &BoosterSettings,
+    settings: &crate::settings::Settings,
     random_seed: u64,
 ) -> (
     smoltcp::iface::Interface,
@@ -64,11 +63,8 @@ pub fn setup(
 ) {
     let net_store = cortex_m::singleton!(: NetStorage = NetStorage::new()).unwrap();
 
-    let ip_address = settings.properties.ip_cidr();
-
-    let mut config = smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(
-        settings.properties.mac,
-    ));
+    let mut config =
+        smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(settings.mac));
     config.random_seed = random_seed;
 
     let mut interface =
@@ -76,7 +72,7 @@ pub fn setup(
 
     interface
         .routes_mut()
-        .add_default_ipv4_route(settings.properties.gateway.0)
+        .add_default_ipv4_route(settings.gateway.0)
         .unwrap();
 
     let mut sockets = smoltcp::iface::SocketSet::new(&mut net_store.sockets[..]);
@@ -96,10 +92,10 @@ pub fn setup(
         &mut net_store.dns_storage[..],
     ));
 
-    if ip_address.address().is_unspecified() {
+    if settings.ip.0.address().is_unspecified() {
         sockets.add(smoltcp::socket::dhcpv4::Socket::new());
     } else {
-        interface.update_ip_addrs(|addrs| addrs.push(ip_address).unwrap());
+        interface.update_ip_addrs(|addrs| addrs.push(settings.ip.0.into()).unwrap());
     }
 
     (interface, sockets)

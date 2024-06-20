@@ -5,7 +5,7 @@ use core::convert::TryInto;
 
 /// The sinara configuration board ID.
 pub enum BoardId {
-    Mainboard = 21,
+    _Mainboard = 21,
     RfChannel = 22,
 }
 
@@ -142,7 +142,7 @@ pub struct SinaraConfiguration {
     pub user_data: [u8; 16],
     pub board_data: [u8; 64],
     _padding: [u8; 122],
-    pub eui48: [u8; 6],
+    pub _eui48: [u8; 6],
 }
 
 impl SinaraConfiguration {
@@ -170,7 +170,7 @@ impl SinaraConfiguration {
                 user_data: deserializer.try_take(16)?.try_into().unwrap(),
                 board_data: deserializer.deserialize_board_data()?,
                 _padding: deserializer.deserialize_padding()?,
-                eui48: deserializer.try_take(6)?.try_into().unwrap(),
+                _eui48: deserializer.try_take(6)?.try_into().unwrap(),
             }
         };
 
@@ -211,7 +211,7 @@ impl SinaraConfiguration {
     /// * `mainboard` - Specified true if the sinara configuration is for the booster mainboard.
     pub fn default(board_id: BoardId) -> SinaraConfiguration {
         let name = match board_id {
-            BoardId::Mainboard => "Booster",
+            BoardId::_Mainboard => "Booster",
             BoardId::RfChannel => "Booster_Ch",
         };
 
@@ -241,7 +241,7 @@ impl SinaraConfiguration {
 
             // Padding and EUI48 are DONT-CARE - this is a read-only memory region.
             _padding: [0xFF; 122],
-            eui48: [0xFF; 6],
+            _eui48: [0xFF; 6],
         };
 
         config.update_crc32();

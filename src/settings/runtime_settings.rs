@@ -1,10 +1,13 @@
 //! Booster NGFW runtime settings
 
-use super::channel_settings::ChannelSettings;
+use super::eeprom::rf_channel::ChannelSettings;
 use crate::{hardware, net};
 use miniconf::Tree;
 
-#[derive(Clone, Tree)]
+use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
+use crate::net::mqtt_control::DEFAULT_TELEMETRY_PERIOD_SECS;
+
+#[derive(Clone, Debug, Tree)]
 pub struct RuntimeSettings {
     #[tree(depth = 3)]
     pub channel: [Option<ChannelSettings>; 8],
@@ -34,6 +37,18 @@ impl RuntimeSettings {
             Ok(new)
         } else {
             Err("Invalid fan speed. Must be within range [0, 1.0]")
+        }
+    }
+
+    pub fn reset(&mut self) {
+        for channel in self.channel.iter_mut().flatten() {
+            *channel = ChannelSettings::default();
+        }
+
+        *self = Self {
+            fan_speed: DEFAULT_FAN_SPEED,
+            telemetry_period: DEFAULT_TELEMETRY_PERIOD_SECS,
+            channel: self.channel,
         }
     }
 }

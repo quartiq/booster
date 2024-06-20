@@ -10,9 +10,7 @@ use minimq::embedded_time::{duration::Extensions, Clock, Instant};
 
 use super::{delay::AsmDelay, platform, I2cBusManager, I2cProxy, SystemTimer};
 use crate::{
-    settings::{
-        channel_settings::ChannelSettings, channel_settings::ChannelState, BoosterChannelSettings,
-    },
+    settings::eeprom::rf_channel::{BoosterChannelSettings, ChannelSettings, ChannelState},
     Error,
 };
 use stm32f4xx_hal::{

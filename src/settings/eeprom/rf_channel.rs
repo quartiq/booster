@@ -1,6 +1,9 @@
 //! Booster NGFW NVM channel settings
 
-use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
+use super::{
+    sinara::{BoardId as SinaraBoardId, SinaraConfiguration},
+    SemVersion,
+};
 use crate::{
     hardware::platform, hardware::I2cProxy, linear_transformation::LinearTransformation, Error,
 };
