@@ -64,7 +64,8 @@ enum-iterator = { version = "2.1", default-features = false }
 enc424j600 = { version = "0.3", features = ["cortex-m-cpu"] }
 smoltcp-nal = { version = "0.5", features=["shared-stack"] }
 
-serial-settings = {git = "https://github.com/quartiq/stabilizer"}
+serial-settings = {git = "https://github.com/quartiq/stabilizer", rev = "58bc7da18"}
+
 postcard = "1"
 
 [build-dependencies]
