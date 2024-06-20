@@ -15,8 +15,6 @@ repository = "https://github.com/quartiq/booster"
 readme = "README.md"
 documentation = "https://quartiq.de/booster-doc/"
 edition = "2021"
-# keep MSRV in sync in ci.yaml, Cargo.toml
-rust-version = "1.72"
 build = "build.rs"
 exclude = [
 	".gitignore",
