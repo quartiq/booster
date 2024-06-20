@@ -158,7 +158,7 @@ impl encdec::DecodeOwned for MqttIdentifier {
         let len = u32::decode_owned(&buff[23..])?.0 as usize;
         let string = core::str::from_utf8(&buff[..len]).map_err(|_| encdec::Error::Utf8)?;
 
-        Ok((MqttIdentifier(String::from(string)), 27))
+        Ok((MqttIdentifier(string.parse().unwrap()), 27))
     }
 }
 
