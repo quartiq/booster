@@ -954,8 +954,7 @@ dependencies = [
 [[package]]
 name = "minireq"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64600b540ee248a33ecae6fe10c65b53ae06255c3cb5afc894a608dc8b15749d"
+source = "git+https://github.com/quartiq/minireq#ab28a95aa40227e1f3cb32772bdf422e221cae6a"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",

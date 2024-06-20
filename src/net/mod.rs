@@ -1,6 +1,6 @@
 //! Booster network management definitions
 
-use crate::hardware::{setup::MainBus, NetworkStack, SystemTimer};
+use crate::hardware::{NetworkStack, SystemTimer};
 
 use core::fmt::Write;
 use heapless::String;
@@ -13,7 +13,6 @@ pub struct MqttStorage {
     telemetry: [u8; 1024],
     settings: [u8; 1024],
     control: [u8; 1024],
-    minireq_handlers: [minireq::HandlerSlot<'static, MainBus, mqtt_control::Error>; 2],
 }
 
 impl Default for MqttStorage {
@@ -22,7 +21,6 @@ impl Default for MqttStorage {
             telemetry: [0u8; 1024],
             settings: [0u8; 1024],
             control: [0u8; 1024],
-            minireq_handlers: [None, None],
         }
     }
 }
@@ -44,11 +42,9 @@ pub struct NetworkDevices {
     >,
     pub control: minireq::Minireq<
         'static,
-        MainBus,
         NetworkStackProxy,
         SystemTimer,
         minireq::minimq::broker::NamedBroker<NetworkStackProxy>,
-        mqtt_control::Error,
     >,
     stack: NetworkStackProxy,
 }
@@ -88,15 +84,10 @@ impl NetworkDevices {
                 .unwrap();
             let mqtt = minireq::minimq::Minimq::new(shared.acquire_stack(), clock, config);
 
-            let mut control =
-                minireq::Minireq::new(&prefix, mqtt, &mut store.minireq_handlers).unwrap();
+            let mut control = minireq::Minireq::new(&prefix, mqtt).unwrap();
 
-            control
-                .register("save", mqtt_control::save_settings)
-                .unwrap();
-            control
-                .register("read-bias", mqtt_control::read_bias)
-                .unwrap();
+            control.subscribe("save").unwrap();
+            control.subscribe("read-bias").unwrap();
 
             control
         };

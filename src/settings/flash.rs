@@ -93,6 +93,38 @@ pub struct SerialSettingsPlatform {
     pub interface: serial_settings::BestEffortInterface<crate::hardware::SerialPort>,
 }
 
+impl SerialSettingsPlatform {
+    pub fn save_item(&mut self, buffer: &mut [u8], key: String<64>, value: Vec<u8, 256>) {
+        let path = SettingsKey(key);
+        let range = self.storage.range();
+
+        // Check if the settings has changed from what's currently in flash (or if it doesn't
+        // yet exist).
+        if embassy_futures::block_on(map::fetch_item::<SettingsKey, SettingsItem, _>(
+            &mut self.storage,
+            range.clone(),
+            &mut sequential_storage::cache::NoCache::new(),
+            buffer,
+            path.clone(),
+        ))
+        .unwrap()
+        .map(|old| old.0 != value)
+        .unwrap_or(true)
+        {
+            log::info!("Storing `{}` to flash", path.0);
+            embassy_futures::block_on(map::store_item(
+                &mut self.storage,
+                range,
+                &mut sequential_storage::cache::NoCache::new(),
+                buffer,
+                path,
+                &SettingsItem(value),
+            ))
+            .unwrap();
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Error<F> {
     Postcard(postcard::Error),
@@ -118,57 +150,29 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
         key: Option<&str>,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error> {
-        let mut save_setting = |path| -> Result<(), Self::Error> {
+        let mut save_setting = |path: String<64>| {
             let path = SettingsKey(path);
 
             let mut data = Vec::new();
             data.resize(data.capacity(), 0).unwrap();
-
             let flavor = postcard::ser_flavors::Slice::new(&mut data);
             let len = match settings.get_postcard_by_key(path.0.split('/').skip(1), flavor) {
                 Err(e) => {
                     log::warn!("Failed to save `{}` to flash: {e:?}", path.0);
-                    return Ok(());
+                    return;
                 }
                 Ok(slice) => slice.len(),
             };
             data.truncate(len);
 
-            let range = self.storage.range();
-
-            // Check if the settings has changed from what's currently in flash (or if it doesn't
-            // yet exist).
-            if embassy_futures::block_on(map::fetch_item::<SettingsKey, SettingsItem, _>(
-                &mut self.storage,
-                range.clone(),
-                &mut sequential_storage::cache::NoCache::new(),
-                buffer,
-                path.clone(),
-            ))
-            .unwrap()
-            .map(|old| old.0 != data)
-            .unwrap_or(true)
-            {
-                log::info!("Storing `{}` to flash", path.0);
-                embassy_futures::block_on(map::store_item(
-                    &mut self.storage,
-                    range,
-                    &mut sequential_storage::cache::NoCache::new(),
-                    buffer,
-                    path,
-                    &SettingsItem(data),
-                ))
-                .unwrap();
-            }
-
-            Ok(())
+            self.save_item(buffer, path.0, data)
         };
 
         if let Some(path) = key {
-            save_setting(path.parse().unwrap())?;
+            save_setting(path.parse().unwrap());
         } else {
             for path in Self::Settings::iter_paths::<String<64>>("/") {
-                save_setting(path.unwrap())?;
+                save_setting(path.unwrap());
             }
         }
 

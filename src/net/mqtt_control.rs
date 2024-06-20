@@ -10,8 +10,11 @@ use minimq::{DeferredPublication, Publication};
 use super::NetworkStackProxy;
 
 use core::fmt::Write;
-use heapless::String;
+use heapless::{String, Vec};
 use serde::Serialize;
+
+use crate::settings::{eeprom::rf_channel::ChannelSettings, flash::SerialSettingsPlatform};
+use miniconf::{Postcard, TreeKey};
 
 /// Default metadata message if formatting errors occur.
 const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
@@ -205,7 +208,6 @@ impl TelemetryClient {
 /// A [minireq::Response] containing a serialized [ChannelBiasResponse].
 pub fn read_bias(
     main_bus: &mut MainBus,
-    _topic: &str,
     request: &[u8],
     output: &mut [u8],
 ) -> Result<usize, Error> {
@@ -222,24 +224,19 @@ pub fn read_bias(
     Ok(serde_json_core::to_slice(&response, output)?)
 }
 
-/// Persist channel settings to EEPROM.
+/// Persist channel settings.
 ///
 /// # Note
-/// This is a handler function for the control interface.
+/// This is a handler function for the MQTT control interface.
 ///
 /// # Args
 /// * `main_bus` - The main I2C bus to communicate with RF channels.
-/// * `_topic` - Unused, but reserved for the incoming topic of the request.
+/// * `settings_platform` - The serial settings interface to persist flash settings.
 /// * `request` - The serialized [ChannelRequest] to process.
-///
-/// # Returns
-/// A [minireq::Response] containing no data, which indicates the success of the command
-/// processing.
-pub fn save_settings(
+pub fn save_settings_to_flash(
     main_bus: &mut MainBus,
-    _topic: &str,
+    settings_platform: &mut SerialSettingsPlatform,
     request: &[u8],
-    _buffer: &mut [u8],
 ) -> Result<usize, Error> {
     let request: ChannelRequest = serde_json_core::from_slice(request)?.0;
 
@@ -248,6 +245,28 @@ pub fn save_settings(
     };
 
     channel.context_mut().save_configuration();
+
+    let settings = channel.context().settings();
+    let mut root_path: String<64> = "/booster/channel".parse().unwrap();
+    write!(&mut root_path, "/{}", request.channel as usize).unwrap();
+
+    let mut buf = [0u8; 256];
+    for channel_path in ChannelSettings::iter_paths::<String<64>>("/") {
+        let channel_path = channel_path.unwrap();
+        let mut path = root_path.clone();
+        path.push_str(&channel_path).unwrap();
+
+        let mut data: Vec<u8, 256> = Vec::new();
+        data.resize(data.capacity(), 0).unwrap();
+        let flavor = postcard::ser_flavors::Slice::new(&mut data);
+        let len = settings
+            .get_postcard_by_key(channel_path.split('/').skip(1), flavor)
+            .unwrap()
+            .len();
+        data.truncate(len);
+
+        settings_platform.save_item(&mut buf[..], path, data);
+    }
 
     Ok(0)
 }
