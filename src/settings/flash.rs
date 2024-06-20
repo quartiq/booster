@@ -165,10 +165,10 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
         };
 
         if let Some(path) = key {
-            save_setting(path.parse().unwrap()).unwrap()
+            save_setting(path.parse().unwrap())?;
         } else {
             for path in Self::Settings::iter_paths::<String<64>>("/") {
-                save_setting(path.unwrap()).unwrap();
+                save_setting(path.unwrap())?;
             }
         }
 
