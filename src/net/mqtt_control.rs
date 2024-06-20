@@ -100,7 +100,7 @@ impl TelemetryClient {
     ) -> Self {
         Self {
             mqtt,
-            prefix: String::from(prefix),
+            prefix: prefix.parse().unwrap(),
             telemetry_period: DEFAULT_TELEMETRY_PERIOD_SECS,
             meta_published: false,
             metadata,

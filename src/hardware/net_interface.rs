@@ -63,8 +63,6 @@ pub fn setup(
 ) {
     let net_store = cortex_m::singleton!(: NetStorage = NetStorage::new()).unwrap();
 
-    let ip_address = settings.ip_cidr();
-
     let mut config =
         smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(settings.mac));
     config.random_seed = random_seed;
@@ -94,10 +92,10 @@ pub fn setup(
         &mut net_store.dns_storage[..],
     ));
 
-    if ip_address.address().is_unspecified() {
+    if settings.ip.0.address().is_unspecified() {
         sockets.add(smoltcp::socket::dhcpv4::Socket::new());
     } else {
-        interface.update_ip_addrs(|addrs| addrs.push(ip_address).unwrap());
+        interface.update_ip_addrs(|addrs| addrs.push(settings.ip.0.into()).unwrap());
     }
 
     (interface, sockets)

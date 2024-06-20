@@ -45,17 +45,17 @@ fn identifier_is_valid(id: &str) -> bool {
 #[derive(DeserializeFromStr, Copy, Clone, Debug)]
 pub struct IpAddr(pub smoltcp_nal::smoltcp::wire::Ipv4Address);
 
-impl Serialize for IpAddr {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut display: String<16> = String::new();
-        write!(&mut display, "{}", self).unwrap();
-        serializer.serialize_str(&display)
-    }
-}
-
 impl IpAddr {
     pub fn new(bytes: &[u8]) -> Self {
         Self(smoltcp::wire::Ipv4Address::from_bytes(bytes))
+    }
+}
+
+impl Serialize for IpAddr {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut display: String<16> = String::new();
+        write!(&mut display, "{}", self.0).unwrap();
+        serializer.serialize_str(&display)
     }
 }
 
@@ -96,6 +96,33 @@ impl encdec::DecodeOwned for IpAddr {
     }
 }
 
+#[derive(DeserializeFromStr, Copy, Clone, Debug)]
+pub struct Cidr(pub smoltcp_nal::smoltcp::wire::Ipv4Cidr);
+
+impl Serialize for Cidr {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut display: String<20> = String::new();
+        write!(&mut display, "{}", self.0).unwrap();
+        serializer.serialize_str(&display)
+    }
+}
+
+impl core::str::FromStr for Cidr {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(
+            smoltcp::wire::Ipv4Cidr::from_str(s).map_err(|_| "Invalid CIDR format")?,
+        ))
+    }
+}
+
+impl core::fmt::Display for Cidr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(transparent)]
 pub struct MqttIdentifier(pub String<23>);
@@ -131,7 +158,7 @@ impl encdec::DecodeOwned for MqttIdentifier {
         let len = u32::decode_owned(&buff[23..])?.0 as usize;
         let string = core::str::from_utf8(&buff[..len]).map_err(|_| encdec::Error::Utf8)?;
 
-        Ok((MqttIdentifier(String::from(string)), 27))
+        Ok((MqttIdentifier(string.parse().unwrap()), 27))
     }
 }
 
@@ -152,18 +179,12 @@ impl SerializedMainBoardData {
         write!(&mut broker, "{}", self.broker.0).unwrap();
         let netmask = smoltcp::wire::IpAddress::Ipv4(self.netmask.0);
 
-        let ipcidr = smoltcp::wire::IpCidr::new(
-            smoltcp::wire::IpAddress::Ipv4(self.ip.0),
-            netmask.prefix_len().unwrap_or(0),
-        );
-
-        let mut ip = String::new();
-        write!(&mut ip, "{}", ipcidr).unwrap();
+        let ipcidr = smoltcp::wire::Ipv4Cidr::new(self.ip.0, netmask.prefix_len().unwrap_or(0));
 
         BoosterMainBoardData {
             mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
             _version: self.version,
-            ip,
+            ip: Cidr(ipcidr),
             broker,
             gateway: self.gateway,
             id: self.id.0,
@@ -177,7 +198,7 @@ impl SerializedMainBoardData {
 pub struct BoosterMainBoardData {
     _version: SemVersion,
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-    pub ip: String<18>,
+    pub ip: Cidr,
     pub broker: String<255>,
     pub gateway: IpAddr,
     pub id: String<23>,
@@ -203,22 +224,18 @@ impl BoosterMainBoardData {
     /// * `eui48` - The EUI48 identifier of the booster mainboard.
     pub fn default(eui48: &[u8; 6]) -> Self {
         let mut name: String<23> = String::new();
-        write!(
-            &mut name,
-            "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
-            eui48[0], eui48[1], eui48[2], eui48[3], eui48[4], eui48[5]
-        )
-        .unwrap();
+        let mac = smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48);
+        write!(&mut name, "{}", mac).unwrap();
 
         let mut id: [u8; 23] = [0; 23];
         id[..name.len()].copy_from_slice(name.as_str().as_bytes());
 
         Self {
-            mac: smoltcp_nal::smoltcp::wire::EthernetAddress(*eui48),
+            mac,
             _version: EXPECTED_VERSION,
             ip: "0.0.0.0/0".parse().unwrap(),
             broker: "mqtt".parse().unwrap(),
-            gateway: IpAddr::new(&[0, 0, 0, 0]),
+            gateway: "0.0.0.0".parse().unwrap(),
             id: name,
             fan_speed: DEFAULT_FAN_SPEED,
         }
