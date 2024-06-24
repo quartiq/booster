@@ -72,7 +72,7 @@ postcard = "1"
 built = { version = "0.7", features = ["git2"], default-features = false }
 
 [dependencies.stm32f4xx-hal]
-version = "0.20.0"
+version = "0.21.0"
 features = ["stm32f407", "usb_fs"]
 
 [dependencies.ad5627]
