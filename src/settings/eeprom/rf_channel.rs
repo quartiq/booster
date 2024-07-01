@@ -1,7 +1,12 @@
 //! Booster NGFW NVM channel settings
 
-use super::{SemVersion, SinaraBoardId, SinaraConfiguration};
-use crate::{hardware::I2cProxy, linear_transformation::LinearTransformation, Error};
+use super::{
+    sinara::{BoardId as SinaraBoardId, SinaraConfiguration},
+    SemVersion,
+};
+use crate::{
+    hardware::platform, hardware::I2cProxy, linear_transformation::LinearTransformation, Error,
+};
 use encdec::{Decode, DecodeOwned, Encode};
 use enum_iterator::Sequence;
 use microchip_24aa02e48::Microchip24AA02E48;
@@ -72,7 +77,9 @@ impl DecodeOwned for ChannelState {
 /// Represents booster channel-specific configuration values.
 #[derive(Tree, Encode, DecodeOwned, Debug, Copy, Clone, PartialEq)]
 pub struct ChannelSettings {
+    #[tree(validate=Self::validate_output_interlock)]
     pub output_interlock_threshold: f32,
+    #[tree(validate=Self::validate_bias_voltage)]
     pub bias_voltage: f32,
     pub state: ChannelState,
     pub input_power_transform: LinearTransformation,
@@ -105,6 +112,31 @@ impl Default for ChannelSettings {
             ),
             input_power_transform: LinearTransformation::new(1.0 / 1.5 / 0.035, -35.6 + 8.9),
         }
+    }
+}
+
+impl ChannelSettings {
+    fn validate_bias_voltage(&mut self, new: f32) -> Result<f32, &'static str> {
+        if (0.0..=platform::BIAS_DAC_VCC).contains(&(-1.0 * new)) {
+            Ok(new)
+        } else {
+            Err("Bias voltage out of range")
+        }
+    }
+
+    fn validate_output_interlock(&mut self, new: f32) -> Result<f32, &'static str> {
+        // Verify the output interlock is within acceptable values.
+        if new >= platform::MAX_OUTPUT_POWER_DBM {
+            return Err("Output interlock threshold too high");
+        }
+
+        // Verify the interlock is mappable to a DAC threshold.
+        let output_interlock_voltage = self.output_power_transform.invert(new);
+        if !(0.00..=ad5627::MAX_VOLTAGE).contains(&output_interlock_voltage) {
+            return Err("Output interlock threshold voltage out of range");
+        }
+
+        Ok(new)
     }
 }
 

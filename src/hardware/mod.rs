@@ -14,13 +14,12 @@ pub mod metadata;
 pub mod net_interface;
 pub mod platform;
 pub mod rf_channel;
-pub mod serial_terminal;
 pub mod setup;
 pub mod usb;
 pub mod user_interface;
 
 pub const MONOTONIC_FREQUENCY: u32 = 1_000;
-pub type Systick = rtic_monotonics::systick::Systick;
+rtic_monotonics::systick_monotonic!(Systick, MONOTONIC_FREQUENCY);
 pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 
 pub const CPU_FREQ: u32 = 168_000_000;
@@ -44,7 +43,8 @@ pub enum Mac {
     Enc424j600(enc424j600::Enc424j600<Spi, SpiCs>),
 }
 
-pub type SerialTerminal = serial_settings::Runner<'static, serial_terminal::SerialSettingsPlatform>;
+pub type SerialTerminal =
+    serial_settings::Runner<'static, crate::settings::flash::SerialSettingsPlatform, 5>;
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<'static, Mac, SystemTimer>;
 
@@ -54,6 +54,9 @@ pub type I2cError = hal::i2c::Error;
 
 pub type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;
 pub type Eeprom = microchip_24aa02e48::Microchip24AA02E48<I2C2>;
+
+pub type SerialPort =
+    usbd_serial::SerialPort<'static, crate::hardware::UsbBus, &'static mut [u8], &'static mut [u8]>;
 
 /// Indicates a booster RF channel.
 #[derive(Sequence, Copy, Clone, Debug, Serialize, Deserialize)]

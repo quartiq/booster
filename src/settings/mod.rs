@@ -1,28 +1,38 @@
 //! Booster NGFW NVM settings
 
-pub mod channel_settings;
-pub mod global_settings;
+use core::fmt::Write;
+use heapless::String;
+use miniconf::Tree;
+
+pub mod eeprom;
+pub mod flash;
 pub mod runtime_settings;
-mod sinara;
-use encdec::{Decode, DecodeOwned, Encode};
-use serde::{Deserialize, Serialize};
 
-use sinara::{BoardId as SinaraBoardId, SinaraConfiguration};
+use eeprom::main_board::{Cidr, IpAddr};
+use runtime_settings::RuntimeSettings;
 
-pub use channel_settings::BoosterChannelSettings;
-pub use global_settings::BoosterSettings;
+#[derive(Clone, Debug, Tree)]
+pub struct Settings {
+    #[tree(depth = 4)]
+    pub booster: RuntimeSettings,
 
-/// A semantic version control for recording software versions.
-#[derive(Encode, DecodeOwned, Serialize, Deserialize, Debug, PartialEq, Copy, Clone)]
-pub struct SemVersion {
-    major: u8,
-    minor: u8,
-    patch: u8,
+    #[tree(skip)]
+    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+
+    pub ip: Cidr,
+    pub broker: String<255>,
+    pub gateway: IpAddr,
+    pub id: String<23>,
 }
 
-impl SemVersion {
-    /// Determine if this version is compatible with `rhs`.
-    pub fn is_compatible_with(&self, rhs: &SemVersion) -> bool {
-        (self.major == rhs.major) && (self.minor <= rhs.minor)
+impl serial_settings::Settings<5> for Settings {
+    fn reset(&mut self) {
+        self.id.clear();
+        write!(&mut self.id, "{}", self.mac).unwrap();
+
+        self.booster.reset();
+        self.ip = "0.0.0.0/0".parse().unwrap();
+        self.broker = "mqtt".parse().unwrap();
+        self.gateway = "0.0.0.0".parse().unwrap();
     }
 }
