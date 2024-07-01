@@ -195,7 +195,7 @@ pub fn setup(
             )
         };
 
-        cortex_m::singleton!(:core::cell::UnsafeCell<I2C> = core::cell::UnsafeCell::new(i2c))
+        cortex_m::singleton!(:embedded_hal_bus::util::AtomicCell<I2C> = embedded_hal_bus::util::AtomicCell::new(i2c))
             .unwrap()
     };
 

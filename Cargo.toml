@@ -44,7 +44,7 @@ debounced-pin = {git = "https://github.com/quartiq/rust-debounced-pin"}
 serde = {version = "1.0", features = ["derive"], default-features = false }
 rtt-logger = "0.2"
 bbqueue = "0.5"
-embedded-hal-bus = { path = "../embedded-hal/embedded-hal-bus" }
+embedded-hal-bus = "0.2"
 usb-device = "0.3.2"
 usbd-serial = "0.2.1"
 encdec = { version = "0.9", default-features = false }
