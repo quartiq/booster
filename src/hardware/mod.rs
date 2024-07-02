@@ -38,9 +38,11 @@ pub type Led2 = hal::gpio::gpioc::PC9<hal::gpio::Output<hal::gpio::PushPull>>;
 pub type Led3 = hal::gpio::gpioc::PC10<hal::gpio::Output<hal::gpio::PushPull>>;
 pub type MainboardLeds = (Led1, Led2, Led3);
 
+pub type SpiDevice = embedded_hal_bus::spi::ExclusiveDevice<Spi, SpiCs, delay::AsmDelay>;
+
 pub enum Mac {
-    W5500(w5500::raw_device::RawDevice<w5500::bus::FourWire<Spi, SpiCs>>),
-    Enc424j600(enc424j600::Enc424j600<Spi, SpiCs>),
+    W5500(w5500::raw_device::RawDevice<w5500::bus::FourWire<SpiDevice>>),
+    Enc424j600(enc424j600::Enc424j600<SpiDevice>),
 }
 
 pub type SerialTerminal =
@@ -48,8 +50,8 @@ pub type SerialTerminal =
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<'static, Mac, SystemTimer>;
 
-pub type I2cBusManager = shared_bus::BusManagerAtomicCheck<I2C>;
-pub type I2cProxy = shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2C>>;
+pub type I2cBusManager = embedded_hal_bus::util::AtomicCell<I2C>;
+pub type I2cProxy = embedded_hal_bus::i2c::AtomicDevice<'static, I2C>;
 pub type I2cError = hal::i2c::Error;
 
 pub type UsbBus = hal::otg_fs::UsbBus<hal::otg_fs::USB>;

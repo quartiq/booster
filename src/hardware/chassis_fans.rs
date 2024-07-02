@@ -64,7 +64,9 @@ impl ChassisFans {
         let mut retry_set = |fan: &mut Max6639<I2cProxy>, subfan, duty_cycle| {
             for _ in 0..2 {
                 match fan.set_duty_cycle(subfan, duty_cycle) {
-                    Err(max6639::Error::Interface(I2cError::NoAcknowledge(_))) => {
+                    Err(max6639::Error::Interface(embedded_hal_bus::i2c::AtomicError::Other(
+                        I2cError::NoAcknowledge(_),
+                    ))) => {
                         leds.0.set_high();
                         leds.1.set_high();
                         leds.2.set_high();
@@ -104,10 +106,7 @@ impl ChassisFans {
     /// # Returns
     /// True if 5 of the six fans properly spun up to a high-speed RPM and all fans had no speed
     /// when disabled.
-    pub fn self_test(
-        &mut self,
-        delay: &mut impl stm32f4xx_hal::hal_02::blocking::delay::DelayMs<u16>,
-    ) -> bool {
+    pub fn self_test(&mut self, delay: &mut impl stm32f4xx_hal::hal::delay::DelayNs) -> bool {
         self.set_duty_cycles(1.0);
         delay.delay_ms(5000);
         let high_rpms = self.read_rpms();

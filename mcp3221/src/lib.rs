@@ -2,23 +2,20 @@
 #![no_std]
 #![deny(warnings)]
 
-use embedded_hal::blocking::i2c::Read;
+use embedded_hal::i2c::{ErrorType, I2c};
 
 // The default address of the ADC.
 const DEVICE_ADDRESS: u8 = 0x4D;
 
 /// A driver for the MCP3221 external analog-to-digital converter.
-pub struct Mcp3221<I2C>
-where
-    I2C: Read,
-{
+pub struct Mcp3221<I2C> {
     i2c: I2C,
     supply_voltage: f32,
 }
 
 impl<I2C> Mcp3221<I2C>
 where
-    I2C: Read,
+    I2C: I2c,
 {
     /// Construct a MCP3221 driver.
     ///
@@ -47,7 +44,7 @@ where
     ///
     /// # Returns
     /// The analog measurement of the conversion in volts.
-    pub fn get_voltage(&mut self) -> Result<f32, I2C::Error> {
+    pub fn get_voltage(&mut self) -> Result<f32, <I2C as ErrorType>::Error> {
         let mut conversion: [u8; 2] = [0; 2];
         self.i2c.read(DEVICE_ADDRESS, &mut conversion)?;
 
