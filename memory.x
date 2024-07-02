@@ -3,10 +3,12 @@ MEMORY
   /* NOTE 1 K = 1 KiBi = 1024 bytes */
   /* Note: The last 256KB flash sector is reserved for settings storage. */
   FLASH : ORIGIN = 0x08000000, LENGTH = 768K
-  RAM : ORIGIN = 0x20000000, LENGTH = 127K
+  RAM : ORIGIN = 0x20000000, LENGTH = 126K
   PANDUMP : ORIGIN = 0x2001FC00, LENGTH = 1K
+  BOOTFLAG_RAM: ORIGIN = 0x2001F800, LENGTH = 1K
 }
 
+_bootflag = ORIGIN(BOOTFLAG_RAM);
 _panic_dump_start = ORIGIN(PANDUMP);
 _panic_dump_end = ORIGIN(PANDUMP) + LENGTH(PANDUMP);
 
