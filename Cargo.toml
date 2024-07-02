@@ -61,7 +61,7 @@ smlang= "0.6"
 minireq = {git = "https://github.com/quartiq/minireq"}
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "2.1", default-features = false }
-enc424j600 = { git = "https://github.com/quartiq/ENC424J600", branch = "feature/e-h-1.0" }
+enc424j600 = { git = "https://github.com/quartiq/ENC424J600" }
 embedded-hal = "1"
 smoltcp-nal = { version = "0.5", features=["shared-stack"] }
 
