@@ -487,8 +487,9 @@ dependencies = [
 
 [[package]]
 name = "enc424j600"
-version = "0.3.0"
-source = "git+https://github.com/quartiq/ENC424J600?branch=feature/e-h-1.0#b5252463111e75ed4051863e77f2f18ac456a42d"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "351d068de46a554ceacaa0b5a9e4ec58741ab63f14f077df4a52166f19158d92"
 dependencies = [
  "aligned",
  "embedded-hal 1.0.0",
