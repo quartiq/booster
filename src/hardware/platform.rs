@@ -1,5 +1,8 @@
 //! Booster NGFW Application
 
+// Flag used to indicate that a reboot to DFU is requested.
+const DFU_REBOOT_FLAG: u32 = 0xDEAD_BEEF;
+
 use super::hal;
 
 use hal::hal::{delay::DelayNs, digital::OutputPin};
@@ -112,8 +115,39 @@ pub fn clear_reset_flags() {
     rcc.csr.modify(|_, w| w.rmvf().set_bit());
 }
 
+pub fn start_dfu_reboot() {
+    extern "C" {
+        static mut _bootflag: u32;
+    }
+
+    unsafe {
+        let start_ptr = core::ptr::addr_of_mut!(_bootflag);
+        core::ptr::write_unaligned(start_ptr, DFU_REBOOT_FLAG)
+    }
+
+    cortex_m::peripheral::SCB::sys_reset();
+}
+
+pub fn dfu_bootflag() -> bool {
+    // Obtain panic region start and end from linker symbol _panic_dump_start and _panic_dump_end
+    extern "C" {
+        static mut _bootflag: u32;
+    }
+
+    unsafe {
+        let start_ptr = core::ptr::addr_of_mut!(_bootflag);
+        let set = DFU_REBOOT_FLAG == core::ptr::read_unaligned(start_ptr);
+
+        // Clear the boot flag after checking it to ensure it doesn't stick between reboots.
+        core::ptr::write_unaligned(start_ptr, 0);
+        set
+    }
+}
+
 /// Reset the device to the internal DFU bootloader.
-pub fn reset_to_dfu_bootloader() {
+pub fn execute_system_bootloader() -> ! {
+    cortex_m::interrupt::disable();
+
     // Disable the SysTick peripheral.
     let systick = unsafe { &*cortex_m::peripheral::SYST::PTR };
     unsafe {
@@ -122,35 +156,19 @@ pub fn reset_to_dfu_bootloader() {
         systick.cvr.write(0);
     }
 
-    // Disable the USB peripheral.
-    let usb_otg = unsafe { &*hal::pac::OTG_FS_GLOBAL::ptr() };
-    usb_otg.gccfg.write(|w| unsafe { w.bits(0) });
+    // Clear NVIC interrupt flags and enables.
+    let nvic = unsafe { &*cortex_m::peripheral::NVIC::PTR };
+    for reg in nvic.icer.iter() {
+        unsafe {
+            reg.write(u32::MAX);
+        }
+    }
 
-    // Reset the RCC configuration.
-    let rcc = unsafe { &*hal::pac::RCC::ptr() };
-
-    // Enable the HSI - we will be switching back to it shortly for the DFU bootloader.
-    rcc.cr.modify(|_, w| w.hsion().set_bit());
-
-    // Reset the CFGR and begin using the HSI for the system bus.
-    rcc.cfgr.reset();
-
-    // Reset the configuration register.
-    rcc.cr.reset();
-
-    // Reset the PLL configuration now that PLLs are unused.
-    rcc.pllcfgr.reset();
-
-    // Remap to system memory.
-    rcc.apb2enr.modify(|_, w| w.syscfgen().set_bit());
-
-    let syscfg = unsafe { &*hal::pac::SYSCFG::ptr() };
-    syscfg.memrm.write(|w| unsafe { w.mem_mode().bits(0b01) });
-
-    // Now that the remap is complete, impose instruction and memory barriers on the
-    // CPU.
-    cortex_m::asm::isb();
-    cortex_m::asm::dsb();
+    for reg in nvic.icpr.iter() {
+        unsafe {
+            reg.write(u32::MAX);
+        }
+    }
 
     // It appears that they must be enabled for the USB-based DFU bootloader to operate.
     unsafe { cortex_m::interrupt::enable() };

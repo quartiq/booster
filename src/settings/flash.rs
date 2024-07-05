@@ -193,7 +193,7 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
                 // Power off all output channels and reset the MCU.
                 platform::shutdown_channels();
 
-                platform::reset_to_dfu_bootloader();
+                platform::start_dfu_reboot();
             }
             "service" => {
                 writeln!(

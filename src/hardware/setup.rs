@@ -114,6 +114,10 @@ pub fn setup(
 
     log::info!("Starting initialization");
 
+    if platform::dfu_bootflag() {
+        platform::execute_system_bootloader();
+    }
+
     core.DWT.enable_cycle_counter();
     core.DCB.enable_trace();
 
