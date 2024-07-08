@@ -442,23 +442,12 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "embedded-nal"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db9efecb57ab54fa918730f2874d7d37647169c50fa1357fecb81abee840b113"
-dependencies = [
- "heapless 0.7.17",
- "nb 1.1.0",
- "no-std-net 0.5.0",
-]
-
-[[package]]
-name = "embedded-nal"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8a943fad5ed3d3f8a00f1e80f6bba371f1e7f0df28ec38477535eb318dc19cc"
 dependencies = [
  "nb 1.1.0",
- "no-std-net 0.6.0",
+ "no-std-net",
 ]
 
 [[package]]
@@ -921,7 +910,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c63955f174d014ef627e6f21dda747c24a294be94234e91ae30a9b2173784e1"
 dependencies = [
  "bit_field",
- "embedded-nal 0.8.0",
+ "embedded-nal",
  "embedded-time",
  "heapless 0.7.17",
  "num_enum",
@@ -972,12 +961,6 @@ name = "nb"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
-
-[[package]]
-name = "no-std-net"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bcece43b12349917e096cddfa66107277f123e6c96a5aea78711dc601a47152"
 
 [[package]]
 name = "no-std-net"
@@ -1458,7 +1441,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "975f15c4c77e7798c236b542032891f0cafe5f2e103debe59d069d50a645ed8a"
 dependencies = [
- "embedded-nal 0.8.0",
+ "embedded-nal",
  "embedded-time",
  "heapless 0.7.17",
  "nanorand",
@@ -1707,14 +1690,15 @@ dependencies = [
 
 [[package]]
 name = "w5500"
-version = "0.4.1"
-source = "git+https://github.com/quartiq/w5500?branch=feature/e-h-1.0#588a7d277d738ed662fc31c1843f807572505245"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1126ec36b5eebffd22607d00573db3c05808cf84caebfcbe4525c250f0420235"
 dependencies = [
  "bit_field",
  "byteorder",
  "derive-try-from-primitive",
  "embedded-hal 1.0.0",
- "embedded-nal 0.6.0",
+ "embedded-nal",
  "nb 1.1.0",
 ]
 
