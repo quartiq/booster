@@ -697,7 +697,7 @@ impl sm::StateMachineContext for RfChannel {
     /// Ok if the channel can power up. Err otherwise.
     fn guard_powerup(&self) -> Result<bool, ()> {
         let settings = self.settings.settings();
-        Ok(settings.state == ChannelState::Off)
+        Ok(settings.state != ChannelState::Off)
     }
 
     /// Check to see if it's currently acceptable to enable the RF output switch.
