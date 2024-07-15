@@ -1,4 +1,5 @@
 //! Booster hardware setup and configuration routines.
+use embedded_hal_bus::i2c::AtomicDevice;
 
 use super::{
     booster_channels::BoosterChannels,
@@ -13,7 +14,7 @@ use super::{
     Channel, HardwareVersion, Mac, NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus,
     CPU_FREQ, I2C,
 };
-use stm32f4xx_hal::hal_02::blocking::delay::DelayMs;
+use stm32f4xx_hal::hal::delay::DelayNs;
 
 use crate::settings::eeprom::main_board::BoosterMainBoardData;
 
@@ -197,7 +198,8 @@ pub fn setup(
             )
         };
 
-        shared_bus::new_atomic_check!(I2C = i2c).unwrap()
+        cortex_m::singleton!(:embedded_hal_bus::util::AtomicCell<I2C> = embedded_hal_bus::util::AtomicCell::new(i2c))
+            .unwrap()
     };
 
     // Instantiate the I2C interface to the I2C mux. Use a shared-bus so we can share the I2C
@@ -216,7 +218,7 @@ pub fn setup(
 
         let mut mux = {
             tca9548::Tca9548::default(
-                i2c_bus_manager.acquire_i2c(),
+                AtomicDevice::new(i2c_bus_manager),
                 &mut i2c_mux_reset,
                 &mut delay,
             )
@@ -377,6 +379,8 @@ pub fn setup(
             result[3] == 0x04
         };
 
+        let spi = embedded_hal_bus::spi::ExclusiveDevice::new(spi, cs, delay.clone()).unwrap();
+
         if w5500_detected {
             // Reset the W5500.
             let mut mac_reset_n = gpiog.pg5.into_push_pull_output();
@@ -389,7 +393,7 @@ pub fn setup(
             // Wait for the W5500 to achieve PLL lock.
             delay.delay_ms(1u32);
 
-            let w5500 = w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi, cs))
+            let w5500 = w5500::UninitializedDevice::new(w5500::bus::FourWire::new(spi))
                 .initialize_macraw(w5500::MacAddress {
                     octets: mac_address,
                 })
@@ -397,7 +401,7 @@ pub fn setup(
 
             Mac::W5500(w5500)
         } else {
-            let mut mac = enc424j600::Enc424j600::new(spi, cs).cpu_freq_mhz(CPU_FREQ / 1_000_000);
+            let mut mac = enc424j600::Enc424j600::new(spi);
             mac.init(&mut delay).expect("PHY initialization failed");
             mac.write_mac_addr(&mac_address).unwrap();
 
@@ -449,14 +453,21 @@ pub fn setup(
             (led1, led2, led3)
         };
 
-        let fan1 =
-            max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pulldown)
-                .unwrap();
-        let fan2 = max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Float)
-            .unwrap();
-        let fan3 =
-            max6639::Max6639::new(i2c_bus_manager.acquire_i2c(), max6639::AddressPin::Pullup)
-                .unwrap();
+        let fan1 = max6639::Max6639::new(
+            AtomicDevice::new(i2c_bus_manager),
+            max6639::AddressPin::Pulldown,
+        )
+        .unwrap();
+        let fan2 = max6639::Max6639::new(
+            AtomicDevice::new(i2c_bus_manager),
+            max6639::AddressPin::Float,
+        )
+        .unwrap();
+        let fan3 = max6639::Max6639::new(
+            AtomicDevice::new(i2c_bus_manager),
+            max6639::AddressPin::Pullup,
+        )
+        .unwrap();
 
         ChassisFans::new(
             [fan1, fan2, fan3],

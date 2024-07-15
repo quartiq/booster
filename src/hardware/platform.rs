@@ -5,7 +5,7 @@ const DFU_REBOOT_FLAG: u32 = 0xDEAD_BEEF;
 
 use super::hal;
 
-use hal::hal_02::{blocking::delay::DelayUs, digital::v2::OutputPin};
+use hal::hal::{delay::DelayNs, digital::OutputPin};
 
 // Booster hardware channels are capable of withstanding up to 1W of reflected RF power. This
 // corresponds with a value of 30 dBm.
@@ -66,11 +66,7 @@ pub fn shutdown_channels() {
 /// * `sda` - The I2C data line.
 /// * `scl` - The I2C clock line.
 /// * `delay` - A means of delaying time.
-pub fn i2c_bus_reset(
-    sda: &mut impl OutputPin,
-    scl: &mut impl OutputPin,
-    delay: &mut impl DelayUs<u16>,
-) {
+pub fn i2c_bus_reset(sda: &mut impl OutputPin, scl: &mut impl OutputPin, delay: &mut impl DelayNs) {
     // Start by pulling SDA/SCL high.
     scl.set_low().ok();
     delay.delay_us(5);
