@@ -9,8 +9,10 @@ import time
 import json
 import enum
 
-from gmqtt import Client as MqttClient
 import miniconf
+from aiomqtt import MqttError
+
+LOGGER = logging.getLogger(__name__)
 
 # A list of channel enumeration names. The index in the list corresponds with the channel name.
 CHANNEL = [
@@ -30,79 +32,8 @@ class Action(enum.Enum):
     Save = 'save'
 
 
-class TelemetryReader:
-    """ Helper utility to read telemetry. """
-
-    @classmethod
-    async def create(cls, prefix, broker, channel):
-        """Create a connection to the broker and an MQTT device using it."""
-        client = MqttClient(client_id='')
-        await client.connect(broker)
-        return cls(client, f'{prefix}/telemetry/ch{channel}')
-
-
-    def __init__(self, client, topic):
-        """ Constructor. """
-        self.client = client
-        self._telemetry_event = None
-        self._last_telemetry = None
-        self._last_telemetry_timestamp = None
-        self.client.on_message = self._handle_telemetry
-        self._telemetry_topic = topic
-        self.client.subscribe(self._telemetry_topic)
-
-
-    def _handle_telemetry(self, _client, topic, payload, _qos, _properties):
-        """ Handle incoming telemetry messages over MQTT. """
-        assert topic == self._telemetry_topic
-        self._last_telemetry = json.loads(payload)
-        self._last_telemetry_timestamp = time.time()
-        if self._telemetry_event:
-            self._telemetry_event.set()
-
-
-    def get_latest_telemetry(self):
-        """ Get the latest telemetry and the time at which it arrived. """
-        return self._last_telemetry_timestamp, self._last_telemetry
-
-
-    async def get_next_telemetry(self):
-        """ Get the next telemetry message that arrives. """
-        self._telemetry_event = asyncio.Event()
-        await self._telemetry_event.wait()
-        return self.get_latest_telemetry()
-
-
-class BoosterApi:
+class Booster:
     """ An asynchronous API for controlling booster using the MQTT control interface. """
-
-    @classmethod
-    async def create(cls, prefix, broker, timeout=1):
-        """ Create a connection to MQTT for communication with booster.
-
-        Args:
-            prefix: An optionally-specified prefix of the device to connect to. If unspecified, a
-                booster will be discovered instead.
-            broker: The address of the broker.
-            timeout: The maximum amount of time to discover boosters for.
-        """
-        # If the user did not provide a prefix, try to find one.
-        if not prefix:
-            devices = await miniconf.discover(broker, 'dt/sinara/booster/+', timeout)
-
-            if not devices:
-                raise Exception('No Boosters found')
-
-            assert len(devices) == 1, \
-                    f'Multiple Boosters found: {devices}. Please specify one with --prefix'
-
-            prefix = devices.pop()
-
-        settings_interface = await miniconf.Miniconf.create(prefix, broker)
-        client = MqttClient(client_id='')
-        await client.connect(broker)
-        client.subscribe(f"{prefix}/command/response")
-        return cls(client, prefix, settings_interface)
 
 
     def __init__(self, client, prefix, settings_interface):
@@ -115,11 +46,28 @@ class BoosterApi:
         self.client = client
         self.prefix = prefix
         self.command_complete = asyncio.Event()
-        self.client.on_message = self._handle_response
-        self.settings_interface = settings_interface
+        self.settings_interface = miniconf.Miniconf(client, prefix)
+        self.listener = asyncio.create_task(self._listen())
+        self.response_topic = f"{prefix}/command/response"
         self.request_id = 0
         self.inflight = {}
 
+
+    async def _listen(self):
+        await self.client.subscribe(self.response_topic)
+        LOGGER.info(f"Subscribed to {self.response_topic}")
+        self.subscribed.set()
+        try:
+            async for message in self.client.messages:
+                self._dispatch(message)
+        except (asyncio.CancelledError, MqttError):
+            pass
+        finally:
+            try:
+                await self.client.unsubscribe(self.response_topic)
+                LOGGER.info(f"Unsubscribed from {self.response_topic}")
+            except MqttError:
+                pass
 
     def _handle_response(self, client, topic, payload, _qos, properties):
         """ Callback function for when messages are received over MQTT.

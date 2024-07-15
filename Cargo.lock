@@ -147,7 +147,7 @@ dependencies = [
  "serde-json-core",
  "serde_with",
  "serial-settings",
- "smlang",
+ "smlang 0.6.0",
  "smoltcp-nal",
  "stm32f4xx-hal",
  "tca9548",
@@ -865,9 +865,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.11.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb5c0319f66b92ee813d7f90b25018673a5e41148caf28951ad0bb9110627b37"
+checksum = "017bf72035f1e4e111f1a62031bcf659fa88d434ddadfa33bb390d616adc63fa"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -878,9 +878,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.11.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47bdb0160aff6c513c43d8ec1188491aedc875eb5cd34abc6cc3d02aab208a5e"
+checksum = "9ce5d455e44c19b52e2455f7591d1727a6b361341d60c39de3a3f728edfa6814"
 dependencies = [
  "darling 0.20.8",
  "proc-macro2",
@@ -890,9 +890,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_mqtt"
-version = "0.11.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1ab8296f329390df0d4542fd83a42985fefffbbf7fe69dd21f88f2c0c91f5f8"
+checksum = "769da289221885b9bd4a1b49fc60b8a90f03fe9d69c7363aa36d260b46fd9977"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -900,7 +900,7 @@ dependencies = [
  "miniconf",
  "minimq",
  "serde-json-core",
- "smlang",
+ "smlang 0.7.0",
 ]
 
 [[package]]
@@ -915,7 +915,7 @@ dependencies = [
  "heapless 0.7.17",
  "num_enum",
  "serde",
- "smlang",
+ "smlang 0.6.0",
  "varint-rs",
 ]
 
@@ -929,7 +929,7 @@ dependencies = [
  "log",
  "minimq",
  "serde",
- "smlang",
+ "smlang 0.6.0",
 ]
 
 [[package]]
@@ -1381,7 +1381,7 @@ dependencies = [
 [[package]]
 name = "serial-settings"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/stabilizer?rev=3ef00cbd9#3ef00cbd92b9ee57b19026ba7abb3791e88be339"
+source = "git+https://github.com/quartiq/stabilizer?rev=5452272931e1ad70547b578052ffbb186fb72514#5452272931e1ad70547b578052ffbb186fb72514"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -1408,7 +1408,16 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b62b263177e999fea25b50588d4413d1686f070d6fe986c3b2e5a7a4d2c532e9"
 dependencies = [
- "smlang-macros",
+ "smlang-macros 0.6.0",
+]
+
+[[package]]
+name = "smlang"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "575de1cab77b6c852f1f61227755ca0c500d75d3e87317b67eee3ad110d1d4ca"
+dependencies = [
+ "smlang-macros 0.7.0",
 ]
 
 [[package]]
@@ -1419,6 +1428,18 @@ checksum = "c682cc05cd4c0dce61656d654b1aef023e7d4b27b58834af94b31391df081469"
 dependencies = [
  "proc-macro2",
  "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "smlang-macros"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7aa9703a40b34abf1d323658a18b197f30f450358f9fd49fe8f7a687bfe301f4"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "string_morph",
  "syn 1.0.109",
 ]
 
@@ -1502,6 +1523,12 @@ dependencies = [
  "vcell",
  "void",
 ]
+
+[[package]]
+name = "string_morph"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "183aaf7fa637cc7b5f54c45b8f7cb6e8d73831f9f75a56b6defa5bf8c51d1699"
 
 [[package]]
 name = "strsim"
@@ -1704,9 +1731,9 @@ dependencies = [
 
 [[package]]
 name = "yafnv"
-version = "1.0.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42a163032c49aec712809692a0b0b49842b0bc49b05d79d9c6dff41ccd93aa1b"
+checksum = "66aad9090f952997c6570d94039d80b5b5e26d182c5f39ef7b05d64535fb5f88"
 dependencies = [
  "num-traits",
 ]

@@ -7,7 +7,7 @@ Description: Provides an API for controlling Booster NGFW over MQTT.
 import argparse
 import asyncio
 
-from . import BoosterApi, Action
+from . import Booster, Action
 
 
 # A dictionary of all the available commands, their number of arguments, argument type, and help
@@ -48,7 +48,9 @@ def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
         description='Modify booster RF channel configuration')
-    parser.add_argument('--prefix', type=str, help='The prefix of the booster to configure')
+    parser.add_argument('--prefix', default='dt/sinara/booster/+', type=str, help='The prefix of the booster to configure')
+    parser.add_argument("--no-discover", "-d", action="store_true",
+                        help="Do not discover Stabilizer device prefix.")
     parser.add_argument('--channel', required=True, type=int, choices=range(8),
                         help='The RF channel index to control')
     parser.add_argument('--broker', default='mqtt', type=str, help='The MQTT broker address')
@@ -67,17 +69,25 @@ def main():
 
     async def channel_configuration(args):
         """ Configure an RF channel. """
+        async with miniconf.Client(
+            args.broker, protocol=miniconf.MQTTv5,
+            logger=logging.getLogger("aiomqtt-client")
+        ) as client:
+            if not args.no_discover:
+                prefix = miniconf.discover_one(client, args.prefix)
+            else:
+                prefix = args.prefix
 
         # Establish a communication interface with Booster.
-        interface = await BoosterApi.create(args.prefix, args.broker)
+        booster = Booster(prefix, args.broker)
 
         for command in args.commands:
             command, cmd_args = parse_command(command)
             if command == 'save':
-                await interface.perform_action(Action.Save, args.channel)
+                await booster.perform_action(Action.Save, args.channel)
                 print(f'Channel {args.channel} configuration saved')
             elif command == 'tune':
-                vgs, ids = await interface.tune_bias(args.channel, cmd_args[0])
+                vgs, ids = await booster.tune_bias(args.channel, cmd_args[0])
                 print(f'Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA')
 
     loop = asyncio.get_event_loop()
@@ -85,4 +95,11 @@ def main():
 
 
 if __name__ == '__main__':
+    import os
+    import sys
+    if sys.platform.lower() == "win32" or os.name.lower() == "nt":
+        from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
+
+        set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+
     main()

@@ -52,8 +52,8 @@ usbd-serial = "0.2.2"
 encdec = { version = "0.9", default-features = false }
 crc-any = { version = "2.5.0", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-miniconf = { version = "0.11.0", features = ["json-core", "derive", "postcard"]}
-miniconf_mqtt = "0.11"
+miniconf = { version = "0.13", features = ["json-core", "derive", "postcard"]}
+miniconf_mqtt = "0.13"
 # Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
 minimq = "0.9.0"
 w5500 = "0.5"
@@ -65,7 +65,7 @@ enc424j600 = "0.4"
 embedded-hal = "1"
 smoltcp-nal = { version = "0.5", features=["shared-stack"] }
 
-serial-settings = {git = "https://github.com/quartiq/stabilizer", rev = "3ef00cbd9"}
+serial-settings = {git = "https://github.com/quartiq/stabilizer", rev = "5452272931e1ad70547b578052ffbb186fb72514"}
 stm32f4xx-hal = {version = "0.21.0", features = ["stm32f407", "usb_fs"] }
 
 postcard = "1"

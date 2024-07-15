@@ -279,8 +279,10 @@ mod app {
                     update_settings::spawn().unwrap();
                 }
                 Ok(false) => {}
-                Err(minimq::Error::Network(smoltcp_nal::NetworkError::TcpConnectionFailure(
-                    smoltcp_nal::smoltcp::socket::tcp::ConnectError::Unaddressable,
+                Err(miniconf_mqtt::Error::Minimq(miniconf_mqtt::minimq::Error::Network(
+                    smoltcp_nal::NetworkError::TcpConnectionFailure(
+                        smoltcp_nal::smoltcp::socket::tcp::ConnectError::Unaddressable,
+                    ),
                 ))) => {}
                 other => log::warn!("Miniconf update failure: {:?}", other),
             };
