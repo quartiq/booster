@@ -3,6 +3,8 @@ use heapless::String;
 
 use super::SerialTerminal;
 use core::fmt::Write;
+use log::LevelFilter;
+use rtt_target::rprintln;
 
 /// A logging buffer for storing serialized logs pending transmission.
 ///
@@ -12,7 +14,7 @@ use core::fmt::Write;
 /// USB task.
 pub struct BufferedLog {
     logs: heapless::mpmc::Q16<heapless::String<256>>,
-    rtt_logger: rtt_logger::RTTLogger,
+    level_filter: LevelFilter,
 }
 
 impl BufferedLog {
@@ -20,7 +22,7 @@ impl BufferedLog {
     pub const fn new() -> Self {
         Self {
             logs: heapless::mpmc::Q16::new(),
-            rtt_logger: rtt_logger::RTTLogger::new(log::LevelFilter::Info),
+            level_filter: LevelFilter::Info,
         }
     }
 
@@ -40,12 +42,16 @@ impl BufferedLog {
 }
 
 impl log::Log for BufferedLog {
-    fn enabled(&self, _metadata: &log::Metadata) -> bool {
-        true
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        self.level_filter.ge(&metadata.level())
     }
 
     fn log(&self, record: &log::Record) {
-        self.rtt_logger.log(record);
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+
+        rprintln!("{} - {}", record.level(), record.args());
         let source_file = record.file().unwrap_or("Unknown");
         let source_line = record.line().unwrap_or(u32::MAX);
 
