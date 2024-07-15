@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolany/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv7em-none-eabihf
           components: rustfmt, clippy
@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: dtolany/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv7em-none-eabihf
 
