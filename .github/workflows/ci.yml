@@ -17,72 +17,42 @@ jobs:
   style:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: thumbv7em-none-eabihf
-          override: true
-      - uses: Swatinem/rust-cache@v1
-      - name: cargo fmt --check
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          targets: thumbv7em-none-eabihf
+          components: rustfmt, clippy
+
+      - run: cargo fmt --all -- --check
+      - run: cargo check
+
+      - run: cargo clippy --all-features -- -D warnings
 
   compile:
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.toolchain == 'nightly' }}
-    strategy:
-      max-parallel: 2
-      matrix:
-        toolchain:
-          - stable
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Install Rust ${{ matrix.toolchain }}
-        uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ matrix.toolchain }}
-          target: thumbv7em-none-eabihf
-          override: true
+          targets: thumbv7em-none-eabihf
           components: llvm-tools-preview
 
-      - uses: Swatinem/rust-cache@v1
-        if: ${{ matrix.toolchain != 'nightly' }}
+      - uses: Swatinem/rust-cache@v2
 
-      - name: Install Binutils
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cargo-binutils
+      - run: cargo install cargo-binutils
 
-      - name: Build [Debug]
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-
-      - name: Build [Release]
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release
+      - run: cargo build
+      - run: cargo build --release
 
       - name: Extract Binary
-        uses: actions-rs/cargo@v1
-        with:
-          command: objcopy
-          args: --release --verbose -- -O binary booster-release.bin
+        run: cargo objcopy --release --verbose -- -O binary booster-release.bin
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v2
-        if: ${{ matrix.toolchain == 'stable'
-          && (github.ref == 'refs/heads/master'
-          || github.ref == 'refs/heads/develop') }}
+        uses: actions/upload-artifact@v4
+        if: (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
         with:
           name: Firmware Images
           path: |

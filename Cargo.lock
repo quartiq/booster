@@ -140,7 +140,6 @@ dependencies = [
  "rtic",
  "rtic-monotonics",
  "rtic-sync",
- "rtt-logger",
  "rtt-target",
  "sequential-storage",
  "serde",
@@ -1245,22 +1244,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "rtt-logger"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2f42c228caf6eab0fe8374ef3988b9db07dbe0b12b65b4a02aaacb48b03354e"
-dependencies = [
- "log",
- "rtt-target",
-]
-
-[[package]]
 name = "rtt-target"
-version = "0.3.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "065d6058bb1204f51a562a67209e1817cf714759d5cf845aa45c75fa7b0b9d9b"
+checksum = "10b34c9e6832388e45f3c01f1bb60a016384a0a4ad80cdd7d34913bed25037f0"
 dependencies = [
- "cortex-m",
+ "critical-section",
  "ufmt-write",
 ]
 
@@ -1446,8 +1435,7 @@ dependencies = [
 [[package]]
 name = "smoltcp"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a1a996951e50b5971a2c8c0fa05a381480d70a933064245c4a223ddc87ccc97"
+source = "git+https://github.com/quartiq/smoltcp?rev=091fbfb828e2a8f52f9d17d46ce24ba632d9920e#091fbfb828e2a8f52f9d17d46ce24ba632d9920e"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",

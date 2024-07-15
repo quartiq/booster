@@ -155,7 +155,7 @@ impl Devices {
     ) -> Option<(Self, Microchip24AA02E48<I2cProxy>)> {
         // The ADS7924 and DAC7571 are present on the booster mainboard, so instantiation
         // and communication should never fail.
-        let mut dac7571 = Dac7571::default(i2c::AtomicDevice::new(&manager));
+        let mut dac7571 = Dac7571::default(i2c::AtomicDevice::new(manager));
 
         // Ensure the bias DAC is placing the RF amplifier in pinch off (disabled).
         dac7571
@@ -163,7 +163,7 @@ impl Devices {
             .expect("Bias DAC did not respond");
 
         // Verify we can communicate with the power monitor.
-        let mut ads7924 = Ads7924::default(i2c::AtomicDevice::new(&manager), delay)
+        let mut ads7924 = Ads7924::default(i2c::AtomicDevice::new(manager), delay)
             .expect("Power monitor did not enumerate");
         ads7924
             .get_voltage(ads7924::Channel::Three)
@@ -176,11 +176,11 @@ impl Devices {
         assert!(ads7924.clear_alarm().expect("Failed to clear alarm") == 0);
 
         // Query devices on the RF module to verify they are present.
-        let ad5627 = Ad5627::default(i2c::AtomicDevice::new(&manager)).ok()?;
-        let eui48 = Microchip24AA02E48::new(i2c::AtomicDevice::new(&manager)).ok()?;
-        let mut max6642 = Max6642::att94(i2c::AtomicDevice::new(&manager));
+        let ad5627 = Ad5627::default(i2c::AtomicDevice::new(manager)).ok()?;
+        let eui48 = Microchip24AA02E48::new(i2c::AtomicDevice::new(manager)).ok()?;
+        let mut max6642 = Max6642::att94(i2c::AtomicDevice::new(manager));
         max6642.get_remote_temperature().ok()?;
-        let mut mcp3221 = Mcp3221::default(i2c::AtomicDevice::new(&manager));
+        let mut mcp3221 = Mcp3221::default(i2c::AtomicDevice::new(manager));
         mcp3221.get_voltage().ok()?;
 
         Some((
