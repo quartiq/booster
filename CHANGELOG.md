@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mainboard flash and will overwrite EEPROM-based settings during device boot. Reversion to older
   firmware variants will still be able to use existing EEPROM settings, but the EEPROM contents
   are no longer modified when settings are changed.
+* [python] Python client has had `TelemetryReader` removed, `BoosterApi` was renamed to `Booster`
+  and now takes an `aiomqtt-client` as the constructor.
 
 ## [0.5.0] - 03-07-2023
 
