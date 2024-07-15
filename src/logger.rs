@@ -47,7 +47,7 @@ impl log::Log for BufferedLog {
     }
 
     fn log(&self, record: &log::Record) {
-        if self.enabled(record.metadata()) == false {
+        if !self.enabled(record.metadata()) {
             return;
         }
 
