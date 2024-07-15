@@ -3,8 +3,8 @@ use heapless::String;
 
 use super::SerialTerminal;
 use core::fmt::Write;
-use rtt_target::rprintln;
 use log::LevelFilter;
+use rtt_target::rprintln;
 
 /// A logging buffer for storing serialized logs pending transmission.
 ///
