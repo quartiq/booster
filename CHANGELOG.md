@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   firmware variants will still be able to use existing EEPROM settings, but the EEPROM contents
   are no longer modified when settings are changed.
 
+### Fixed
+* Heavy network traffic no longer causes Booster to encounter watchdog resets or other spurious
+resets.
+
 ## [0.5.0] - 03-07-2023
 
 ### Added
