@@ -57,7 +57,7 @@ miniconf_mqtt = "0.11"
 # Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
 minimq = "0.9.0"
 w5500 = "0.5"
-smlang= "0.6"
+smlang= "0.7"
 minireq = {git = "https://github.com/quartiq/minireq"}
 rtt-target = {version = "0.3", features=["cortex-m"]}
 enum-iterator = { version = "2.1", default-features = false }
