@@ -129,7 +129,7 @@ dependencies = [
  "max6642",
  "mcp3221",
  "microchip-24aa02e48",
- "miniconf",
+ "miniconf 0.13.0",
  "miniconf_mqtt",
  "minimq",
  "minireq",
@@ -869,7 +869,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb5c0319f66b92ee813d7f90b25018673a5e41148caf28951ad0bb9110627b37"
 dependencies = [
  "itoa",
- "miniconf_derive",
+ "miniconf_derive 0.11.0",
+ "serde",
+ "serde-json-core",
+]
+
+[[package]]
+name = "miniconf"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "017bf72035f1e4e111f1a62031bcf659fa88d434ddadfa33bb390d616adc63fa"
+dependencies = [
+ "itoa",
+ "miniconf_derive 0.13.0",
  "postcard",
  "serde",
  "serde-json-core",
@@ -888,6 +900,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "miniconf_derive"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ce5d455e44c19b52e2455f7591d1727a6b361341d60c39de3a3f728edfa6814"
+dependencies = [
+ "darling 0.20.8",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
+]
+
+[[package]]
 name = "miniconf_mqtt"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -896,7 +920,7 @@ dependencies = [
  "embedded-io",
  "heapless 0.8.0",
  "log",
- "miniconf",
+ "miniconf 0.11.0",
  "minimq",
  "serde-json-core",
  "smlang 0.6.0",
@@ -1375,7 +1399,7 @@ dependencies = [
  "embedded-io",
  "heapless 0.8.0",
  "menu",
- "miniconf",
+ "miniconf 0.11.0",
  "yafnv",
 ]
 
