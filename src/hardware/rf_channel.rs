@@ -590,13 +590,6 @@ mod sm {
     use minimq::embedded_time::Instant;
     use smlang::statemachine;
 
-    impl Copy for States {}
-    impl Clone for States {
-        fn clone(&self) -> States {
-            *self
-        }
-    }
-
     impl serde::Serialize for States {
         fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             let (idx, var) = match self {
@@ -617,6 +610,7 @@ mod sm {
     }
 
     statemachine! {
+        derive_states: [Copy, Clone],
         transitions: {
             *Off + InterlockReset [guard_powerup] / start_powerup = Powerup(Instant<SystemTimer>),
             Off + Disable = Off,
@@ -651,21 +645,22 @@ mod sm {
 
 impl sm::StateMachineContext for RfChannel {
     /// Handle the occurrence of a tripped interlock.
-    fn handle_trip(&mut self, interlock: &Interlock) -> Interlock {
-        self.disable_rf_switch();
-        *interlock
+    fn handle_trip(&mut self, interlock: Interlock) -> Result<Interlock, ()> {
+        self.disable_rf_switch().unwrap();
+        Ok(interlock)
     }
 
     /// Turn off the RF output enable switch.
-    fn disable_rf_switch(&mut self) {
+    fn disable_rf_switch(&mut self) -> Result<(), ()> {
         self.pins.signal_on.set_low();
+        Ok(())
     }
 
     /// Begin the process of powering up the channel.
     ///
     /// # Returns
     /// The time at which the powerup process can be deemed complete.
-    fn start_powerup(&mut self) -> Instant<SystemTimer> {
+    fn start_powerup(&mut self) -> Result<Instant<SystemTimer>, ()> {
         // Place the bias DAC to drive the RF amplifier into pinch-off during the power-up process.
         self.devices
             .bias_dac
@@ -677,10 +672,10 @@ impl sm::StateMachineContext for RfChannel {
 
         // The LM3880 requires 180ms to power up all supplies on the channel. We add an additional
         // 20ms margin.
-        self.clock.try_now().unwrap() + 200_u32.milliseconds()
+        Ok(self.clock.try_now().unwrap() + 200_u32.milliseconds())
     }
 
-    fn reset_interlocks(&mut self, _: &Instant<SystemTimer>) {
+    fn reset_interlocks(&mut self, _: &Instant<SystemTimer>) -> Result<(), ()> {
         // Next, handle resetting interlocks for v1.6 hardware. The interlocks are reset by a
         // falling edge on ON/OFF. Because the bias dac is currently in pinch-off (and the RF
         // channel is unpowered), toggling ON/OFF introduces no output transients on the RF
@@ -692,30 +687,28 @@ impl sm::StateMachineContext for RfChannel {
         self.delay.delay_ms(1u32);
 
         self.pins.signal_on.set_low();
+
+        Ok(())
     }
 
     /// Guard against powering up the channel.
     ///
     /// # Returns
     /// Ok if the channel can power up. Err otherwise.
-    fn guard_powerup(&mut self) -> Result<(), ()> {
+    fn guard_powerup(&self) -> Result<bool, ()> {
         let settings = self.settings.settings();
-        if settings.state == ChannelState::Off {
-            Err(())
-        } else {
-            Ok(())
-        }
+        Ok(settings.state != ChannelState::Off)
     }
 
     /// Check to see if it's currently acceptable to enable the RF output switch.
     ///
     /// # Returns
     /// An error if it's not currently acceptable to enable. Otherwise, Ok.
-    fn guard_enable(&mut self) -> Result<(), ()> {
+    fn guard_enable(&self) -> Result<bool, ()> {
         let settings = self.settings.settings();
 
         if platform::watchdog_detected() {
-            return Err(());
+            return Ok(false);
         }
 
         // It is not valid to enable the channel while the interlock thresholds are low. Due to
@@ -725,23 +718,23 @@ impl sm::StateMachineContext for RfChannel {
         // detector level. When RF is disabled, the power detectors output a near-zero value, so
         // 100mV should be a sufficient level.
         if settings.output_interlock_threshold < settings.output_power_transform.map(0.100) {
-            return Err(());
+            return Ok(false);
         }
 
         // Do not enable output if it shouldn't be enabled due to settings.
         if settings.state != ChannelState::Enabled {
-            return Err(());
+            return Ok(false);
         }
 
         // Enable power should always be high before we're enabling the RF switch.
         if self.pins.enable_power.is_set_low() {
-            return Err(());
+            return Ok(false);
         }
 
-        Ok(())
+        Ok(true)
     }
 
-    fn enable_output(&mut self) {
+    fn enable_output(&mut self) -> Result<(), ()> {
         let settings = self.settings.settings();
 
         // It is only valid to enable the output if the channel is powered.
@@ -750,14 +743,16 @@ impl sm::StateMachineContext for RfChannel {
 
         self.apply_bias().unwrap();
         self.pins.signal_on.set_high();
+
+        Ok(())
     }
 
     /// Begin the process of powering down the channel.
     ///
     /// # Returns
     /// The time at which the powerdown process can be deemed complete.
-    fn start_disable(&mut self) -> Instant<SystemTimer> {
-        self.disable_rf_switch();
+    fn start_disable(&mut self) -> Result<Instant<SystemTimer>, ()> {
+        self.disable_rf_switch().unwrap();
 
         // Set the bias DAC output into pinch-off.
         self.devices
@@ -771,14 +766,17 @@ impl sm::StateMachineContext for RfChannel {
         // LM3880 that occurs when a channel is disabled immediately after enable. In this case,
         // the LM3880 will require 180ms to power up the channel, 120ms to stabilize, and then
         // 180ms to power down the channel.
-        self.clock.try_now().unwrap() + 500_u32.milliseconds()
+        Ok(self.clock.try_now().unwrap() + 500_u32.milliseconds())
     }
 
-    fn start_disable_instant(&mut self, _: &Instant<SystemTimer>) -> Instant<SystemTimer> {
+    fn start_disable_instant(
+        &mut self,
+        _: &Instant<SystemTimer>,
+    ) -> Result<Instant<SystemTimer>, ()> {
         self.start_disable()
     }
 
-    fn start_disable_interlock(&mut self, _: &Interlock) -> Instant<SystemTimer> {
+    fn start_disable_interlock(&mut self, _: &Interlock) -> Result<Instant<SystemTimer>, ()> {
         self.start_disable()
     }
 
@@ -786,38 +784,38 @@ impl sm::StateMachineContext for RfChannel {
     ///
     /// # Returns
     /// Ok if the deadline (timeout) has occurred. Error otherwise.
-    fn check_timeout(&mut self, deadline: &Instant<SystemTimer>) -> Result<(), ()> {
-        if self.clock.try_now().unwrap() > *deadline {
-            Ok(())
-        } else {
-            Err(())
-        }
+    fn check_timeout(&self, deadline: &Instant<SystemTimer>) -> Result<bool, ()> {
+        Ok(self.clock.try_now().unwrap() > *deadline)
     }
 
     /// Handle the occurrence of a channel fault.
-    fn handle_fault(&mut self, fault: &ChannelFault) -> ChannelFault {
-        self.start_disable();
-        *fault
+    fn handle_fault(&mut self, fault: ChannelFault) -> Result<ChannelFault, ()> {
+        self.start_disable().unwrap();
+        Ok(fault)
     }
 
     fn handle_fault_instant(
         &mut self,
         _: &Instant<SystemTimer>,
-        fault: &ChannelFault,
-    ) -> ChannelFault {
+        fault: ChannelFault,
+    ) -> Result<ChannelFault, ()> {
         self.handle_fault(fault)
     }
 
-    fn handle_fault_interlock(&mut self, _: &Interlock, fault: &ChannelFault) -> ChannelFault {
+    fn handle_fault_interlock(
+        &mut self,
+        _: &Interlock,
+        fault: ChannelFault,
+    ) -> Result<ChannelFault, ()> {
         self.handle_fault(fault)
     }
 
     fn handle_recurrent_fault(
         &mut self,
         old_fault: &ChannelFault,
-        _: &ChannelFault,
-    ) -> ChannelFault {
-        self.handle_fault(old_fault)
+        _: ChannelFault,
+    ) -> Result<ChannelFault, ()> {
+        self.handle_fault(*old_fault)
     }
 }
 

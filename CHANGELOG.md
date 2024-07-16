@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * [python] Python client has had `TelemetryReader` removed, `BoosterApi` was renamed to `Booster`
   and now takes an `aiomqtt-client` as the constructor.
 
+### Fixed
+* Heavy network traffic no longer causes Booster to encounter watchdog resets or other spurious
+resets.
+
 ## [0.5.0] - 03-07-2023
 
 ### Added
