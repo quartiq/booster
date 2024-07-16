@@ -13,8 +13,8 @@ use core::fmt::Write;
 use heapless::{String, Vec};
 use serde::Serialize;
 
-use crate::settings::{eeprom::rf_channel::ChannelSettings, flash::SerialSettingsPlatform};
-use miniconf::{Postcard, TreeKey};
+use crate::settings::{flash::SerialSettingsPlatform, Settings};
+use miniconf::{IntoKeys, Keys, Path, Postcard, TreeKey};
 
 /// Default metadata message if formatting errors occur.
 const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
@@ -247,25 +247,26 @@ pub fn save_settings_to_flash(
     channel.context_mut().save_configuration();
 
     let settings = channel.context().settings();
-    let mut root_path: String<64> = "/booster/channel".parse().unwrap();
-    write!(&mut root_path, "/{}", request.channel as usize).unwrap();
+
+    let channel_root: Path<_, '/'> = Path("/booster/channel");
 
     let mut buf = [0u8; 256];
-    for channel_path in ChannelSettings::iter_paths::<String<64>>("/") {
-        let channel_path = channel_path.unwrap();
-        let mut path = root_path.clone();
-        path.push_str(&channel_path).unwrap();
+    for channel_path in Settings::nodes::<Path<String<64>, '/'>>()
+        .root(channel_root.into_keys().chain([request.channel as usize]))
+        .unwrap()
+    {
+        let (channel_path, _) = channel_path.unwrap();
 
         let mut data: Vec<u8, 256> = Vec::new();
         data.resize(data.capacity(), 0).unwrap();
         let flavor = postcard::ser_flavors::Slice::new(&mut data);
         let len = settings
-            .get_postcard_by_key(channel_path.split('/').skip(1), flavor)
+            .get_postcard_by_key(channel_path.split('/').skip(4), flavor)
             .unwrap()
             .len();
         data.truncate(len);
 
-        settings_platform.save_item(&mut buf[..], path, data);
+        settings_platform.save_item(&mut buf[..], channel_path.0, data);
     }
 
     Ok(0)

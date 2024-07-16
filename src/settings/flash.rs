@@ -1,11 +1,11 @@
 //! Booster NGFW Application
 
 use heapless::{String, Vec};
-use miniconf::{JsonCoreSlash, Postcard, TreeKey};
+use miniconf::{JsonCoreSlash, Path, Postcard, TreeKey};
 use sequential_storage::map;
 
 use crate::hardware::{flash::Flash, platform};
-use core::fmt::Write;
+use embedded_io::Write;
 
 pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
     structure: &mut T,
@@ -13,8 +13,9 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
 ) {
     // Loop over flash and read settings
     let mut buffer = [0u8; 512];
-    for path in T::iter_paths::<String<64>>("/") {
-        let path = path.unwrap();
+    for path in T::nodes::<Path<String<64>, '/'>>() {
+        let (path, _) = path.unwrap();
+        let path = path.0;
 
         // Try to fetch the setting from flash.
         let item = match embassy_futures::block_on(map::fetch_item::<SettingsKey, SettingsItem, _>(
@@ -171,8 +172,9 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
         if let Some(path) = key {
             save_setting(path.parse().unwrap());
         } else {
-            for path in Self::Settings::iter_paths::<String<64>>("/") {
-                save_setting(path.unwrap());
+            for path in Self::Settings::nodes::<Path<String<64>, '/'>>() {
+                let (path, _) = path.unwrap();
+                save_setting(path.0);
             }
         }
 
@@ -294,8 +296,9 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
         if let Some(key) = key {
             erase_setting(key.parse().unwrap()).unwrap();
         } else {
-            for path in Self::Settings::iter_paths::<String<64>>("/") {
-                erase_setting(path.unwrap()).unwrap();
+            for path in Self::Settings::nodes::<Path<String<64>, '/'>>() {
+                let (path, _) = path.unwrap();
+                erase_setting(path.0).unwrap();
             }
         }
     }

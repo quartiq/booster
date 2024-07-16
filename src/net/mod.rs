@@ -70,7 +70,7 @@ impl NetworkDevices {
 
         let store = cortex_m::singleton!(: MqttStorage = MqttStorage::default()).unwrap();
 
-        let mut prefix: String<128> = String::new();
+        let mut prefix = cortex_m::singleton!(: String<128> = String::new()).unwrap();
         write!(&mut prefix, "dt/sinara/booster/{}", identifier).unwrap();
 
         let control = {
@@ -84,7 +84,7 @@ impl NetworkDevices {
                 .unwrap();
             let mqtt = minireq::minimq::Minimq::new(shared.acquire_stack(), clock, config);
 
-            let mut control = minireq::Minireq::new(&prefix, mqtt).unwrap();
+            let mut control = minireq::Minireq::new(prefix, mqtt).unwrap();
 
             control.subscribe("save").unwrap();
             control.subscribe("read-bias").unwrap();
@@ -107,7 +107,7 @@ impl NetworkDevices {
             mqtt_control::TelemetryClient::new(
                 minimq::Minimq::new(shared.acquire_stack(), clock, config),
                 metadata,
-                &prefix,
+                prefix,
             )
         };
 
@@ -120,7 +120,7 @@ impl NetworkDevices {
             let config = miniconf_mqtt::minimq::ConfigBuilder::new(broker, &mut store.control)
                 .client_id(&client_id)
                 .unwrap();
-            miniconf_mqtt::MqttClient::new(shared.acquire_stack(), &prefix, clock, config).unwrap()
+            miniconf_mqtt::MqttClient::new(shared.acquire_stack(), prefix, clock, config).unwrap()
         };
 
         Self {

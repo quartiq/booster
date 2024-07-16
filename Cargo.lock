@@ -864,9 +864,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.11.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb5c0319f66b92ee813d7f90b25018673a5e41148caf28951ad0bb9110627b37"
+checksum = "017bf72035f1e4e111f1a62031bcf659fa88d434ddadfa33bb390d616adc63fa"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -877,9 +877,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.11.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47bdb0160aff6c513c43d8ec1188491aedc875eb5cd34abc6cc3d02aab208a5e"
+checksum = "9ce5d455e44c19b52e2455f7591d1727a6b361341d60c39de3a3f728edfa6814"
 dependencies = [
  "darling 0.20.8",
  "proc-macro2",
@@ -889,9 +889,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_mqtt"
-version = "0.11.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1ab8296f329390df0d4542fd83a42985fefffbbf7fe69dd21f88f2c0c91f5f8"
+checksum = "769da289221885b9bd4a1b49fc60b8a90f03fe9d69c7363aa36d260b46fd9977"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -899,7 +899,7 @@ dependencies = [
  "miniconf",
  "minimq",
  "serde-json-core",
- "smlang 0.6.0",
+ "smlang 0.7.0",
 ]
 
 [[package]]
@@ -1370,7 +1370,7 @@ dependencies = [
 [[package]]
 name = "serial-settings"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/stabilizer?rev=3ef00cbd9#3ef00cbd92b9ee57b19026ba7abb3791e88be339"
+source = "git+https://github.com/quartiq/stabilizer?rev=5452272931e1ad70547b578052ffbb186fb72514#5452272931e1ad70547b578052ffbb186fb72514"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -1719,9 +1719,9 @@ dependencies = [
 
 [[package]]
 name = "yafnv"
-version = "1.0.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42a163032c49aec712809692a0b0b49842b0bc49b05d79d9c6dff41ccd93aa1b"
+checksum = "66aad9090f952997c6570d94039d80b5b5e26d182c5f39ef7b05d64535fb5f88"
 dependencies = [
  "num-traits",
 ]
