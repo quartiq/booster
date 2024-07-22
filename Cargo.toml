@@ -32,7 +32,7 @@ cortex-m = "0.7.7"
 cortex-m-rt = "0.7"
 fugit = "0.3"
 rtic-sync = "1"
-sequential-storage = "2"
+sequential-storage = "3"
 rtic = {version = "2.1", features = ["thumbv7-backend"] }
 embassy-futures = { version = "0.1", default-features = false }
 rtic-monotonics = { version = "2.0", features = ["cortex-m-systick"] }
