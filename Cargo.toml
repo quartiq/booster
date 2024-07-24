@@ -77,8 +77,10 @@ path = "ad5627"
 version = "0.2"
 
 [patch.crates-io.smoltcp]
-git = "https://github.com/quartiq/smoltcp"
-rev = "091fbfb828e2a8f52f9d17d46ce24ba632d9920e"
+# Locking to a patch where the poll() function no longer loops infinitely during packet floods. This
+# can be removed once smoltcp is re-released.
+git = "https://github.com/smoltcp-rs/smoltcp"
+rev = "53caf70f640d5ccb3cd1492e1cb178bc7dfa3cdd"
 
 [dependencies.ads7924]
 path = "ads7924"
