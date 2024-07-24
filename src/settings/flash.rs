@@ -23,7 +23,7 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
             storage.range(),
             &mut sequential_storage::cache::NoCache::new(),
             &mut buffer,
-            SettingsKey(path.clone()),
+            &SettingsKey(path.clone()),
         )) {
             Err(e) => {
                 log::warn!("Failed to fetch `{path}` from flash: {e:?}");
@@ -106,7 +106,7 @@ impl SerialSettingsPlatform {
             range.clone(),
             &mut sequential_storage::cache::NoCache::new(),
             buffer,
-            path.clone(),
+            &path,
         ))
         .unwrap()
         .map(|old| old.0 != value)
@@ -118,7 +118,7 @@ impl SerialSettingsPlatform {
                 range,
                 &mut sequential_storage::cache::NoCache::new(),
                 buffer,
-                path,
+                &path,
                 &SettingsItem(value),
             ))
             .unwrap();
@@ -270,7 +270,7 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
                     range.clone(),
                     &mut sequential_storage::cache::NoCache::new(),
                     buffer,
-                    path.clone(),
+                    &path,
                 ))
                 .unwrap();
 
@@ -284,7 +284,7 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
                     range,
                     &mut sequential_storage::cache::NoCache::new(),
                     buffer,
-                    path,
+                    &path,
                     &SettingsItem(Vec::new()),
                 ))
                 .unwrap();
