@@ -7,7 +7,7 @@ text = "MIT"
 
 [project]
 name = "booster"
-version = "0.1.0"
+version = "0.6.0"
 description = "Booster Utilities"
 authors = [
     { name = "Ryan Summers", email = "ryan.summers@vertigo-designs.com" },
