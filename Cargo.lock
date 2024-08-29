@@ -1388,12 +1388,15 @@ dependencies = [
 [[package]]
 name = "serial-settings"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/stabilizer?rev=5452272931e1ad70547b578052ffbb186fb72514#5452272931e1ad70547b578052ffbb186fb72514"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74e625da19d0598abfecd5f8ead895ec4542c79a3139234cc7fd9cb3fe3ba0ff"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
+ "log",
  "menu",
  "miniconf",
+ "postcard",
  "yafnv",
 ]
 
@@ -1758,9 +1761,9 @@ dependencies = [
 
 [[package]]
 name = "yafnv"
-version = "2.0.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66aad9090f952997c6570d94039d80b5b5e26d182c5f39ef7b05d64535fb5f88"
+checksum = "a98cd19b5e3fbcda406d58efc9f5cb2d6e82e381708d52f357b3b3cfb19559b1"
 dependencies = [
  "num-traits",
 ]

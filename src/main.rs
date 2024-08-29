@@ -250,10 +250,12 @@ mod app {
                 .lock(|watchdog| watchdog.check_in(WatchdogClient::Usb));
 
             (&mut c.shared.usb_terminal, &mut c.shared.settings).lock(|terminal, settings| {
+                // Handle the USB serial terminal.
                 c.local.usb.process(terminal);
-                if terminal.process(settings).unwrap() {
-                    update_settings::spawn().unwrap();
+                if terminal.poll(settings).unwrap() {
+                    update_settings::spawn().unwrap()
                 }
+
                 // Process any log output.
                 LOGGER.process(terminal);
             });
