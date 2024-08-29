@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2024-08-28
 
 ### Changed
 * Network stack is randomly seeded on startup so that random ports are used.
@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Heavy network traffic no longer causes Booster to encounter watchdog resets or other spurious
 resets.
 
-## [0.5.0] - 03-07-2023
+## [0.5.0] - 2023-07-03
 
 ### Added
 * Support for different ethernet daughterboards using the ENC424J00 has been added.
@@ -83,7 +83,8 @@ resets.
 ### Added
 * Output interlock threshold is now limited to a maximum of 47 dBm
 
-[Unreleased]: https://github.com/quartiq/booster/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/quartiq/booster/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/quartiq/booster/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/quartiq/booster/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/quartiq/booster/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/quartiq/booster/compare/v0.2.0...v0.3.0
