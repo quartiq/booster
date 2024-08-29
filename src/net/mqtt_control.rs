@@ -13,8 +13,10 @@ use core::fmt::Write;
 use heapless::{String, Vec};
 use serde::Serialize;
 
-use crate::settings::{flash::SerialSettingsPlatform, Settings};
+use crate::hardware::SerialSettingsPlatform;
+use crate::settings::Settings;
 use miniconf::{IntoKeys, Keys, Path, Postcard, TreeKey};
+use serial_settings::Platform;
 
 /// Default metadata message if formatting errors occur.
 const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
@@ -266,7 +268,9 @@ pub fn save_settings_to_flash(
             .len();
         data.truncate(len);
 
-        settings_platform.save_item(&mut buf[..], channel_path.0, data);
+        settings_platform
+            .store(&mut buf[..], channel_path.0.as_bytes(), &data)
+            .map_err(|_| "Failed to save to flash")?;
     }
 
     Ok(0)

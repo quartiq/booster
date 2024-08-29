@@ -330,7 +330,7 @@ pub fn setup(
     // values stored in flash. This helps preserve backwards compatibility with older Booster
     // firmware versions that didn't store settings in flash. We no longer persist settings to
     // EEPROM, so flash will have the latest and greatest settings data.
-    crate::settings::flash::load_from_flash(&mut settings, &mut flash);
+    crate::settings::flash::SerialSettingsPlatform::load(&mut settings, &mut flash);
 
     let mut mac = {
         let mut spi = {
@@ -548,6 +548,7 @@ pub fn setup(
         serial_settings::Runner::new(
             crate::settings::flash::SerialSettingsPlatform {
                 metadata,
+                _settings_marker: core::marker::PhantomData,
                 interface: serial_settings::BestEffortInterface::new(usb_serial),
                 storage: flash,
             },
