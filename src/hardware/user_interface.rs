@@ -2,10 +2,9 @@
 
 use super::Channel;
 use bit_field::BitField;
-use hal::hal::digital::{ErrorType, InputPin};
 use stm32f4xx_hal as hal;
 
-use debounced_pin::{Debounce, DebounceState, DebouncedInputPin};
+use debouncr::{Debouncer, Repeat10};
 
 /// Represents an event indicated through the GPIO buttons.
 pub enum ButtonEvent {
@@ -19,8 +18,10 @@ type Button2 = hal::gpio::gpiof::PF15<hal::gpio::Input>;
 
 /// Represents the two user input buttons on the front panel.
 pub struct UserButtons {
-    button1: InputButton<Button1, <Button1 as ErrorType>::Error>,
-    button2: InputButton<Button2, <Button2 as ErrorType>::Error>,
+    button1: Button1,
+    button2: Button2,
+    button1_state: Debouncer<u16, Repeat10>,
+    button2_state: Debouncer<u16, Repeat10>,
 }
 
 impl UserButtons {
@@ -34,8 +35,10 @@ impl UserButtons {
     /// The user interface button manager.
     pub fn new(button1: Button1, button2: Button2) -> Self {
         UserButtons {
-            button1: InputButton::new(button1),
-            button2: InputButton::new(button2),
+            button1,
+            button2,
+            button1_state: debouncr::debounce_10(false),
+            button2_state: debouncr::debounce_10(false),
         }
     }
 
@@ -45,58 +48,16 @@ impl UserButtons {
     /// An option containing any event that is indicated by the button update.
     pub fn update(&mut self) -> Option<ButtonEvent> {
         // Prioritize entering standby.
-        if self.button2.update() {
+        let button2_pressed = self.button2.is_low();
+        if let Some(debouncr::Edge::Rising) = self.button2_state.update(button2_pressed) {
             return Some(ButtonEvent::Standby);
         }
 
-        if self.button1.update() {
+        let button1_pressed = self.button1.is_low();
+        if let Some(debouncr::Edge::Rising) = self.button1_state.update(button1_pressed) {
             return Some(ButtonEvent::InterlockReset);
         }
-
         None
-    }
-}
-
-/// A structure representing one of the input buttons.
-struct InputButton<INPUT, E>
-where
-    INPUT: InputPin<Error = E>,
-    E: core::fmt::Debug,
-{
-    button: DebouncedInputPin<INPUT, debounced_pin::ActiveLow>,
-    was_active: bool,
-}
-
-impl<INPUT, E> InputButton<INPUT, E>
-where
-    INPUT: InputPin<Error = E>,
-    E: core::fmt::Debug,
-{
-    /// Construct a new input button.
-    pub fn new(button: INPUT) -> Self {
-        InputButton {
-            was_active: false,
-            button: DebouncedInputPin::new(button, debounced_pin::ActiveLow),
-        }
-    }
-
-    /// Periodically check the state of the input button.
-    ///
-    /// # Returns
-    /// True if the debounced button state has encountered an activation.
-    pub fn update(&mut self) -> bool {
-        match self.button.update().unwrap() {
-            DebounceState::Active => {
-                let result = !self.was_active;
-                self.was_active = true;
-                result
-            }
-            DebounceState::NotActive => {
-                self.was_active = false;
-                false
-            }
-            _ => false,
-        }
     }
 }
 
