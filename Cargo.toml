@@ -64,7 +64,7 @@ enc424j600 = "0.4"
 embedded-hal = "1"
 smoltcp-nal = { version = "0.5", features=["shared-stack"] }
 
-serial-settings = {git = "https://github.com/quartiq/stabilizer", rev = "5452272931e1ad70547b578052ffbb186fb72514"}
+serial-settings = "0.1"
 stm32f4xx-hal = {version = "0.21.0", features = ["stm32f407", "usb_fs"] }
 
 postcard = "1"

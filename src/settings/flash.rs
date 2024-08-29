@@ -1,184 +1,132 @@
 //! Booster NGFW Application
 
 use heapless::{String, Vec};
-use miniconf::{JsonCoreSlash, Path, Postcard, TreeKey};
-use sequential_storage::map;
+use miniconf::{JsonCoreSlash, Path, Postcard};
 
 use crate::hardware::{flash::Flash, platform};
+use embassy_futures::block_on;
 use embedded_io::Write;
-
-pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
-    structure: &mut T,
-    storage: &mut Flash,
-) {
-    // Loop over flash and read settings
-    let mut buffer = [0u8; 512];
-    for path in T::nodes::<Path<String<64>, '/'>>() {
-        let (path, _) = path.unwrap();
-        let path = path.0;
-
-        // Try to fetch the setting from flash.
-        let item = match embassy_futures::block_on(map::fetch_item::<SettingsKey, SettingsItem, _>(
-            storage,
-            storage.range(),
-            &mut sequential_storage::cache::NoCache::new(),
-            &mut buffer,
-            &SettingsKey(path.clone()),
-        )) {
-            Err(e) => {
-                log::warn!("Failed to fetch `{path}` from flash: {e:?}");
-                continue;
-            }
-            Ok(Some(item)) => item,
-            _ => continue,
-        };
-
-        // An empty vector may be saved to flash to "erase" a setting, since the H7 doesn't support
-        // multi-write NOR flash. If we see an empty vector, ignore this entry.
-        if item.0.is_empty() {
-            continue;
-        }
-
-        log::info!("Loading initial `{path}` from flash");
-
-        let flavor = postcard::de_flavors::Slice::new(&item.0);
-        if let Err(e) = structure.set_postcard_by_key(path.split('/').skip(1), flavor) {
-            log::warn!("Failed to deserialize `{path}` from flash: {e:?}");
-        }
-    }
-    log::info!("Loaded settings from Flash");
-}
+use sequential_storage::{
+    cache::NoCache,
+    map::{fetch_item, store_item, SerializationError},
+};
+use serial_settings::{BestEffortInterface, Platform, Settings};
 
 #[derive(Default, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct SettingsKey(String<64>);
+pub struct SettingsKey(Vec<u8, 128>);
 
-impl map::Key for SettingsKey {
-    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, map::SerializationError> {
+impl sequential_storage::map::Key for SettingsKey {
+    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, SerializationError> {
         Ok(postcard::to_slice(self, buffer)
-            .map_err(|_| map::SerializationError::BufferTooSmall)?
+            .map_err(|_| SerializationError::BufferTooSmall)?
             .len())
     }
 
-    fn deserialize_from(buffer: &[u8]) -> Result<(Self, usize), map::SerializationError> {
+    fn deserialize_from(buffer: &[u8]) -> Result<(Self, usize), SerializationError> {
         let original_length = buffer.len();
-        let (result, remainder) = postcard::take_from_bytes(buffer)
-            .map_err(|_| map::SerializationError::BufferTooSmall)?;
+        let (result, remainder) =
+            postcard::take_from_bytes(buffer).map_err(|_| SerializationError::BufferTooSmall)?;
         Ok((result, original_length - remainder.len()))
     }
 }
 
-#[derive(Default, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct SettingsItem(Vec<u8, 256>);
+pub struct SerialSettingsPlatform<C, const Y: usize> {
+    /// The interface to read/write data to/from serially (via text) to the user.
+    pub interface: BestEffortInterface<crate::hardware::SerialPort>,
 
-impl<'a> map::Value<'a> for SettingsItem {
-    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, map::SerializationError> {
-        if buffer.len() < self.0.len() {
-            return Err(map::SerializationError::BufferTooSmall);
-        }
+    pub _settings_marker: core::marker::PhantomData<C>,
 
-        buffer[..self.0.len()].copy_from_slice(&self.0);
-        Ok(self.0.len())
-    }
-
-    fn deserialize_from(buffer: &'a [u8]) -> Result<Self, map::SerializationError> {
-        let vec = Vec::from_slice(buffer).map_err(|_| map::SerializationError::BufferTooSmall)?;
-        Ok(Self(vec))
-    }
-}
-
-pub struct SerialSettingsPlatform {
-    pub metadata: &'static crate::hardware::metadata::ApplicationMetadata,
     pub storage: Flash,
 
-    /// The interface to read/write data to/from serially (via text) to the user.
-    pub interface: serial_settings::BestEffortInterface<crate::hardware::SerialPort>,
+    pub metadata: &'static crate::hardware::metadata::ApplicationMetadata,
 }
 
-impl SerialSettingsPlatform {
-    pub fn save_item(&mut self, buffer: &mut [u8], key: String<64>, value: Vec<u8, 256>) {
-        let path = SettingsKey(key);
-        let range = self.storage.range();
+impl<C, const Y: usize> SerialSettingsPlatform<C, Y>
+where
+    C: for<'d> JsonCoreSlash<'d, Y>,
+{
+    pub fn load(structure: &mut C, storage: &mut Flash) {
+        // Loop over flash and read settings
+        let mut buffer = [0u8; 512];
+        for path in C::nodes::<Path<String<128>, '/'>>() {
+            let (path, _node) = path.unwrap();
 
-        // Check if the settings has changed from what's currently in flash (or if it doesn't
-        // yet exist).
-        if embassy_futures::block_on(map::fetch_item::<SettingsKey, SettingsItem, _>(
-            &mut self.storage,
-            range.clone(),
-            &mut sequential_storage::cache::NoCache::new(),
-            buffer,
-            &path,
-        ))
-        .unwrap()
-        .map(|old| old.0 != value)
-        .unwrap_or(true)
-        {
-            log::info!("Storing `{}` to flash", path.0);
-            embassy_futures::block_on(map::store_item(
-                &mut self.storage,
-                range,
-                &mut sequential_storage::cache::NoCache::new(),
-                buffer,
-                &path,
-                &SettingsItem(value),
-            ))
-            .unwrap();
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum Error<F> {
-    Postcard(postcard::Error),
-    Flash(F),
-}
-
-impl<F> From<postcard::Error> for Error<F> {
-    fn from(e: postcard::Error) -> Self {
-        Self::Postcard(e)
-    }
-}
-
-impl serial_settings::Platform<5> for SerialSettingsPlatform {
-    type Interface = serial_settings::BestEffortInterface<crate::hardware::SerialPort>;
-
-    type Settings = crate::settings::Settings;
-
-    type Error = Error<<Flash as embedded_storage::nor_flash::ErrorType>::Error>;
-
-    fn save(
-        &mut self,
-        buffer: &mut [u8],
-        key: Option<&str>,
-        settings: &Self::Settings,
-    ) -> Result<(), Self::Error> {
-        let mut save_setting = |path: String<64>| {
-            let path = SettingsKey(path);
-
-            let mut data = Vec::new();
-            data.resize(data.capacity(), 0).unwrap();
-            let flavor = postcard::ser_flavors::Slice::new(&mut data);
-            let len = match settings.get_postcard_by_key(path.0.split('/').skip(1), flavor) {
+            // Try to fetch the setting from flash.
+            let value: &[u8] = match block_on(fetch_item(
+                storage,
+                storage.range(),
+                &mut NoCache::new(),
+                &mut buffer,
+                &SettingsKey(path.clone().into_inner().into_bytes()),
+            )) {
                 Err(e) => {
-                    log::warn!("Failed to save `{}` to flash: {e:?}", path.0);
-                    return;
+                    log::warn!("Failed to fetch `{}` from flash: {e:?}", path.as_str());
+                    continue;
                 }
-                Ok(slice) => slice.len(),
+                Ok(Some(value)) => value,
+                Ok(None) => continue,
             };
-            data.truncate(len);
 
-            self.save_item(buffer, path.0, data)
-        };
+            // An empty vector may be saved to flash to "erase" a setting, since the H7 doesn't support
+            // multi-write NOR flash. If we see an empty vector, ignore this entry.
+            if value.is_empty() {
+                continue;
+            }
 
-        if let Some(path) = key {
-            save_setting(path.parse().unwrap());
-        } else {
-            for path in Self::Settings::nodes::<Path<String<64>, '/'>>() {
-                let (path, _) = path.unwrap();
-                save_setting(path.0);
+            log::info!("Loading initial `{}` from flash", path.as_str());
+
+            let flavor = postcard::de_flavors::Slice::new(value);
+            if let Err(e) = structure.set_postcard_by_key(&path, flavor) {
+                log::warn!(
+                    "Failed to deserialize `{}` from flash: {e:?}",
+                    path.as_str()
+                );
             }
         }
+    }
+}
 
-        Ok(())
+impl<C, const Y: usize> Platform<Y> for SerialSettingsPlatform<C, Y>
+where
+    C: Settings<Y>,
+{
+    type Interface = BestEffortInterface<crate::hardware::SerialPort>;
+
+    type Error =
+        sequential_storage::Error<<Flash as embedded_storage::nor_flash::ErrorType>::Error>;
+
+    type Settings = C;
+
+    fn fetch<'a>(
+        &mut self,
+        buf: &'a mut [u8],
+        key: &[u8],
+    ) -> Result<Option<&'a [u8]>, Self::Error> {
+        let range = self.storage.range();
+        block_on(fetch_item(
+            &mut self.storage,
+            range,
+            &mut NoCache::new(),
+            buf,
+            &SettingsKey(Vec::try_from(key).unwrap()),
+        ))
+        .map(|v| v.filter(|v: &&[u8]| !v.is_empty()))
+    }
+
+    fn store(&mut self, buf: &mut [u8], key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
+        let range = self.storage.range();
+        block_on(store_item(
+            &mut self.storage,
+            range,
+            &mut NoCache::new(),
+            buf,
+            &SettingsKey(Vec::try_from(key).unwrap()),
+            &value,
+        ))
+    }
+
+    fn clear(&mut self, buf: &mut [u8], key: &[u8]) -> Result<(), Self::Error> {
+        self.store(buf, key, b"")
     }
 
     /// Execute a platform specific command.
@@ -251,54 +199,6 @@ impl serial_settings::Platform<5> for SerialSettingsPlatform {
                     "Invalid platform command: `{other}` is not in [`dfu`, `service`, `reboot`]"
                 )
                 .ok();
-            }
-        }
-    }
-
-    fn clear(&mut self, buffer: &mut [u8], key: Option<&str>) {
-        let mut erase_setting = |path| -> Result<(), Self::Error> {
-            let path = SettingsKey(path);
-            let range = self.storage.range();
-
-            // Check if there's an entry for this item in our flash map. The item might be a
-            // sentinel value indicating "erased". Because we can't write flash memory twice, we
-            // instead append a sentry "erased" value to the map where the serialized value is
-            // empty.
-            let maybe_item =
-                embassy_futures::block_on(map::fetch_item::<SettingsKey, SettingsItem, _>(
-                    &mut self.storage,
-                    range.clone(),
-                    &mut sequential_storage::cache::NoCache::new(),
-                    buffer,
-                    &path,
-                ))
-                .unwrap();
-
-            // An entry may exist in the map with no data as a sentinel that this path was
-            // previously erased. If we find this, there's no need to store a duplicate "item is
-            // erased" sentinel in flash. We only need to logically erase the path from the map if
-            // it existed there in the first place.
-            if matches!(maybe_item, Some(item) if !item.0.is_empty()) {
-                embassy_futures::block_on(map::store_item(
-                    &mut self.storage,
-                    range,
-                    &mut sequential_storage::cache::NoCache::new(),
-                    buffer,
-                    &path,
-                    &SettingsItem(Vec::new()),
-                ))
-                .unwrap();
-            }
-
-            Ok(())
-        };
-
-        if let Some(key) = key {
-            erase_setting(key.parse().unwrap()).unwrap();
-        } else {
-            for path in Self::Settings::nodes::<Path<String<64>, '/'>>() {
-                let (path, _) = path.unwrap();
-                erase_setting(path.0).unwrap();
             }
         }
     }
