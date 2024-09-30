@@ -129,7 +129,7 @@ dependencies = [
  "max6642",
  "mcp3221",
  "microchip-24aa02e48",
- "miniconf",
+ "miniconf 0.13.0",
  "miniconf_mqtt",
  "minimq",
  "minireq",
@@ -883,6 +883,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "miniconf"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8954fad4aada6a559edc5753c428cde9bc1d317f7672a5898b9943e7be414abc"
+dependencies = [
+ "itoa",
+ "serde",
+ "serde-json-core 0.6.0",
+]
+
+[[package]]
 name = "miniconf_derive"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -896,17 +907,17 @@ dependencies = [
 
 [[package]]
 name = "miniconf_mqtt"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "769da289221885b9bd4a1b49fc60b8a90f03fe9d69c7363aa36d260b46fd9977"
+checksum = "6b62859f66f4e14fa77ec84605845a6ad9b95447630b05535e529507db35dafc"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
  "log",
- "miniconf",
+ "miniconf 0.14.0",
  "minimq",
- "serde-json-core 0.5.1",
- "smlang 0.7.0",
+ "serde-json-core 0.6.0",
+ "smlang 0.8.0",
 ]
 
 [[package]]
@@ -1396,7 +1407,7 @@ dependencies = [
  "heapless 0.8.0",
  "log",
  "menu",
- "miniconf",
+ "miniconf 0.13.0",
  "postcard",
  "yafnv",
 ]
@@ -1424,15 +1435,6 @@ dependencies = [
 
 [[package]]
 name = "smlang"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "575de1cab77b6c852f1f61227755ca0c500d75d3e87317b67eee3ad110d1d4ca"
-dependencies = [
- "smlang-macros 0.7.0",
-]
-
-[[package]]
-name = "smlang"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1de84f9f80bbe6272174e2bfdb8cf7ce4815b218038a42161c2f21c1d872c215"
@@ -1448,18 +1450,6 @@ checksum = "c682cc05cd4c0dce61656d654b1aef023e7d4b27b58834af94b31391df081469"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "smlang-macros"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7aa9703a40b34abf1d323658a18b197f30f450358f9fd49fe8f7a687bfe301f4"
-dependencies = [
- "proc-macro2",
- "quote",
- "string_morph",
  "syn 1.0.109",
 ]
 
