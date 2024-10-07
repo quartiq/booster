@@ -52,7 +52,7 @@ encdec = { version = "0.9", default-features = false }
 crc-any = { version = "2.5.0", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
 miniconf = { version = "0.13", features = ["json-core", "derive", "postcard"]}
-miniconf_mqtt = "0.13"
+miniconf_mqtt = "0.15"
 # Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
 minimq = "0.9.0"
 w5500 = "0.5"
