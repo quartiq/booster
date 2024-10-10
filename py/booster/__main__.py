@@ -6,10 +6,17 @@ Description: Provides an API for controlling Booster NGFW over MQTT.
 """
 import argparse
 import asyncio
+import os
+import sys
+import logging
 
 from . import Booster, Action
 import miniconf
-import logging
+
+if sys.platform.lower() == "win32" or os.name.lower() == "nt":
+    from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
+
+    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 
 # A dictionary of all the available commands, their number of arguments, argument type, and help
