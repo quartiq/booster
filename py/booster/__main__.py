@@ -6,11 +6,10 @@ Description: Provides an API for controlling Booster NGFW over MQTT.
 """
 import argparse
 import asyncio
+import logging
 
 from . import Booster, Action
 import miniconf
-import logging
-
 
 # A dictionary of all the available commands, their number of arguments, argument type, and help
 # information about the command.
@@ -24,6 +23,11 @@ CMDS = {
         "type": float,
         "help": "Tune the channel RF drain current to the specified amps",
     },
+    "calibrate": {
+        "nargs": 1,
+        "type": str,
+        "help": "Calibrate a transform (input, output, or reflected)",
+    }
 }
 
 
@@ -113,9 +117,10 @@ def main():
                     print(
                         f"Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA"
                     )
+                elif command == "calibrate":
+                    await booster.calibrate(args.channel, cmd_args[0])
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(channel_configuration(parser.parse_args()))
+    asyncio.run(channel_configuration(parser.parse_args()))
 
 
 if __name__ == "__main__":
