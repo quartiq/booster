@@ -4,8 +4,14 @@ use enc424j600::EthPhy;
 use smoltcp_nal::smoltcp;
 
 impl smoltcp::phy::Device for Mac {
-    type RxToken<'a> = RxToken where Self: 'a;
-    type TxToken<'a> = TxToken<'a> where Self: 'a;
+    type RxToken<'a>
+        = RxToken
+    where
+        Self: 'a;
+    type TxToken<'a>
+        = TxToken<'a>
+    where
+        Self: 'a;
 
     fn capabilities(&self) -> smoltcp::phy::DeviceCapabilities {
         let mut caps = smoltcp::phy::DeviceCapabilities::default();

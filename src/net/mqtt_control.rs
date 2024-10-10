@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use crate::hardware::SerialSettingsPlatform;
 use crate::settings::Settings;
-use miniconf::{IntoKeys, Keys, Path, Postcard, TreeKey};
+use miniconf::{IntoKeys, Keys, Path, TreeKey};
 use serial_settings::Platform;
 
 /// Default metadata message if formatting errors occur.
@@ -262,8 +262,7 @@ pub fn save_settings_to_flash(
         let mut data: Vec<u8, 256> = Vec::new();
         data.resize(data.capacity(), 0).unwrap();
         let flavor = postcard::ser_flavors::Slice::new(&mut data);
-        let len = settings
-            .get_postcard_by_key(channel_path.split('/').skip(4), flavor)
+        let len = miniconf::postcard::get_by_key(settings, channel_path.split('/').skip(4), flavor)
             .unwrap()
             .len();
         data.truncate(len);

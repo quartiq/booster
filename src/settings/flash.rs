@@ -1,7 +1,7 @@
 //! Booster NGFW Application
 
 use heapless::{String, Vec};
-use miniconf::{JsonCoreSlash, Path, Postcard};
+use miniconf::{Path, TreeDeserializeOwned, TreeSerialize};
 
 use crate::hardware::{flash::Flash, platform};
 use embassy_futures::block_on;
@@ -43,7 +43,7 @@ pub struct SerialSettingsPlatform<C, const Y: usize> {
 
 impl<C, const Y: usize> SerialSettingsPlatform<C, Y>
 where
-    C: for<'d> JsonCoreSlash<'d, Y>,
+    C: TreeDeserializeOwned<Y> + TreeSerialize<Y>,
 {
     pub fn load(structure: &mut C, storage: &mut Flash) {
         // Loop over flash and read settings
@@ -76,7 +76,7 @@ where
             log::info!("Loading initial `{}` from flash", path.as_str());
 
             let flavor = postcard::de_flavors::Slice::new(value);
-            if let Err(e) = structure.set_postcard_by_key(&path, flavor) {
+            if let Err(e) = miniconf::postcard::set_by_key(structure, &path, flavor) {
                 log::warn!(
                     "Failed to deserialize `{}` from flash: {e:?}",
                     path.as_str()
