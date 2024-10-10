@@ -45,7 +45,6 @@ class Booster:
             client: A connected MQTT5 client.
             prefix: The prefix of the booster to control.
         """
-        self.prefix = prefix
         self.miniconf = miniconf.Miniconf(client, prefix)
 
     async def perform_action(self, action: Action, channel: str):
@@ -61,7 +60,7 @@ class Booster:
         message = json.dumps({"channel": CHANNEL[channel]})
 
         return await self.miniconf._do(
-            f"{self.prefix}/command/{action.value}", payload=message
+            f"{self.miniconf.prefix}/command/{action.value}", payload=message
         )
 
     async def tune_bias(self, channel, current):
