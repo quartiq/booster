@@ -58,16 +58,11 @@ class Booster:
         Returns:
             The received response to the action.
         """
-        message = json.dumps(
-            {
-                "channel": CHANNEL[channel],
-            }
-        )
+        message = json.dumps({"channel": CHANNEL[channel]})
 
-        response = await self.miniconf._do(
+        await self.miniconf._do(
             f"{self.prefix}/command/{action.value}", payload=message
         )
-        return json.loads(response[0])
 
     async def tune_bias(self, channel, current):
         """Set a booster RF bias current.
