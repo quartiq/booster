@@ -51,8 +51,8 @@ usbd-serial = "0.2.2"
 encdec = { version = "0.9", default-features = false }
 crc-any = { version = "2.5.0", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-miniconf = { version = "0.15", features = ["json-core", "derive", "postcard"]}
-miniconf_mqtt = "0.15"
+miniconf = { version = "0.16", features = ["json-core", "derive", "postcard"]}
+miniconf_mqtt = "0.16"
 # Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
 minimq = "0.9.0"
 w5500 = "0.5"
@@ -63,7 +63,6 @@ enum-iterator = { version = "2.1", default-features = false }
 enc424j600 = "0.4"
 embedded-hal = "1"
 smoltcp-nal = { version = "0.5", features=["shared-stack"] }
-
 serial-settings = "0.1"
 stm32f4xx-hal = {version = "0.21.0", features = ["stm32f407", "usb_fs"] }
 
@@ -81,6 +80,10 @@ version = "0.2"
 # can be removed once smoltcp is re-released.
 git = "https://github.com/smoltcp-rs/smoltcp"
 rev = "53caf70f640d5ccb3cd1492e1cb178bc7dfa3cdd"
+
+[patch.crates-io.serial-settings]
+git = "https://github.com/quartiq/stabilizer.git"
+branch = "main"
 
 [dependencies.ads7924]
 path = "ads7924"
