@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * The default output power interlock threshold has been increased from 0 dBm to 20 dBm.
 
+### Added
+
+* Booster CLI tool support for power transform calibrations.
+
 ## [0.6.0] - 2024-08-28
 
 ### Changed
