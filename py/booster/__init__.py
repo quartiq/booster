@@ -60,7 +60,7 @@ class Booster:
         """
         message = json.dumps({"channel": CHANNEL[channel]})
 
-        await self.miniconf._do(
+        return await self.miniconf._do(
             f"{self.prefix}/command/{action.value}", payload=message
         )
 
@@ -81,9 +81,10 @@ class Booster:
 
         async def set_bias(voltage):
             await self.miniconf.set(f"/channel/{channel}/bias_voltage", voltage)
-            # Sleep 100 ms for bias current to settle and for ADC to take current measurement.
+            # Sleep 200 ms for bias current to settle and for ADC to take current measurement.
             await asyncio.sleep(0.2)
             response = await self.perform_action(Action.ReadBiasCurrent, channel)
+            response = json.loads(response[0])
             vgs, ids = response["vgs"], response["ids"]
             print(f"Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA")
             return vgs, ids
