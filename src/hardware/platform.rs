@@ -52,11 +52,11 @@ pub fn shutdown_channels() {
     unsafe {
         // Disable all SIG_ON outputs. Note that the upper 16 bits of this register are the ODR
         // reset bits.
-        gpiog.bsrr.write(|w| w.bits(0xFF00_0000));
+        gpiog.bsrr().write(|w| w.bits(0xFF00_0000));
 
         // Disable all EN_PWR outputs. Note that the upper 16 bits of this register are the ODR
         // reset bits.
-        gpiod.bsrr.write(|w| w.bits(0x00FF_0000));
+        gpiod.bsrr().write(|w| w.bits(0x00FF_0000));
     }
 }
 
@@ -105,14 +105,14 @@ pub fn i2c_bus_reset(sda: &mut impl OutputPin, scl: &mut impl OutputPin, delay: 
 pub fn watchdog_detected() -> bool {
     let rcc = unsafe { &*hal::pac::RCC::ptr() };
 
-    rcc.csr.read().wdgrstf().bit_is_set()
+    rcc.csr().read().wdgrstf().bit_is_set()
 }
 
 /// Clear all of the reset flags in the device.
 pub fn clear_reset_flags() {
     let rcc = unsafe { &*hal::pac::RCC::ptr() };
 
-    rcc.csr.modify(|_, w| w.rmvf().set_bit());
+    rcc.csr().modify(|_, w| w.rmvf().set_bit());
 }
 
 pub fn start_dfu_reboot() {
