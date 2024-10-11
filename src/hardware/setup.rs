@@ -104,7 +104,7 @@ pub fn setup(
     clock: SystemTimer,
 ) -> BoosterDevices {
     // Configure RTT logging.
-    device.DBGMCU.cr.modify(|_, w| w.dbg_sleep().set_bit());
+    device.DBGMCU.cr().modify(|_, w| w.dbg_sleep().set_bit());
     rtt_target::rtt_init_print!();
 
     // Install the logger

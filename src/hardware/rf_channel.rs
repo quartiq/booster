@@ -198,18 +198,18 @@ impl Devices {
 
 /// Represents the control and status pins for an RF channel.
 pub struct ChannelPins {
-    enable_power: hal::gpio::EPin<Output>,
+    enable_power: hal::gpio::ErasedPin<Output>,
 
     // The alert and input overdrive pins have external pull resistors, so we don't need to pull
     // them internally.
-    alert: hal::gpio::EPin<Input>,
+    alert: hal::gpio::ErasedPin<Input>,
 
-    reflected_overdrive: hal::gpio::EPin<Input>,
+    reflected_overdrive: hal::gpio::ErasedPin<Input>,
 
     // There are no pullup/pulldown resistors on this input, so we will pull it down internally.
-    output_overdrive: hal::gpio::EPin<Input>,
+    output_overdrive: hal::gpio::ErasedPin<Input>,
 
-    signal_on: hal::gpio::EPin<Output>,
+    signal_on: hal::gpio::ErasedPin<Output>,
 
     output_power: AdcPin,
     reflected_power: AdcPin,
@@ -228,11 +228,11 @@ impl ChannelPins {
     /// * `output_power` - The pin to use for measuring transmitted power.
     /// * `reflected_power` - The pin to use for measuring reflected power.
     pub fn new(
-        enable_power: hal::gpio::EPin<Output>,
-        alert: hal::gpio::EPin<Input>,
-        reflected_overdrive: hal::gpio::EPin<Input>,
-        output_overdrive: hal::gpio::EPin<Input>,
-        signal_on: hal::gpio::EPin<Output>,
+        enable_power: hal::gpio::ErasedPin<Output>,
+        alert: hal::gpio::ErasedPin<Input>,
+        reflected_overdrive: hal::gpio::ErasedPin<Input>,
+        output_overdrive: hal::gpio::ErasedPin<Input>,
+        signal_on: hal::gpio::ErasedPin<Output>,
         output_power: AdcPin,
         reflected_power: AdcPin,
     ) -> Self {
