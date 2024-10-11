@@ -65,7 +65,7 @@ jobs:
     environment: hitl
 
     steps:
-      - uses: LouisBrunner/checks-action@v1.1.1
+      - uses: LouisBrunner/checks-action@v2.0.0
         id: hitl-check
         with:
           repo: ${{ github.repository }}
@@ -77,7 +77,7 @@ jobs:
           output: |
             {"summary": "Starting..."}
 
-      - uses: peter-evans/repository-dispatch@v1
+      - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.DISPATCH_PAT }}
           event-type: booster
@@ -85,7 +85,7 @@ jobs:
           client-payload: |
             {"github": ${{ toJson(github) }}, "check_id": ${{steps.hitl-check.outputs.check_id}}}
 
-      - uses: fountainhead/action-wait-for-check@v1.0.0
+      - uses: fountainhead/action-wait-for-check@v1.2.0
         id: status
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
