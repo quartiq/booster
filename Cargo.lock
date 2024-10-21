@@ -913,9 +913,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.16.0"
+version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d321db7bd2b8c1b203558fbf25e384617859faec309ea6357077792b50d20cd"
+checksum = "baf52da0fbf409a8a008b661e476127fa79b954169af83586cc1ceebb15e5ccb"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -926,9 +926,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.16.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "768efa8caf55896ba67abd266c1969de89b3b400c13d8f7860fedd1eef8c7596"
+checksum = "4720786aa0863bd853f54a95da244c2598d2216ba6711b7b95d8043aa9a83e43"
 dependencies = [
  "darling 0.20.10",
  "proc-macro2",
