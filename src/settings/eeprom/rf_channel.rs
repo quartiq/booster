@@ -77,13 +77,20 @@ impl DecodeOwned for ChannelState {
 /// Represents booster channel-specific configuration values.
 #[derive(Tree, Encode, DecodeOwned, Debug, Copy, Clone, PartialEq)]
 pub struct ChannelSettings {
+    // dBm
     #[tree(validate=Self::validate_output_interlock)]
     pub output_interlock_threshold: f32,
+
+    // V
     #[tree(validate=Self::validate_bias_voltage)]
     pub bias_voltage: f32,
+
     pub state: ChannelState,
+
     pub input_power_transform: LinearTransformation,
+
     pub output_power_transform: LinearTransformation,
+
     pub reflected_power_transform: LinearTransformation,
 }
 
@@ -91,25 +98,29 @@ impl Default for ChannelSettings {
     /// Generate default booster channel data.
     fn default() -> Self {
         Self {
-            output_interlock_threshold: 0.0,
+            // dBm
+            output_interlock_threshold: 20.0,
+
+            // V
             bias_voltage: -3.2,
+
             state: ChannelState::Off,
 
             // When operating at 100MHz, the power detectors specify the following output
-            // characteristics for -10 dBm to 10 dBm (the equation uses slightly different coefficients
-            // for different power levels and frequencies):
+            // characteristics for -10 dBm to 10 dBm:
             //
             // dBm = V(Vout) / .035 V/dB - 35.6 dBm
             //
             // All of the power meters are preceded by attenuators which are incorporated in
             // the offset.
             output_power_transform: LinearTransformation::new(1.0 / 0.035, -35.6 + 19.8 + 10.0),
-            // The input power and reflected power detectors are then passed through an
-            // op-amp with gain 1.5x - this modifies the slope from 35mV/dB to 52.5mV/dB
+
+            // The input power and reflected power detectors have an op-amp gain of 1.5
             reflected_power_transform: LinearTransformation::new(
                 1.0 / 1.5 / 0.035,
                 -35.6 + 19.8 + 10.0,
             ),
+
             input_power_transform: LinearTransformation::new(1.0 / 1.5 / 0.035, -35.6 + 8.9),
         }
     }
@@ -131,8 +142,7 @@ impl ChannelSettings {
         }
 
         // Verify the interlock is mappable to a DAC threshold.
-        let output_interlock_voltage = self.output_power_transform.invert(new);
-        if !(0.00..=ad5627::MAX_VOLTAGE).contains(&output_interlock_voltage) {
+        if !(0.0..=ad5627::MAX_VOLTAGE).contains(&self.output_power_transform.invert(new)) {
             return Err("Output interlock threshold voltage out of range");
         }
 
