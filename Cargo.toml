@@ -58,7 +58,7 @@ minimq = "0.9.0"
 w5500 = "0.5"
 smlang= "0.8"
 minireq = "0.5"
-rtt-target = "0.5"
+rtt-target = "0.6"
 enum-iterator = { version = "2.1", default-features = false }
 enc424j600 = "0.4"
 embedded-hal = "1"
