@@ -1262,11 +1262,12 @@ dependencies = [
 
 [[package]]
 name = "rtt-target"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10b34c9e6832388e45f3c01f1bb60a016384a0a4ad80cdd7d34913bed25037f0"
+checksum = "4235cd78091930e907d2a510adb0db1369e82668eafa338f109742fa0c83059d"
 dependencies = [
  "critical-section",
+ "portable-atomic",
  "ufmt-write",
 ]
 
