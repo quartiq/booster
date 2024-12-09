@@ -74,7 +74,7 @@ pub struct TxToken<'a> {
     mac: &'a mut Mac,
 }
 
-impl<'a> smoltcp::phy::TxToken for TxToken<'a> {
+impl smoltcp::phy::TxToken for TxToken<'_> {
     fn consume<R, F>(self, len: usize, f: F) -> R
     where
         F: FnOnce(&mut [u8]) -> R,
