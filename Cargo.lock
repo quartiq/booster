@@ -494,29 +494,19 @@ dependencies = [
 
 [[package]]
 name = "encdec"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25de94e10baa85551f7c65730423239370ed5bed60bf8d2a9cbf2683327ba421"
+checksum = "2ec7aafa197dadfa18575eb62d05adaec89237d0fb0663baf2e141529b3a20b0"
 dependencies = [
- "encdec-base 0.9.0",
+ "encdec-base",
  "encdec-macros",
 ]
 
 [[package]]
 name = "encdec-base"
-version = "0.8.3"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f8542ff2a35da7fc94ffcf280f35dc759219c4b48fa930e0a0f268220d7fb6a"
-dependencies = [
- "byteorder",
- "num-traits",
-]
-
-[[package]]
-name = "encdec-base"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "516ae3c7d00515548bf26a6531883335ceac2e9cde4938e70feea7456569be09"
+checksum = "5abc9d559c177b2a75892e92c1812216e5cec7e1a14e0682b25ed6f5c0bd78a2"
 dependencies = [
  "byteorder",
  "num-traits",
@@ -524,12 +514,12 @@ dependencies = [
 
 [[package]]
 name = "encdec-macros"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15497932aae6b53bf8548cc63c65929b4fab6be54e28709c80fc72f5707eeed"
+checksum = "ace893fa216d3c4cd14239cf2807b48c1ad8abcf583d779a29f410cd35cff413"
 dependencies = [
  "darling 0.14.4",
- "encdec-base 0.8.3",
+ "encdec-base",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
