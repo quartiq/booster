@@ -48,7 +48,7 @@ bbqueue = "0.5"
 embedded-hal-bus = "0.2"
 usb-device = "0.3.2"
 usbd-serial = "0.2.2"
-encdec = { version = "0.9", default-features = false }
+encdec = { version = "0.10", default-features = false }
 crc-any = { version = "2.5.0", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
 miniconf = { version = "0.16", features = ["json-core", "derive", "postcard"]}
