@@ -1,0 +1,378 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Booster Documentation</title>
+                <meta name="robots" content="noindex" />
+                
+
+        <!-- Custom HTML head -->
+        
+
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+                        <link rel="shortcut icon" href="favicon.png">
+                <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+                <link rel="stylesheet" href="css/print.css" media="print">
+        
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+                <link rel="stylesheet" href="fonts/fonts.css">
+        
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+            </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="front-panel.html"><strong aria-hidden="true">2.</strong> Front Panel Operation</a></li><li class="chapter-item expanded "><a href="network-interface.html"><strong aria-hidden="true">3.</strong> Network Interface</a></li><li class="chapter-item expanded "><a href="firmware-update.html"><strong aria-hidden="true">4.</strong> Appendix: Firmware Update</a></li></ol>            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                                                <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                                            </div>
+
+                    <h1 class="menu-title">Booster Documentation</h1>
+
+                    <div class="right-buttons">
+                                                <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                                                                        <a href="https://github.com/quartiq/booster" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                                                
+                    </div>
+                </div>
+
+                                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="booster-ngfw-next-generation-firmware-user-manual"><a class="header" href="#booster-ngfw-next-generation-firmware-user-manual">Booster NGFW (Next-Generation Firmware) User Manual</a></h1>
+<p>This document is intended to provide an overview of the Booster NG firmware, which is a rewrite of
+Booster firmware to align it with other projects, resolve qualify issues, and enable continued
+maintenance and improvements.</p>
+<h1 id="hardware"><a class="header" href="#hardware">Hardware</a></h1>
+<p><img src="assets/booster-creotech-v1.3.jpg" alt="Booster Creotech Front Panel" /></p>
+<p>Booster is an 8 channel RF power amplifier in the Sinara open hardware ecosystem.
+The open hardware designs and hardware discussions are located at
+https://github.com/sinara-hw/Booster/wiki.
+The hardware is available from Creotech, QUARTIQ, Technosystem, and M-Labs.</p>
+<h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
+<p>There are three ways to interface with the Booster application that are covered in the chapters of
+this manual:</p>
+<ol>
+<li>Pressing any of two the front-panel buttons</li>
+<li>Communicating with Booster over the USB port</li>
+<li>Communicating with Booster over ethernet via MQTT</li>
+</ol>
+<h1 id="fault-mode"><a class="header" href="#fault-mode">Fault Mode</a></h1>
+<p>When Booster encounters a software fault, it goes into a safe mode where no channels will be
+enabled. To acknowledge and clear the fault, utilize the <code>service</code> command from the front panel USB
+port.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="front-panel"><a class="header" href="#front-panel">Front Panel</a></h1>
+<ul>
+<li><a href="front-panel.html#user-buttons">User Buttons</a></li>
+<li><a href="front-panel.html#channel-led-indications">Channel LED Indications</a>
+<ul>
+<li><a href="front-panel.html#example">Example</a></li>
+</ul>
+</li>
+<li><a href="front-panel.html#ethernet-port">Ethernet Port</a></li>
+<li><a href="front-panel.html#usb-port">USB Port</a></li>
+</ul>
+<p>The front panel of Booster is used to physically clear channel interlocks to enable channels. It is also used to power down Booster and observe the operational status of the
+channels and ethernet interface.</p>
+<h2 id="user-buttons"><a class="header" href="#user-buttons">User Buttons</a></h2>
+<p>There are two buttons on the front of booster. One is labeled &quot;Interlock Reset&quot; and the other is
+labeled &quot;Standby&quot;.</p>
+<p>The &quot;Standby&quot; button places all channels into an RF-disabled state. In this state, the channel is
+not powered and no output will be generated. Pressing the &quot;Standby&quot; button repeatedly will not have
+any effect.</p>
+<p>The &quot;Interlock Reset&quot; has the effect of powering up all of the channels and resetting any tripped
+interlocks. After powering up, channels require a few hundred milliseconds to fully enable, so there
+is a short delay after the button press before outputs fully enable. The &quot;Interlock Reset&quot; button
+may be pressed while all channels are already powered to reset any tripped interlocks to re-enable
+RF output.</p>
+<p>There is also a much smaller, recessed button labeled &quot;DFU Bootloader&quot;. This button may be pressed
+while power is cycled to Booster to force the device into DFU mode. Booster NGFW exposes a mechanism
+to reset to DFU mode via the USB port, so this button is not generally necessary.</p>
+<h1 id="channel-led-indications"><a class="header" href="#channel-led-indications">Channel LED Indications</a></h1>
+<p>Each output channel is composed of 3 LEDs - one red, one yellow/orange, and one green. If no RF
+module is installed for a given channel, no LEDs on the channel will be illuminated. If an RF
+channel is detected, at least one of the LEDs will illuminate.</p>
+<p>The red LED is illuminated if a channel fault is detected. A fault cannot be cleared by the
+&quot;Interlock Reset&quot; button, the channel is powered down, and the channel cannot be used. The only way
+to clear this type of error is to power cycle Booster. The red LED nominally indicates a fault at a
+hardware level that likely requires further investigation. Any indication of the red LED should
+warrant further investigation of the device.</p>
+<p>The yellow LED and the green LED are used to indicate the status of a 
+channel. When the yellow LED is illuminated, the RF input is disabled on the channel. When a
+channel is in standby or powered down, the yellow LED will illuminate without the green LED.</p>
+<p>The green LED indicates that the channel is powered.  If only the green LED is illuminated,
+the channel is operational and outputting normally. If the green LED and the yellow LED are both
+illuminated, this indicates that an channel interlock has tripped. The channel may be reset from
+this state by pressing the &quot;Interlock Reset&quot; button.</p>
+<h3 id="example"><a class="header" href="#example">Example</a></h3>
+<p><img src="assets/user-interface-example.png" alt="Front Panel Example" /></p>
+<p><em>Figure 1</em>: Sample Booster front-panel indications.</p>
+<p>In the example above, it can be seen that CH0 is enabled.</p>
+<p>Channel 2 is enabled, but one of the protection interlocks has tripped. This channel interlock can
+be cleared by pressing the &quot;Interlock Reset&quot; button after the trip source has been removed.</p>
+<p>Channels 1 and 3-7 are all powered up, but outputs are disabled.</p>
+<h1 id="ethernet-port"><a class="header" href="#ethernet-port">Ethernet Port</a></h1>
+<p>The ethernet port contains a green and an orange/yellow LED. The yellow LED illuminates when Booster
+has successfully connected with an ethernet switch. The green LED will flash whenever there is
+ethernet traffic detected.</p>
+<h1 id="usb-port"><a class="header" href="#usb-port">USB Port</a></h1>
+<p>The USB port on booster enumerates as a serial port and can be opened with any terminal emulation
+program (e.g. Pyserial's miniterm, TeraTerm, picoterm, putty, or your desired serial port reader).
+The USB port serves two purposes:</p>
+<ul>
+<li>Human-readable logging</li>
+<li>Basic network and MQTT configuration</li>
+</ul>
+<p>No control of the channels is exposed over the USB serial port. Channels may only be controlled
+over MQTT or through the front-panel buttons.</p>
+<p>When connecting to the USB port, a help menu is displayed to the user to outline what can be
+configured over the USB port. Any configuration made over the USB port will not take effect
+immediately - in order for new configurations to apply, booster must be reset.</p>
+<p>The USB port allows for configuration of:</p>
+<ul>
+<li>The MQTT ID of Booster</li>
+<li>The MQTT broker IP address</li>
+<li>Default fan speeds</li>
+</ul>
+<p>Additionally, the USB port allows the user to:</p>
+<ul>
+<li>Read the MAC address</li>
+<li>Reboot the device</li>
+<li>Enter DFU mode remotely for upgrading firmware over USB</li>
+<li>Request device service information</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ethernet-telemetry-and-control"><a class="header" href="#ethernet-telemetry-and-control">Ethernet Telemetry and Control</a></h1>
+<ul>
+<li><a href="network-interface.html#measurement-units">Measurement Units</a></li>
+<li><a href="network-interface.html#telemetry">Telemetry</a></li>
+<li><a href="network-interface.html#settings">Settings</a></li>
+<li><a href="network-interface.html#control">Control</a></li>
+</ul>
+<p>Booster uses MQTT for telemetry reporting, settings configuration, and control of the channels. All
+booster MQTT topics are prefixed with <code>dt/sinara/booster/&lt;ID&gt;</code>, where <ID> is the MAC address of the
+device by default(e.g. <code>12-34-56-78-90-ab</code>). The ID is configurable via the USB port.</p>
+<p>Please refer to <a href="https://quartiq.de/stabilizer/setup.html#mqtt-broker">Stabilizer's documentation</a>
+for instructions on getting MQTT configured.</p>
+<p>We recommend using <a href="http://mqtt-explorer.com/"><code>mqtt-explorer</code></a> to view telemetry and run-time
+settings.</p>
+<h2 id="measurement-units"><a class="header" href="#measurement-units">Measurement Units</a></h2>
+<p>Booster uses SI units (Volt, Ampere, Celsius) for telemetry and settings. Power measurements are
+specified in dBm.</p>
+<h2 id="telemetry"><a class="header" href="#telemetry">Telemetry</a></h2>
+<p>Telemetry is generated on the
+<code>&lt;prefix&gt;/telemetry/ch&lt;N&gt;</code> topics, where N is an integer from 0 to 7. Telemetry is only reported for
+connected channels. Telemetry is transmitted in human-readable JSON format for logging purposes.</p>
+<p><img src="assets/booster-telemetry-example.png" alt="Sample Booster Telemtry Topics" /></p>
+<p><em>Figure 1</em>: Example display of Booster telemetry on all 8 channels reported via MQTT Explorer.</p>
+<h2 id="settings"><a class="header" href="#settings">Settings</a></h2>
+<p>Booster leverages <a href="https://crates.io/crates/miniconf"><code>miniconf</code></a> to manage run-time settings and
+configuration identical to Stabilizer. Please refer to <a href="https://quartiq.de/stabilizer/usage.html#miniconf-run-time-settings">Stabilizer's Miniconf
+Documentation</a> to get
+started.</p>
+<p>When settings are saved in booster, the saved channel configuration will be applied to
+the channel when Booster boots. Note that saving channel settings overwrites any existing channel
+configuration and calibrations including those from the old legacy firmware. The legacy firmware
+settings are incompatible.</p>
+<p><img src="assets/booster-settings-example.png" alt="Sample Booster Settings" /></p>
+<p><em>Figure 2</em>: Example display of Booster settings tree reported via MQTT Explorer.</p>
+<h2 id="control"><a class="header" href="#control">Control</a></h2>
+<p>Booster supports channel bias tuning and saving active channel settings configuration to EEPROM
+via the Booster python package located in the <code>py</code> folder of the repository. Execute the
+following to install the package and see how to use it:</p>
+<pre><code class="language-sh">pip install py
+python -m booster --help
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="firmware-upgrade-instructions"><a class="header" href="#firmware-upgrade-instructions">Firmware Upgrade Instructions</a></h1>
+<p>These instructions provide information on how to upgrade the firmware on Booster to a newer release.</p>
+<p><strong>Prerequisites</strong></p>
+<ul>
+<li>Ensure <code>dfu-util</code> is installed. On Ubuntu, install it from <code>apt</code> using <code>sudo apt-get install dfu-util</code></li>
+<li>If building your own firmware, <a href="https://github.com/rust-embedded/cargo-binutils#installation"><code>cargo-binutils</code></a>) must be installed:</li>
+</ul>
+<pre><code>cargo install cargo-binutils
+rustup component add llvm-tools-preview
+</code></pre>
+<p>The following instructions describe the process of uploading a new firmware image over the DFU
+Bootloader USB interface.</p>
+<ol>
+<li>
+<p>Generate the firmware image: <code>cargo build</code></p>
+<ul>
+<li>Note: For production usage, you should append <code>--release</code> to build the firmware with more optimization and slightly less debugging information.</li>
+<li>Note: You may also use the latest <a href="https://github.com/quartiq/booster/releases">pre-built</a> assets instead of building firmware.</li>
+</ul>
+</li>
+<li>
+<p>Generate the binary file for your firmware build: <code>cargo objcopy -- -O binary booster.bin</code></p>
+<ul>
+<li>Note: If you built with <code>--release</code>, use the commmand: <code>cargo objcopy --release -- -O binary booster.bin</code></li>
+</ul>
+</li>
+<li>
+<p>Reset Booster into DFU mode. This can be done via the USB serial port or by doing the following:</p>
+<ul>
+<li>Insert a pin into the DFU Bootloader hole to press the DFU button</li>
+<li>While the DFU button is pressed, power cycle booster by turning off the power switch for at
+least 10 seconds and then turn the power switch on.</li>
+</ul>
+</li>
+<li>
+<p>Verify Booster is in DFU mode: <code>dfu-util -l</code> should show 4 entries beginning with <code>Found DFU: [0483:df11]</code></p>
+</li>
+<li>
+<p>Upload the DFU file to Booster:</p>
+</li>
+</ol>
+<pre><code>dfu-util -a 0 -s 0x08000000:leave --download booster.bin
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                        
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                            </nav>
+
+        </div>
+
+        
+        
+        
+                <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        
+        
+                <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+                        <script type="text/javascript">
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+                
+    </body>
+</html>
