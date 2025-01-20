@@ -39,7 +39,7 @@ rtic-monotonics = { version = "2.0", features = ["cortex-m-systick"] }
 rand_core = "0.6"
 mono-clock = "0.1"
 cortex-m-log = { version = "0.8.0", features = ["log-integration"] }
-log = "0.4.22"
+log = "0.4.25"
 heapless = { version = "0.8", features = ["serde"] }
 bit_field = "0.10.2"
 debouncr = "0.2"
