@@ -54,7 +54,7 @@ panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
 miniconf = { version = "0.16", features = ["json-core", "derive", "postcard"]}
 miniconf_mqtt = "0.16"
 # Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
-minimq = "0.9.0"
+minimq = "0.10.0"
 w5500 = "0.5"
 smlang= "0.8"
 minireq = "0.5"
