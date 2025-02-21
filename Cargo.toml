@@ -62,7 +62,7 @@ rtt-target = "0.6"
 enum-iterator = { version = "2.1", default-features = false }
 enc424j600 = "0.4"
 embedded-hal = "1"
-smoltcp-nal = { version = "0.5", features=["shared-stack"] }
+smoltcp-nal = { version = "0.6", features=["shared-stack"] }
 serial-settings = "0.1"
 stm32f4xx-hal = {version = "0.22.1", features = ["stm32f407", "usb_fs"] }
 
