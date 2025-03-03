@@ -3,3 +3,5 @@
 .gdb_history
 target/
 */Cargo.lock
+py/booster.egg-info
+py/build
