@@ -51,6 +51,6 @@ Booster supports channel bias tuning and saving active channel settings configur
 via the Booster python package located in the `py` folder of the repository. Execute the
 following to install the package and see how to use it:
 ```sh
-pip install py
+pip install ./py
 python -m booster --help
 ```
