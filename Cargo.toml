@@ -51,7 +51,7 @@ usbd-serial = "0.2.2"
 encdec = { version = "0.10", default-features = false }
 crc-any = { version = "2.5.0", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-miniconf = { version = "0.16", features = ["json-core", "derive", "postcard"]}
+miniconf = { version = "0.16", features = ["json-core", "derive", "postcard"] }
 miniconf_mqtt = "0.16"
 # Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
 minimq = "0.9.0"
@@ -70,6 +70,7 @@ postcard = "1"
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }
+git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2"] }
 
 [dependencies.ad5627]
 path = "ad5627"
@@ -83,7 +84,7 @@ rev = "53caf70f640d5ccb3cd1492e1cb178bc7dfa3cdd"
 
 [patch.crates-io.serial-settings]
 git = "https://github.com/quartiq/stabilizer.git"
-branch = "main"
+rev = "f3d8eddc208eec9eb573f7f815159f52286cad62" # for miniconf 0.16 dependency
 
 [dependencies.ads7924]
 path = "ads7924"
