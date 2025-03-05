@@ -72,7 +72,7 @@ pub fn setup(
 
     interface
         .routes_mut()
-        .add_default_ipv4_route(settings.gateway.0)
+        .add_default_ipv4_route((*settings.gateway).0)
         .unwrap();
 
     let mut sockets = smoltcp::iface::SocketSet::new(&mut net_store.sockets[..]);
@@ -92,10 +92,10 @@ pub fn setup(
         &mut net_store.dns_storage[..],
     ));
 
-    if settings.ip.0.address().is_unspecified() {
+    if (*settings.ip).0.address().is_unspecified() {
         sockets.add(smoltcp::socket::dhcpv4::Socket::new());
     } else {
-        interface.update_ip_addrs(|addrs| addrs.push(settings.ip.0.into()).unwrap());
+        interface.update_ip_addrs(|addrs| addrs.push((*settings.ip).0.into()).unwrap());
     }
 
     (interface, sockets)
