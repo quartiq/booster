@@ -253,7 +253,7 @@ pub fn save_settings_to_flash(
     let channel_root: Path<_, '/'> = Path("/booster/channel");
 
     let mut buf = [0u8; 256];
-    for channel_path in Settings::nodes::<Path<String<64>, '/'>>()
+    for channel_path in Settings::nodes::<Path<String<64>, '/'>, 4>()
         .root(channel_root.into_keys().chain([request.channel as usize]))
         .unwrap()
     {
