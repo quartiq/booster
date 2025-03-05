@@ -46,7 +46,7 @@ pub enum Mac {
 }
 
 pub type SerialSettingsPlatform =
-    crate::settings::flash::SerialSettingsPlatform<crate::settings::Settings, 5>;
+    crate::settings::flash::SerialSettingsPlatform<crate::settings::Settings>;
 
 pub type SerialTerminal = serial_settings::Runner<'static, SerialSettingsPlatform, 5>;
 
