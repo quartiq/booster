@@ -1,7 +1,6 @@
 //! Booster NGFW NVM settings
 
 use core::fmt::Write;
-use core::str::FromStr;
 use heapless::String;
 use miniconf::{Leaf, StrLeaf, Tree};
 
@@ -31,8 +30,8 @@ impl serial_settings::Settings for Settings {
         write!(&mut self.id, "{}", self.mac).unwrap();
 
         self.booster.reset();
-        self.ip = Leaf(Cidr::from_str("0.0.0.0/0").unwrap());
-        self.broker = StrLeaf(String::from_str("mqtt").unwrap());
-        self.gateway = Leaf(IpAddr::from_str("0.0.0.0").unwrap());
+        self.ip = Leaf("0.0.0.0/0".parse().unwrap());
+        self.broker = StrLeaf("mqtt".parse().unwrap());
+        self.gateway = Leaf("0.0.0.0".parse().unwrap());
     }
 }
