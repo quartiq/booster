@@ -31,8 +31,8 @@ impl serial_settings::Settings for Settings {
         write!(&mut self.id, "{}", self.mac).unwrap();
 
         self.booster.reset();
-        self.ip = Leaf::from(Cidr::from_str("0.0.0.0/0").unwrap());
-        self.broker = StrLeaf::from(String::from_str("mqtt").unwrap());
-        self.gateway = Leaf::from(IpAddr::from_str("0.0.0.0").unwrap());
+        self.ip = Leaf(Cidr::from_str("0.0.0.0/0").unwrap());
+        self.broker = StrLeaf(String::from_str("mqtt").unwrap());
+        self.gateway = Leaf(IpAddr::from_str("0.0.0.0").unwrap());
     }
 }

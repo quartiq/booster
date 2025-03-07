@@ -113,12 +113,12 @@ impl DecodeOwned for ChannelSettings {
         let (inner, inner_len) = ChannelSettingsDecoder::decode_owned(buff)?;
         Ok((
             ChannelSettings {
-                output_interlock_threshold: Leaf::from(inner.output_interlock_threshold),
-                bias_voltage: Leaf::from(inner.bias_voltage),
-                state: Leaf::from(inner.state),
-                input_power_transform: Leaf::from(inner.input_power_transform),
-                output_power_transform: Leaf::from(inner.output_power_transform),
-                reflected_power_transform: Leaf::from(inner.reflected_power_transform),
+                output_interlock_threshold: Leaf(inner.output_interlock_threshold),
+                bias_voltage: Leaf(inner.bias_voltage),
+                state: Leaf(inner.state),
+                input_power_transform: Leaf(inner.input_power_transform),
+                output_power_transform: Leaf(inner.output_power_transform),
+                reflected_power_transform: Leaf(inner.reflected_power_transform),
             },
             inner_len,
         ))
@@ -130,12 +130,12 @@ impl Default for ChannelSettings {
     fn default() -> Self {
         Self {
             // dBm
-            output_interlock_threshold: Leaf::from(20.0),
+            output_interlock_threshold: Leaf(20.0),
 
             // V
-            bias_voltage: Leaf::from(-3.2),
+            bias_voltage: Leaf(-3.2),
 
-            state: Leaf::from(ChannelState::Off),
+            state: Leaf(ChannelState::Off),
 
             // When operating at 100MHz, the power detectors specify the following output
             // characteristics for -10 dBm to 10 dBm:
@@ -144,21 +144,18 @@ impl Default for ChannelSettings {
             //
             // All of the power meters are preceded by attenuators which are incorporated in
             // the offset.
-            output_power_transform: Leaf::from(LinearTransformation::new(
+            output_power_transform: Leaf(LinearTransformation::new(
                 1.0 / 0.035,
                 -35.6 + 19.8 + 10.0,
             )),
 
             // The input power and reflected power detectors have an op-amp gain of 1.5
-            reflected_power_transform: Leaf::from(LinearTransformation::new(
+            reflected_power_transform: Leaf(LinearTransformation::new(
                 1.0 / 1.5 / 0.035,
                 -35.6 + 19.8 + 10.0,
             )),
 
-            input_power_transform: Leaf::from(LinearTransformation::new(
-                1.0 / 1.5 / 0.035,
-                -35.6 + 8.9,
-            )),
+            input_power_transform: Leaf(LinearTransformation::new(1.0 / 1.5 / 0.035, -35.6 + 8.9)),
         }
     }
 }

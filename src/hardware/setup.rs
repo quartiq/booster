@@ -320,10 +320,10 @@ pub fn setup(
 
     let mut settings = crate::settings::Settings {
         mac: eeprom_settings.mac,
-        ip: Leaf::from(eeprom_settings.ip),
-        broker: StrLeaf::from(eeprom_settings.broker),
-        gateway: Leaf::from(eeprom_settings.gateway),
-        id: StrLeaf::from(eeprom_settings.id),
+        ip: Leaf(eeprom_settings.ip),
+        broker: StrLeaf(eeprom_settings.broker),
+        gateway: Leaf(eeprom_settings.gateway),
+        id: StrLeaf(eeprom_settings.id),
         booster: runtime_settings,
     };
 

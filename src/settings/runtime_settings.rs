@@ -23,8 +23,8 @@ impl Default for RuntimeSettings {
     fn default() -> Self {
         Self {
             channel: [None; 8],
-            fan_speed: Leaf::from(DEFAULT_FAN_SPEED),
-            telemetry_period: Leaf::from(DEFAULT_TELEMETRY_PERIOD_SECS),
+            fan_speed: Leaf(DEFAULT_FAN_SPEED),
+            telemetry_period: Leaf(DEFAULT_TELEMETRY_PERIOD_SECS),
         }
     }
 }
