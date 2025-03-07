@@ -168,16 +168,18 @@ impl ChannelSettings {
 
     fn validate_output_interlock_threshold(&mut self, depth: usize) -> Result<usize, &'static str> {
         // Verify the output interlock is within acceptable values.
-        if *self.output_interlock_threshold >= platform::MAX_OUTPUT_POWER_DBM {
+        if *self.output_interlock_threshold > platform::MAX_OUTPUT_POWER_DBM {
+            *self.output_interlock_threshold = platform::MAX_OUTPUT_POWER_DBM;
             return Err("Output interlock threshold too high");
         }
 
         // Verify the interlock is mappable to a DAC threshold.
-        if !(0.0..=ad5627::MAX_VOLTAGE).contains(
-            &self
-                .output_power_transform
-                .invert(*self.output_interlock_threshold),
-        ) {
+        let dac_voltage = self
+            .output_power_transform
+            .invert(*self.output_interlock_threshold);
+        let dac_voltage_clamped = dac_voltage.clamp(0.0, ad5627::MAX_VOLTAGE);
+        if dac_voltage_clamped != dac_voltage {
+            *self.output_interlock_threshold = self.output_power_transform.map(dac_voltage_clamped);
             return Err("Output interlock threshold voltage out of range");
         }
 
