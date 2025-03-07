@@ -31,11 +31,8 @@ impl Default for RuntimeSettings {
 
 impl RuntimeSettings {
     fn validate_fan_speed(&mut self, depth: usize) -> Result<usize, &'static str> {
-        if (0.0..=1.0).contains(&*self.fan_speed) {
-            Ok(depth)
-        } else {
-            Err("Invalid fan speed. Must be within range [0, 1.0]")
-        }
+        *self.fan_speed = self.fan_speed.clamp(0.0, 1.0);
+        Ok(depth)
     }
 
     pub fn reset(&mut self) {

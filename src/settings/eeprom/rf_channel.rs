@@ -165,11 +165,8 @@ impl Default for ChannelSettings {
 
 impl ChannelSettings {
     fn validate_bias_voltage(&mut self, depth: usize) -> Result<usize, &'static str> {
-        if (0.0..=platform::BIAS_DAC_VCC).contains(&-(*self.bias_voltage)) {
-            Ok(depth)
-        } else {
-            Err("Bias voltage out of range")
-        }
+        *self.bias_voltage = -(-*self.bias_voltage).clamp(0.0, platform::BIAS_DAC_VCC);
+        Ok(depth)
     }
 
     fn validate_output_interlock_threshold(&mut self, depth: usize) -> Result<usize, &'static str> {
