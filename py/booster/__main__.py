@@ -51,6 +51,22 @@ def parse_command(entry):
         raise Exception(f'Failed to parse command "{entry}": {exception}')
 
 
+class CommaSeparatedChannelList(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        channels = [int(channel) for channel in values.split(',')]
+        for channel in channels:
+            self._validate_channel(parser, channel)
+        setattr(
+            namespace,
+            self.dest,
+            channels
+        )
+
+    def _validate_channel(self, parser, channel):
+        if channel not in range(8):
+            parser.error('channel must be between 0 and 7')
+
+
 def main():
     """Main program entry point."""
     parser = argparse.ArgumentParser(
@@ -71,9 +87,8 @@ def main():
     )
     parser.add_argument(
         "--channel",
-        required=True,
-        type=int,
-        choices=range(8),
+        default=[0, 1, 2, 3, 4, 5, 6, 7],
+        action=CommaSeparatedChannelList,
         help="The RF channel index to control",
     )
     parser.add_argument(
@@ -109,16 +124,17 @@ def main():
 
             for command in args.commands:
                 command, cmd_args = parse_command(command)
-                if command == "save":
-                    await booster.perform_action(Action.Save, args.channel)
-                    print(f"Channel {args.channel} configuration saved")
-                elif command == "tune":
-                    vgs, ids = await booster.tune_bias(args.channel, cmd_args[0])
-                    print(
-                        f"Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA"
-                    )
-                elif command == "calibrate":
-                    await booster.calibrate(args.channel, cmd_args[0])
+                for channel in args.channel:
+                    if command == "save":
+                        await booster.perform_action(Action.Save, channel)
+                        print(f"Channel {channel} configuration saved")
+                    elif command == "tune":
+                        vgs, ids = await booster.tune_bias(channel, cmd_args[0])
+                        print(
+                            f"Channel {channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA"
+                        )
+                    elif command == "calibrate":
+                        await booster.calibrate(channel, cmd_args[0])
 
     asyncio.run(channel_configuration(parser.parse_args()))
 
