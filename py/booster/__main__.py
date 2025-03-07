@@ -7,6 +7,7 @@ Description: Provides an API for controlling Booster NGFW over MQTT.
 import argparse
 import asyncio
 import logging
+import json
 
 from . import Booster, Action
 import miniconf
@@ -22,6 +23,11 @@ CMDS = {
         "nargs": 1,
         "type": float,
         "help": "Tune the channel RF drain current to the specified amps",
+    },
+    "set": {
+        "nargs": 2,
+        "type": str,
+        "help": "Set the given property for the channel to the specified value",
     },
     "calibrate": {
         "nargs": 1,
@@ -117,6 +123,11 @@ def main():
                     print(
                         f"Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA"
                     )
+                elif command == "set":
+                    prop = cmd_args[0]
+                    value = json.loads(cmd_args[1])
+                    await booster.miniconf.set(f"/channel/{args.channel}/{prop}", value)
+                    print(f"Channel {args.channel} property '{prop}' set to {value}.")
                 elif command == "calibrate":
                     await booster.calibrate(args.channel, cmd_args[0])
 
