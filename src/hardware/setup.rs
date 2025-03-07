@@ -25,7 +25,7 @@ use core::convert::TryInto;
 use core::fmt::Write;
 use hal::prelude::*;
 use heapless::String;
-use miniconf::{Leaf, StrLeaf};
+use miniconf::Leaf;
 use rand_core::RngCore;
 use usb_device::prelude::*;
 
@@ -321,9 +321,9 @@ pub fn setup(
     let mut settings = crate::settings::Settings {
         mac: eeprom_settings.mac,
         ip: Leaf(eeprom_settings.ip),
-        broker: StrLeaf(eeprom_settings.broker),
+        broker: Leaf(eeprom_settings.broker),
         gateway: Leaf(eeprom_settings.gateway),
-        id: StrLeaf(eeprom_settings.id),
+        id: Leaf(eeprom_settings.id),
         booster: runtime_settings,
     };
 

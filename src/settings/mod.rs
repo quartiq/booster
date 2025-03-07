@@ -2,7 +2,7 @@
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::{Leaf, StrLeaf, Tree};
+use miniconf::{Leaf, Tree};
 
 pub mod eeprom;
 pub mod flash;
@@ -19,9 +19,9 @@ pub struct Settings {
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 
     pub ip: Leaf<Cidr>,
-    pub broker: StrLeaf<String<255>>,
+    pub broker: Leaf<String<255>>,
     pub gateway: Leaf<IpAddr>,
-    pub id: StrLeaf<String<23>>,
+    pub id: Leaf<String<23>>,
 }
 
 impl serial_settings::Settings for Settings {
@@ -31,7 +31,7 @@ impl serial_settings::Settings for Settings {
 
         self.booster.reset();
         self.ip = Leaf("0.0.0.0/0".parse().unwrap());
-        self.broker = StrLeaf("mqtt".parse().unwrap());
+        self.broker = Leaf("mqtt".parse().unwrap());
         self.gateway = Leaf("0.0.0.0".parse().unwrap());
     }
 }
