@@ -23,6 +23,11 @@ CMDS = {
         "type": float,
         "help": "Tune the channel RF drain current to the specified amps",
     },
+    "output_interlock_threshold": {
+        "nargs": 1,
+        "type": float,
+        "help": "Set the output interlock threshold for the channel",
+    },
     "calibrate": {
         "nargs": 1,
         "type": str,
@@ -117,6 +122,10 @@ def main():
                     print(
                         f"Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA"
                     )
+                elif command == "output_interlock_threshold":
+                    threshold = cmd_args[0]
+                    await booster.set_output_interlock_threshold(args.channel, threshold)
+                    print(f"Output interlock threshold for channel {args.channel} set to {threshold}")
                 elif command == "calibrate":
                     await booster.calibrate(args.channel, cmd_args[0])
 

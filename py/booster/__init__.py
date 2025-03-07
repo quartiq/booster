@@ -125,6 +125,15 @@ class Booster:
 
         return vgs, ids
 
+    async def set_output_interlock_threshold(self, channel, threshold):
+        """Set the output interlock threshold.
+
+        Args:
+            channel: The channel to set the threshold for.
+            threshold: The threshold value in dBm.
+        """
+        await self.miniconf.set(f"/channel/{channel}/output_interlock_threshold", threshold)
+
     async def calibrate(self, channel, transform):
         """Calibrate a linear transform.
 
