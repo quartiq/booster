@@ -45,6 +45,15 @@ settings are incompatible.
 
 _Figure 2_: Example display of Booster settings tree reported via MQTTX.
 
+For saving settings via MQTT, the `<prefix>/command/save` topic is used. The payload should be a JSON
+containing the channel ID, e.g. `{"channel": "Zero"}`. Additionally, a response topic must be set,
+e.g. `<prefix>/response`, to receive the response code from the device, otherwise the save command
+is not executed.
+
+![Sample Command Save](assets/booster-command-save-example.png)
+
+_Figure 3_: Example display of saving settings for channel zero via MQTTX.
+
 ## Control
 
 Booster supports channel bias tuning and saving active channel settings configuration to EEPROM
