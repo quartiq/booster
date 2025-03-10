@@ -3,7 +3,7 @@
 use heapless::{String, Vec};
 use miniconf::{Path, TreeDeserializeOwned, TreeKey, TreeSerialize};
 
-use crate::hardware::{flash::Flash, platform};
+use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use embassy_futures::block_on;
 use embedded_io::Write;
 use sequential_storage::{
@@ -38,7 +38,7 @@ pub struct SerialSettingsPlatform<C> {
 
     pub storage: Flash,
 
-    pub metadata: &'static crate::hardware::metadata::ApplicationMetadata,
+    pub metadata: &'static ApplicationMetadata,
 }
 
 impl<C> SerialSettingsPlatform<C>
@@ -91,11 +91,9 @@ where
     C: Settings,
 {
     type Interface = BestEffortInterface<crate::hardware::SerialPort>;
-
+    type Settings = C;
     type Error =
         sequential_storage::Error<<Flash as embedded_storage::nor_flash::ErrorType>::Error>;
-
-    type Settings = C;
 
     fn fetch<'a>(
         &mut self,
