@@ -167,10 +167,10 @@ impl ChannelSettings {
     }
 
     fn validate_output_interlock_threshold(&mut self, depth: usize) -> Result<usize, &'static str> {
-        // Verify the output interlock is within acceptable values.
-        *self.output_interlock_threshold = self
-            .output_interlock_threshold
-            .clamp(0.0, platform::MAX_OUTPUT_POWER_DBM);
+        // Ensure the output interlock is within acceptable values.
+        if *self.output_interlock_threshold > platform::MAX_OUTPUT_POWER_DBM {
+            self.output_interlock_threshold = Leaf(platform::MAX_OUTPUT_POWER_DBM);
+        }
 
         // Verify the interlock is mappable to a DAC threshold.
         let dac_voltage = self
