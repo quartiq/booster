@@ -5,7 +5,7 @@ use crate::{
     Channel,
 };
 
-use minimq::{DeferredPublication, Publication};
+use minimq::Publication;
 
 use super::NetworkStackProxy;
 
@@ -124,12 +124,9 @@ impl TelemetryClient {
         // All telemtry is published in a best-effort manner.
         self.mqtt
             .client()
-            .publish(
-                DeferredPublication::new(|buf| serde_json_core::to_slice(telemetry, buf))
-                    .topic(&topic)
-                    .finish()
-                    .unwrap(),
-            )
+            .publish(Publication::new(&topic, |buf: &mut [u8]| {
+                serde_json_core::to_slice(telemetry, buf)
+            }))
             .ok();
     }
 
@@ -155,23 +152,15 @@ impl TelemetryClient {
 
             if mqtt
                 .client()
-                .publish(
-                    DeferredPublication::new(|buf| serde_json_core::to_slice(&metadata, buf))
-                        .topic(&topic)
-                        .finish()
-                        .unwrap(),
-                )
+                .publish(Publication::new(&topic, |buf: &mut [u8]| {
+                    serde_json_core::to_slice(&metadata, buf)
+                }))
                 .is_err()
             {
                 // Note(unwrap): We can guarantee that this message will be sent because we checked
                 // for ability to publish above.
                 mqtt.client()
-                    .publish(
-                        Publication::new(DEFAULT_METADATA.as_bytes())
-                            .topic(&topic)
-                            .finish()
-                            .unwrap(),
-                    )
+                    .publish(Publication::new(&topic, DEFAULT_METADATA.as_bytes()))
                     .unwrap();
             }
 
