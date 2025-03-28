@@ -46,8 +46,8 @@ fn identifier_is_valid(id: &str) -> bool {
 pub struct IpAddr(pub smoltcp_nal::smoltcp::wire::Ipv4Address);
 
 impl IpAddr {
-    pub fn new(bytes: &[u8]) -> Self {
-        Self(smoltcp::wire::Ipv4Address::from_bytes(bytes))
+    pub fn new(a: u8, b: u8, c: u8, d: u8) -> Self {
+        Self(smoltcp::wire::Ipv4Address::new(a, b, c, d))
     }
 }
 
@@ -78,11 +78,11 @@ impl encdec::Encode for IpAddr {
     type Error = encdec::Error;
 
     fn encode_len(&self) -> Result<usize, Self::Error> {
-        Ok(self.0 .0.len())
+        Ok(self.0.octets().len())
     }
 
     fn encode(&self, buff: &mut [u8]) -> Result<usize, Self::Error> {
-        self.0 .0.encode(buff)
+        self.0.octets().encode(buff)
     }
 }
 
@@ -91,8 +91,8 @@ impl encdec::DecodeOwned for IpAddr {
     type Error = encdec::Error;
 
     fn decode_owned(buff: &[u8]) -> Result<(Self::Output, usize), Self::Error> {
-        let (data, size) = <[u8; 4]>::decode_owned(buff)?;
-        Ok((Self::new(&data[..]), size))
+        let ([a, b, c, d], size) = <[u8; 4]>::decode_owned(buff)?;
+        Ok((Self::new(a, b, c, d), size))
     }
 }
 

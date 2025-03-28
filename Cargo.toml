@@ -63,7 +63,7 @@ rtt-target = { version = "0.6", optional = true }
 enum-iterator = { version = "2.1", default-features = false }
 enc424j600 = "0.4"
 embedded-hal = "1"
-smoltcp-nal = { version = "0.5", features=["shared-stack"] }
+smoltcp-nal = { version = "0.7", features=["shared-stack"] }
 serial-settings = "0.2"
 stm32f4xx-hal = {version = "0.22.1", features = ["stm32f407", "usb_fs"] }
 postcard = "1"
@@ -78,11 +78,8 @@ built = { version = "0.7", features = ["git2"], default-features = false }
 path = "ad5627"
 version = "0.2"
 
-[patch.crates-io.smoltcp]
-# Locking to a patch where the poll() function no longer loops infinitely during packet floods. This
-# can be removed once smoltcp is re-released.
-git = "https://github.com/smoltcp-rs/smoltcp"
-rev = "53caf70f640d5ccb3cd1492e1cb178bc7dfa3cdd"
+[patch.crates-io]
+smoltcp-nal = { git = "https://github.com/quartiq/smoltcp-nal" }
 
 [dependencies.ads7924]
 path = "ads7924"

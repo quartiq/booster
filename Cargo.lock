@@ -131,7 +131,7 @@ dependencies = [
  "microchip-24aa02e48",
  "miniconf",
  "miniconf_mqtt",
- "minimq",
+ "minimq 0.10.0",
  "minireq",
  "mono-clock",
  "panic-persist",
@@ -454,6 +454,15 @@ checksum = "b8a943fad5ed3d3f8a00f1e80f6bba371f1e7f0df28ec38477535eb318dc19cc"
 dependencies = [
  "nb 1.1.0",
  "no-std-net",
+]
+
+[[package]]
+name = "embedded-nal"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c56a28be191a992f28f178ec338a0bf02f63d7803244add736d026a471e6ed77"
+dependencies = [
+ "nb 1.1.0",
 ]
 
 [[package]]
@@ -905,7 +914,7 @@ dependencies = [
  "heapless 0.8.0",
  "log",
  "miniconf",
- "minimq",
+ "minimq 0.9.0",
  "serde-json-core",
  "smlang 0.8.0",
  "strum",
@@ -918,12 +927,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c63955f174d014ef627e6f21dda747c24a294be94234e91ae30a9b2173784e1"
 dependencies = [
  "bit_field",
- "embedded-nal",
+ "embedded-nal 0.8.0",
  "embedded-time",
  "heapless 0.7.17",
  "num_enum",
  "serde",
  "smlang 0.6.0",
+ "varint-rs",
+]
+
+[[package]]
+name = "minimq"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8aca206883c70c23d8a8179533c0dad0f7c9abe6574c0dc0908e913203b6b6e3"
+dependencies = [
+ "bit_field",
+ "embedded-nal 0.9.0",
+ "embedded-time",
+ "heapless 0.8.0",
+ "num_enum",
+ "serde",
+ "smlang 0.8.0",
  "varint-rs",
 ]
 
@@ -936,7 +961,7 @@ dependencies = [
  "embedded-io",
  "heapless 0.8.0",
  "log",
- "minimq",
+ "minimq 0.9.0",
  "serde",
  "smlang 0.6.0",
 ]
@@ -952,9 +977,9 @@ dependencies = [
 
 [[package]]
 name = "nanorand"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
+checksum = "6e3d189da485332e96ba8a5ef646a311871abd7915bf06ac848a9117f19cf6e4"
 
 [[package]]
 name = "nb"
@@ -1458,8 +1483,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp"
-version = "0.11.0"
-source = "git+https://github.com/smoltcp-rs/smoltcp?rev=53caf70f640d5ccb3cd1492e1cb178bc7dfa3cdd#53caf70f640d5ccb3cd1492e1cb178bc7dfa3cdd"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dad095989c1533c1c266d9b1e8d70a1329dd3723c3edac6d03bbd67e7bf6f4bb"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -1470,13 +1496,12 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "975f15c4c77e7798c236b542032891f0cafe5f2e103debe59d069d50a645ed8a"
+version = "0.7.0"
+source = "git+https://github.com/quartiq/smoltcp-nal#0c683a0bf75e8ca2e74c57914da03873897aaa39"
 dependencies = [
- "embedded-nal",
+ "embedded-nal 0.9.0",
  "embedded-time",
- "heapless 0.7.17",
+ "heapless 0.8.0",
  "nanorand",
  "shared-bus",
  "smoltcp",
@@ -1778,15 +1803,14 @@ dependencies = [
 
 [[package]]
 name = "w5500"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1126ec36b5eebffd22607d00573db3c05808cf84caebfcbe4525c250f0420235"
+checksum = "b9c89c027282c4cf46de82c6c5f0267d16ca84985b414b13ddb5707acf8ea564"
 dependencies = [
  "bit_field",
- "byteorder",
  "derive-try-from-primitive",
  "embedded-hal 1.0.0",
- "embedded-nal",
+ "embedded-nal 0.9.0",
  "nb 1.1.0",
 ]
 
