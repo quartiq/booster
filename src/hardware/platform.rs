@@ -36,12 +36,10 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
         writeln!(channel, "{}", info).ok();
     }
 
-    // Reset the device in `release` configuration.
-    #[cfg(not(debug_assertions))]
-    cortex_m::peripheral::SCB::sys_reset();
-
     #[cfg(debug_assertions)]
-    loop {}
+    cortex_m::asm::bkpt();
+
+    cortex_m::peripheral::SCB::sys_reset();
 }
 
 /// Unconditionally disable and power-off all channels.
