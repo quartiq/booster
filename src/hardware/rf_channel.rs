@@ -362,7 +362,7 @@ impl RfChannel {
             .set_voltage(
                 settings
                     .output_power_transform
-                    .invert(settings.output_interlock_threshold),
+                    .invert(*settings.output_interlock_threshold),
                 ad5627::Dac::B,
             )
             .map_err(|e| match e {
@@ -417,10 +417,10 @@ impl RfChannel {
         let bias_changed = new_settings.bias_voltage != settings.bias_voltage;
         let output_interlock_updated = settings
             .output_power_transform
-            .map(settings.output_interlock_threshold)
+            .map(*settings.output_interlock_threshold)
             != new_settings
                 .output_power_transform
-                .map(new_settings.output_interlock_threshold);
+                .map(*new_settings.output_interlock_threshold);
         let reflected_interlock_updated = settings
             .reflected_power_transform
             .map(platform::MAXIMUM_REFLECTED_POWER_DBM)
@@ -456,7 +456,7 @@ impl RfChannel {
 
     fn apply_bias(&mut self) -> Result<f32, Error> {
         // The bias voltage is the inverse of the DAC output voltage.
-        let bias_voltage = -1.0 * self.settings().bias_voltage;
+        let bias_voltage = -*self.settings().bias_voltage;
 
         match self.devices.bias_dac.set_voltage(bias_voltage) {
             Err(dac7571::Error::Bounds) => Err(Error::Bounds),
@@ -576,7 +576,7 @@ impl RfChannel {
 
     /// Get the current bias voltage programmed to the RF amplification transistor.
     pub fn get_bias_voltage(&self) -> f32 {
-        self.settings.settings().bias_voltage
+        *self.settings.settings().bias_voltage
     }
 
     pub fn settings(&self) -> &ChannelSettings {
@@ -697,7 +697,7 @@ impl sm::StateMachineContext for RfChannel {
     /// Ok if the channel can power up. Err otherwise.
     fn guard_powerup(&self) -> Result<bool, ()> {
         let settings = self.settings.settings();
-        Ok(settings.state != ChannelState::Off)
+        Ok(*settings.state != ChannelState::Off)
     }
 
     /// Check to see if it's currently acceptable to enable the RF output switch.
@@ -717,12 +717,12 @@ impl sm::StateMachineContext for RfChannel {
         // As a workaround, we need to ensure that the interlock level is above the output power
         // detector level. When RF is disabled, the power detectors output a near-zero value, so
         // 100mV should be a sufficient level.
-        if settings.output_interlock_threshold < settings.output_power_transform.map(0.100) {
+        if *settings.output_interlock_threshold < settings.output_power_transform.map(0.100) {
             return Ok(false);
         }
 
         // Do not enable output if it shouldn't be enabled due to settings.
-        if settings.state != ChannelState::Enabled {
+        if *settings.state != ChannelState::Enabled {
             return Ok(false);
         }
 
@@ -739,7 +739,7 @@ impl sm::StateMachineContext for RfChannel {
 
         // It is only valid to enable the output if the channel is powered.
         assert!(self.pins.enable_power.is_set_high());
-        assert!(settings.output_interlock_threshold > settings.output_power_transform.map(0.100));
+        assert!(*settings.output_interlock_threshold > settings.output_power_transform.map(0.100));
 
         self.apply_bias().unwrap();
         self.pins.signal_on.set_high();
@@ -870,7 +870,7 @@ impl sm::StateMachine<RfChannel> {
     pub fn handle_settings(&mut self, settings: &ChannelSettings) -> Result<(), Error> {
         self.context_mut().apply_settings(settings)?;
 
-        match (self.state(), settings.state) {
+        match (self.state(), *settings.state) {
             // It's always acceptable to power off.
             (_, ChannelState::Off) => {
                 self.process_event(sm::Events::Disable).ok();

@@ -25,6 +25,7 @@ use core::convert::TryInto;
 use core::fmt::Write;
 use hal::prelude::*;
 use heapless::String;
+use miniconf::Leaf;
 use rand_core::RngCore;
 use usb_device::prelude::*;
 
@@ -315,14 +316,14 @@ pub fn setup(
 
     // Load initial main-board settings from EEPROM
     let eeprom_settings = BoosterMainBoardData::load(&mut eeprom);
-    runtime_settings.fan_speed = eeprom_settings.fan_speed;
+    *runtime_settings.fan_speed = eeprom_settings.fan_speed;
 
     let mut settings = crate::settings::Settings {
         mac: eeprom_settings.mac,
-        ip: eeprom_settings.ip,
-        broker: eeprom_settings.broker,
-        gateway: eeprom_settings.gateway,
-        id: eeprom_settings.id,
+        ip: Leaf(eeprom_settings.ip),
+        broker: Leaf(eeprom_settings.broker),
+        gateway: Leaf(eeprom_settings.gateway),
+        id: Leaf(eeprom_settings.id),
         booster: runtime_settings,
     };
 
@@ -472,7 +473,7 @@ pub fn setup(
         ChassisFans::new(
             [fan1, fan2, fan3],
             main_board_leds,
-            settings.booster.fan_speed,
+            *settings.booster.fan_speed,
         )
     };
 

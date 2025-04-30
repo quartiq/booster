@@ -1,9 +1,9 @@
 //! Booster NGFW Application
 
 use heapless::{String, Vec};
-use miniconf::{Path, TreeDeserializeOwned, TreeSerialize};
+use miniconf::{Path, TreeDeserializeOwned, TreeKey, TreeSerialize};
 
-use crate::hardware::{flash::Flash, platform};
+use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use embassy_futures::block_on;
 use embedded_io::Write;
 use sequential_storage::{
@@ -30,7 +30,7 @@ impl sequential_storage::map::Key for SettingsKey {
     }
 }
 
-pub struct SerialSettingsPlatform<C, const Y: usize> {
+pub struct SerialSettingsPlatform<C> {
     /// The interface to read/write data to/from serially (via text) to the user.
     pub interface: BestEffortInterface<crate::hardware::SerialPort>,
 
@@ -38,17 +38,17 @@ pub struct SerialSettingsPlatform<C, const Y: usize> {
 
     pub storage: Flash,
 
-    pub metadata: &'static crate::hardware::metadata::ApplicationMetadata,
+    pub metadata: &'static ApplicationMetadata,
 }
 
-impl<C, const Y: usize> SerialSettingsPlatform<C, Y>
+impl<C> SerialSettingsPlatform<C>
 where
-    C: TreeDeserializeOwned<Y> + TreeSerialize<Y>,
+    C: TreeDeserializeOwned + TreeSerialize + TreeKey,
 {
     pub fn load(structure: &mut C, storage: &mut Flash) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
-        for path in C::nodes::<Path<String<128>, '/'>>() {
+        for path in C::nodes::<Path<String<128>, '/'>, 8>() {
             let (path, _node) = path.unwrap();
 
             // Try to fetch the setting from flash.
@@ -86,16 +86,14 @@ where
     }
 }
 
-impl<C, const Y: usize> Platform<Y> for SerialSettingsPlatform<C, Y>
+impl<C> Platform for SerialSettingsPlatform<C>
 where
-    C: Settings<Y>,
+    C: Settings,
 {
     type Interface = BestEffortInterface<crate::hardware::SerialPort>;
-
+    type Settings = C;
     type Error =
         sequential_storage::Error<<Flash as embedded_storage::nor_flash::ErrorType>::Error>;
-
-    type Settings = C;
 
     fn fetch<'a>(
         &mut self,

@@ -230,14 +230,14 @@ mod app {
         (&mut c.shared.main_bus, &mut c.shared.settings).lock(|main_bus, settings| {
             main_bus
                 .fans
-                .set_default_duty_cycle(settings.booster.fan_speed)
+                .set_default_duty_cycle(*settings.booster.fan_speed)
         });
 
         // Update the telemetry rate.
         (&mut c.shared.net_devices, &mut c.shared.settings).lock(|net_devices, settings| {
             net_devices
                 .telemetry
-                .set_telemetry_period(settings.booster.telemetry_period)
+                .set_telemetry_period(*settings.booster.telemetry_period)
         });
     }
 
