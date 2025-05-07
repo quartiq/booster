@@ -77,9 +77,11 @@ def main():
     )
     parser.add_argument(
         "--channel",
+        "-c",
         required=True,
         type=int,
         choices=range(8),
+        action="append",
         help="The RF channel index to control",
     )
     parser.add_argument(
@@ -113,23 +115,24 @@ def main():
             # Establish a communication interface with Booster.
             booster = Booster(client, prefix)
 
-            for command in args.commands:
-                command, cmd_args = parse_command(command)
-                if command == "save":
-                    await booster.perform_action(Action.Save, args.channel)
-                    print(f"Channel {args.channel} configuration saved")
-                elif command == "tune":
-                    vgs, ids = await booster.tune_bias(args.channel, cmd_args[0])
-                    print(
-                        f"Channel {args.channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA"
-                    )
-                elif command == "set":
-                    prop = cmd_args[0]
-                    value = json.loads(cmd_args[1])
-                    await booster.miniconf.set(f"/channel/{args.channel}/{prop}", value)
-                    print(f"Channel {args.channel} property '{prop}' set to {value}.")
-                elif command == "calibrate":
-                    await booster.calibrate(args.channel, cmd_args[0])
+            for channel in args.channel:
+                for command in args.commands:
+                    command, cmd_args = parse_command(command)
+                    if command == "save":
+                        await booster.perform_action(Action.Save, channel)
+                        print(f"Channel {channel} configuration saved")
+                    elif command == "tune":
+                        vgs, ids = await booster.tune_bias(channel, cmd_args[0])
+                        print(
+                            f"Channel {channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA"
+                        )
+                    elif command == "set":
+                        prop = cmd_args[0]
+                        value = json.loads(cmd_args[1])
+                        await booster.miniconf.set(f"/channel/{channel}/{prop}", value)
+                        print(f"Channel {channel} property '{prop}' set to {value}.")
+                    elif command == "calibrate":
+                        await booster.calibrate(channel, cmd_args[0])
 
     asyncio.run(channel_configuration(parser.parse_args()))
 
