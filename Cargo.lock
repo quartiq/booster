@@ -448,12 +448,11 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "embedded-nal"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8a943fad5ed3d3f8a00f1e80f6bba371f1e7f0df28ec38477535eb318dc19cc"
+checksum = "c56a28be191a992f28f178ec338a0bf02f63d7803244add736d026a471e6ed77"
 dependencies = [
  "nb 1.1.0",
- "no-std-net",
 ]
 
 [[package]]
@@ -872,8 +871,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1503186d3a89d933300e616a919e10b089a8c3379956589d009556ed5ea1b3c4"
+source = "git+https://github.com/quartiq/miniconf#b70f2606c1896069daf2d09d8e8aa82712041770"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -886,8 +884,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbe8f870567988a09000856955ae194f2dfb1ff73ff615988a44d0fc2385df7b"
+source = "git+https://github.com/quartiq/miniconf#b70f2606c1896069daf2d09d8e8aa82712041770"
 dependencies = [
  "darling 0.20.10",
  "proc-macro2",
@@ -898,8 +895,7 @@ dependencies = [
 [[package]]
 name = "miniconf_mqtt"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18beed978188ff9ec7ce6f1a10a0d0e6d821fb4742021498662f4ddaa8e02892"
+source = "git+https://github.com/quartiq/miniconf#b70f2606c1896069daf2d09d8e8aa82712041770"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -913,25 +909,24 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c63955f174d014ef627e6f21dda747c24a294be94234e91ae30a9b2173784e1"
+checksum = "8aca206883c70c23d8a8179533c0dad0f7c9abe6574c0dc0908e913203b6b6e3"
 dependencies = [
  "bit_field",
  "embedded-nal",
  "embedded-time",
- "heapless 0.7.17",
+ "heapless 0.8.0",
  "num_enum",
  "serde",
- "smlang 0.6.0",
+ "smlang 0.8.0",
  "varint-rs",
 ]
 
 [[package]]
 name = "minireq"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4ccb1b67c4fa24f360531cbf7e67d7ce6f1ba980431a7461ed741ed707a1beb"
+source = "git+https://github.com/quartiq/minireq#fb58f34e06d68801d86b6c96d8acf48f62b6435d"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -970,12 +965,6 @@ name = "nb"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
-
-[[package]]
-name = "no-std-net"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43794a0ace135be66a25d3ae77d41b91615fb68ae937f904090203e81f755b65"
 
 [[package]]
 name = "num"
@@ -1458,8 +1447,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp"
-version = "0.11.0"
-source = "git+https://github.com/smoltcp-rs/smoltcp?rev=53caf70f640d5ccb3cd1492e1cb178bc7dfa3cdd#53caf70f640d5ccb3cd1492e1cb178bc7dfa3cdd"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dad095989c1533c1c266d9b1e8d70a1329dd3723c3edac6d03bbd67e7bf6f4bb"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -1470,13 +1460,12 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "975f15c4c77e7798c236b542032891f0cafe5f2e103debe59d069d50a645ed8a"
+version = "0.6.0"
+source = "git+https://github.com/quartiq/smoltcp-nal#bb415665334c34f7434d51edb20793e36dc7f0cd"
 dependencies = [
  "embedded-nal",
  "embedded-time",
- "heapless 0.7.17",
+ "heapless 0.8.0",
  "nanorand",
  "shared-bus",
  "smoltcp",
@@ -1778,12 +1767,11 @@ dependencies = [
 
 [[package]]
 name = "w5500"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1126ec36b5eebffd22607d00573db3c05808cf84caebfcbe4525c250f0420235"
+checksum = "b9c89c027282c4cf46de82c6c5f0267d16ca84985b414b13ddb5707acf8ea564"
 dependencies = [
  "bit_field",
- "byteorder",
  "derive-try-from-primitive",
  "embedded-hal 1.0.0",
  "embedded-nal",
