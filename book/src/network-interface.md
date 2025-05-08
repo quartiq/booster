@@ -9,7 +9,7 @@ device by default(e.g. `12-34-56-78-90-ab`). The ID is configurable via the USB 
 Please refer to [Stabilizer's documentation](https://quartiq.de/stabilizer/setup.html#mqtt-broker)
 for instructions on getting MQTT configured.
 
-We recommend using [`mqtt-explorer`](http://mqtt-explorer.com/) to view telemetry and run-time
+We recommend using [MQTTX](https://mqttx.app/) to view telemetry and run-time
 settings.
 
 ## Measurement Units
@@ -27,7 +27,7 @@ connected channels. Telemetry is transmitted in human-readable JSON format for l
 
 ![Sample Booster Telemtry Topics](assets/booster-telemetry-example.png)
 
-_Figure 1_: Example display of Booster telemetry on all 8 channels reported via MQTT Explorer.
+_Figure 1_: Example display of Booster telemetry on all 8 channels reported via MQTTX.
 
 ## Settings
 
@@ -43,7 +43,16 @@ settings are incompatible.
 
 ![Sample Booster Settings](assets/booster-settings-example.png)
 
-_Figure 2_: Example display of Booster settings tree reported via MQTT Explorer.
+_Figure 2_: Example display of Booster settings tree reported via MQTTX.
+
+For saving settings via MQTT, the `<prefix>/command/save` topic is used. The payload should be a JSON
+containing the channel ID, e.g. `{"channel": "Zero"}`. Additionally, a response topic must be set,
+e.g. `<prefix>/response`, to receive the response code from the device, otherwise the save command
+is not executed.
+
+![Sample Command Save](assets/booster-command-save-example.png)
+
+_Figure 3_: Example display of saving settings for channel zero via MQTTX.
 
 ## Control
 
