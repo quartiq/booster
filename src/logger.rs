@@ -4,7 +4,6 @@ use heapless::String;
 use super::SerialTerminal;
 use core::fmt::Write;
 use log::LevelFilter;
-use rtt_target::rprintln;
 
 /// A logging buffer for storing serialized logs pending transmission.
 ///
@@ -51,7 +50,8 @@ impl log::Log for BufferedLog {
             return;
         }
 
-        rprintln!("{} - {}", record.level(), record.args());
+        #[cfg(feature = "rtt")]
+        rtt_target::rprintln!("{} - {}", record.level(), record.args());
         let source_file = record.file().unwrap_or("Unknown");
         let source_line = record.line().unwrap_or(u32::MAX);
 

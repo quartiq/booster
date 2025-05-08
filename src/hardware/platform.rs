@@ -20,28 +20,26 @@ pub const BIAS_DAC_VCC: f32 = 3.2;
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    use core::fmt::Write;
-    use rtt_target::{ChannelMode, UpChannel};
-
     cortex_m::interrupt::disable();
 
     // Shutdown all of the RF channels.
     shutdown_channels();
 
-    if let Some(mut channel) = unsafe { UpChannel::conjure(0) } {
-        channel.set_mode(ChannelMode::BlockIfFull);
-        writeln!(channel, "{}", info).ok();
-    }
-
     // Write panic info to RAM.
     panic_persist::report_panic_info(info);
 
-    // Reset the device in `release` configuration.
-    #[cfg(not(debug_assertions))]
-    cortex_m::peripheral::SCB::sys_reset();
+    #[cfg(feature = "rtt")]
+    if let Some(mut channel) = unsafe { rtt_target::UpChannel::conjure(0) } {
+        use core::fmt::Write;
+
+        channel.set_mode(rtt_target::ChannelMode::BlockIfFull);
+        writeln!(channel, "{}", info).ok();
+    }
 
     #[cfg(debug_assertions)]
-    loop {}
+    cortex_m::asm::bkpt();
+
+    cortex_m::peripheral::SCB::sys_reset();
 }
 
 /// Unconditionally disable and power-off all channels.
