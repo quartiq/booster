@@ -2,6 +2,7 @@ use super::Mac;
 use enc424j600::EthPhy;
 
 use smoltcp_nal::smoltcp;
+use super::net_interface::MAX_MTU;
 
 impl smoltcp::phy::Device for Mac {
     type RxToken<'a>
@@ -15,7 +16,7 @@ impl smoltcp::phy::Device for Mac {
 
     fn capabilities(&self) -> smoltcp::phy::DeviceCapabilities {
         let mut caps = smoltcp::phy::DeviceCapabilities::default();
-        caps.max_transmission_unit = 1500;
+        caps.max_transmission_unit = MAX_MTU;
         caps.medium = smoltcp::phy::Medium::Ethernet;
         caps
     }
@@ -24,7 +25,7 @@ impl smoltcp::phy::Device for Mac {
         &mut self,
         _timestamp: smoltcp::time::Instant,
     ) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
-        let mut buffer = [0u8; 1500];
+        let mut buffer = [0u8; MAX_MTU];
         let len = match self {
             Mac::W5500(w5500) => w5500.read_frame(&mut buffer[..]).unwrap(),
             Mac::Enc424j600(mac) => match mac.recv_packet(false) {
@@ -79,7 +80,7 @@ impl smoltcp::phy::TxToken for TxToken<'_> {
     where
         F: FnOnce(&mut [u8]) -> R,
     {
-        let mut buffer = [0u8; 1500];
+        let mut buffer = [0u8; MAX_MTU];
         let result = f(&mut buffer[..len]);
         match self.mac {
             Mac::W5500(mac) => {

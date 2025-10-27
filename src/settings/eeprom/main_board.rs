@@ -23,6 +23,7 @@ use heapless::String;
 use smoltcp_nal::smoltcp;
 
 use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
+use crate::hardware::net_interface::MAX_MTU;
 
 use super::{sinara::SinaraConfiguration, SemVersion};
 use serde::{Deserialize, Serialize};
@@ -40,6 +41,26 @@ const EXPECTED_VERSION: SemVersion = SemVersion {
 
 fn identifier_is_valid(id: &str) -> bool {
     id.len() <= 23 && id.chars().all(|x| x.is_alphanumeric() || x == '-')
+}
+
+#[derive(DeserializeFromStr, Copy, Clone, Debug)]
+pub struct Mtu(pub u16);
+
+impl core::str::FromStr for Mtu {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mtu = s.parse::<u16>().map_err(|_| "Invalid MTU format (expected decimal integer)")?;
+        if mtu as usize > MAX_MTU {
+            return Err("Specified MTU exceeds maximum allowed value");
+        }
+        Ok(Self(mtu))
+    }
+}
+
+impl Serialize for Mtu {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u16(self.0)
+    }
 }
 
 #[derive(DeserializeFromStr, Copy, Clone, Debug)]
@@ -171,6 +192,7 @@ pub struct SerializedMainBoardData {
     pub netmask: IpAddr,
     pub id: MqttIdentifier,
     pub fan_speed: f32,
+    pub mtu: u16,
 }
 
 impl SerializedMainBoardData {
@@ -189,6 +211,7 @@ impl SerializedMainBoardData {
             gateway: self.gateway,
             id: self.id.0,
             fan_speed: self.fan_speed,
+            mtu: self.mtu,
         }
     }
 }
@@ -203,6 +226,7 @@ pub struct BoosterMainBoardData {
     pub gateway: IpAddr,
     pub id: String<23>,
     pub fan_speed: f32,
+    pub mtu: u16,
 }
 
 impl BoosterMainBoardData {
@@ -238,6 +262,7 @@ impl BoosterMainBoardData {
             gateway: "0.0.0.0".parse().unwrap(),
             id: name,
             fan_speed: DEFAULT_FAN_SPEED,
+            mtu: MAX_MTU as u16,
         }
     }
 
@@ -277,4 +302,25 @@ impl BoosterMainBoardData {
         log::info!("Loaded settings from EEPROM");
         Ok((config.with_mac(eui48), modified))
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    // use super::MTU;
+    // use core::str::FromStr;
+    //
+    // // TODO: restructure repo tree to allow logic tests to run not on embedded
+    // //       hardware, but on the host machine
+    // #[test]
+    // fn test_mtu_parsing() {
+    //     let mtu: MTU = MTU::from_str("1500").unwrap();
+    //     assert_eq!(mtu.0, 1500);
+
+    //     let mtu_err = MTU::from_str("1501");
+    //     assert!(mtu_err.is_err());
+
+    //     let mtu_err = MTU::from_str("invalid");
+    //     assert!(mtu_err.is_err());
+    // }
 }

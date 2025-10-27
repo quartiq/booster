@@ -9,6 +9,7 @@ pub mod flash;
 pub mod runtime_settings;
 
 use eeprom::main_board::{Cidr, IpAddr};
+use eeprom::main_board::Mtu;
 use runtime_settings::RuntimeSettings;
 
 #[derive(Clone, Debug, Tree)]
@@ -22,6 +23,7 @@ pub struct Settings {
     pub broker: Leaf<String<255>>,
     pub gateway: Leaf<IpAddr>,
     pub id: Leaf<String<23>>,
+    pub mtu: Leaf<Mtu>,
 }
 
 impl serial_settings::Settings for Settings {
@@ -33,5 +35,6 @@ impl serial_settings::Settings for Settings {
         self.ip = Leaf("0.0.0.0/0".parse().unwrap());
         self.broker = Leaf("mqtt".parse().unwrap());
         self.gateway = Leaf("0.0.0.0".parse().unwrap());
+        self.mtu = Leaf("1500".parse().unwrap());
     }
 }

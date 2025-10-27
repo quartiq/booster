@@ -6,6 +6,8 @@ use super::Mac;
 
 /// The number of TCP sockets supported in the network stack.
 const NUM_TCP_SOCKETS: usize = 4;
+/// The maximum MTU configurable for the network interface.
+pub const MAX_MTU: usize = 1500;
 
 /// Containers for smoltcp-related network configurations
 struct NetStorage {

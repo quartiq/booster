@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * The default output power interlock threshold has been increased from 0 dBm to 20 dBm.
+* The MTU used for MQTT messages is now configurable in flash.
 
 ### Added
 

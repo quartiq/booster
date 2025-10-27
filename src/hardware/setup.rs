@@ -16,7 +16,7 @@ use super::{
 };
 use stm32f4xx_hal::hal::delay::DelayNs;
 
-use crate::settings::eeprom::main_board::BoosterMainBoardData;
+use crate::settings::eeprom::main_board::{BoosterMainBoardData, Mtu};
 
 use stm32f4xx_hal as hal;
 
@@ -323,6 +323,7 @@ pub fn setup(
         ip: Leaf(eeprom_settings.ip),
         broker: Leaf(eeprom_settings.broker),
         gateway: Leaf(eeprom_settings.gateway),
+        mtu: Leaf(Mtu(eeprom_settings.mtu)),
         id: Leaf(eeprom_settings.id),
         booster: runtime_settings,
     };
