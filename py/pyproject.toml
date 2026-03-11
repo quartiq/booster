@@ -14,6 +14,6 @@ authors = [
     { name = "Robert Jördens", email = "rj@quartiq.de" },
 ]
 dependencies = [
-    # Note: keep this in sync with Cargo.toml
-    "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.16.0#subdirectory=py/miniconf-mqtt",
+    # NOTE: Keep this in sync with `Cargo.toml`.
+    "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.18.0#subdirectory=py/miniconf-mqtt",
 ]

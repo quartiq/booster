@@ -51,9 +51,10 @@ usbd-serial = "0.2.2"
 encdec = { version = "0.10", default-features = false }
 crc-any = { version = "2.5.0", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-miniconf = { version = "0.18", features = ["json-core", "derive", "postcard"]}
-miniconf_mqtt = "0.18"
-# Note: Keep `py/pyproject.toml` version in sync with the Minimq version used in FW.
+miniconf = { version = "0.18.0", features = ["json-core", "derive", "postcard"]}
+# NOTE: Keep this in sync with `py/pyproject.toml`.
+miniconf_mqtt = "0.18.0"
+# NOTE: Keep this in sync with the version used by `miniconf_mqtt`.
 minimq = "0.9.0"
 w5500 = "0.5"
 smlang= "0.8"
