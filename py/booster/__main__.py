@@ -21,17 +21,22 @@ CMDS = {
     },
     "tune": {
         "nargs": 1,
-        "type": float,
+        "type": [float],
         "help": "Tune the channel RF drain current to the specified amps",
     },
-    "set": {
+    "set_str": {
         "nargs": 2,
-        "type": str,
-        "help": "Set the given property for the channel to the specified value",
+        "type": [str, str],
+        "help": "Set the given property for the channel to the specified string value (e.g. ip)",
+    },
+    "set_float": {
+        "nargs": 2,
+        "type": [str, float],
+        "help": "Set the given property for the channel to the specified float value (e.g. output_interlock_threshold)",
     },
     "calibrate": {
         "nargs": 1,
-        "type": str,
+        "type": [str],
         "help": "Calibrate a transform (input, output, or reflected)",
     }
 }
@@ -51,7 +56,7 @@ def parse_command(entry):
         assert CMDS[cmd]["nargs"] == len(
             args
         ), f'Invalid args specified. Expected {CMDS[cmd]["nargs"]}, but found {len(args)}'
-        return (cmd, [CMDS[cmd]["type"](x) for x in args])
+        return (cmd, [CMDS[cmd]["type"][i](x) for i, x in enumerate(args)])
 
     except Exception as exception:
         raise Exception(f'Failed to parse command "{entry}": {exception}')
@@ -126,9 +131,9 @@ def main():
                         print(
                             f"Channel {channel}: Vgs = {vgs:.3f} V, Ids = {ids * 1000:.2f} mA"
                         )
-                    elif command == "set":
+                    elif command.startswith("set"):
                         prop = cmd_args[0]
-                        value = json.loads(cmd_args[1])
+                        value = cmd_args[1]
                         await booster.miniconf.set(f"/channel/{channel}/{prop}", value)
                         print(f"Channel {channel} property '{prop}' set to {value}.")
                     elif command == "calibrate":
