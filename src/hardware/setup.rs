@@ -104,9 +104,12 @@ pub fn setup(
     device: stm32f4xx_hal::pac::Peripherals,
     clock: SystemTimer,
 ) -> BoosterDevices {
-    // Configure RTT logging.
-    device.DBGMCU.cr().modify(|_, w| w.dbg_sleep().set_bit());
-    rtt_target::rtt_init_print!();
+    #[cfg(feature = "rtt")]
+    {
+        // Configure RTT logging.
+        device.DBGMCU.cr().modify(|_, w| w.dbg_sleep().set_bit());
+        rtt_target::rtt_init_print!();
+    }
 
     // Install the logger
     log::set_logger(&crate::LOGGER)
@@ -140,6 +143,7 @@ pub fn setup(
 
     // Start the watchdog during the initialization process.
     let mut watchdog = hal::watchdog::IndependentWatchdog::new(device.IWDG);
+    watchdog.stop_on_debug(&device.DBGMCU, true);
     watchdog.start(30.secs());
 
     let mut delay = AsmDelay::new(clocks.sysclk().to_Hz());

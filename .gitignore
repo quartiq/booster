@@ -6,3 +6,4 @@ target/
 py/booster.egg-info
 py/build
 *.bin
+vpy

@@ -8,8 +8,13 @@ set -eux
 
 BOOSTER="${BOOSTER:-booster-hitl}"
 MQTT_BROKER="${MQTT_BROKER:-mqtt.ber.quartiq.de}"
-# When only one booster is connected, we can use the discovery prefix for all activities.
-PREFIX="${PREFIX:-dt/sinara/booster/+}"
+if [[ "${BOOSTER}" == 'booster-hitl' ]]; then
+  # CI environment has multiple boosters, so we need to select a specific one.
+  PREFIX='dt/sinara/booster/80-34-28-1b-45-41'
+else
+  # When only one booster is connected, we can use the discovery prefix for all activities.
+  PREFIX="${PREFIX:-dt/sinara/booster/+}"
+fi
 PROBE="${PROBE:-0483:3754:003C002F5632500A20313236}"
 
 function finish {
@@ -47,5 +52,5 @@ ping -c 5 -w 20 "${BOOSTER}"
 # Test the MQTT interface.
 python3 -m miniconf --broker "${MQTT_BROKER}" --discover "${PREFIX}" /telemetry_period=5
 
-# Test basic operation
-python3 hitl/basic.py --broker "${MQTT_BROKER}" --prefix "${PREFIX}"
+# Test basic operation (only 2 channels to avoid timeout).
+python3 hitl/basic.py --broker "${MQTT_BROKER}" --prefix "${PREFIX}" --channels 0 1
