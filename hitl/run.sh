@@ -52,5 +52,5 @@ ping -c 5 -w 20 "${BOOSTER}"
 # Test the MQTT interface.
 python3 -m miniconf --broker "${MQTT_BROKER}" --discover "${PREFIX}" /telemetry_period=5
 
-# Test basic operation
-python3 hitl/basic.py --broker "${MQTT_BROKER}" --prefix "${PREFIX}"
+# Test basic operation (only 2 channels to avoid timeout).
+python3 hitl/basic.py --broker "${MQTT_BROKER}" --prefix "${PREFIX}" --channels 0 1

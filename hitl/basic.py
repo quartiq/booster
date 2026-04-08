@@ -114,7 +114,7 @@ def main():
     parser.add_argument('--broker', '-b', default='mqtt', type=str,
                         help='The MQTT broker address')
     parser.add_argument('--channels', '-c', nargs='+', help='Channels indices to test',
-                        default=list(range(8)))
+                        default=list(range(8)), type=int)
 
     args = parser.parse_args()
 
