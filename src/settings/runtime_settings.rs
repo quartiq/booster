@@ -6,13 +6,32 @@ use miniconf::{Leaf, Tree};
 use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
 use crate::net::mqtt_control::DEFAULT_TELEMETRY_PERIOD_SECS;
 
+mod validate_fan_speed {
+    pub use miniconf::{leaf::*, Keys, SerdeError};
+    use serde::{Deserialize, Deserializer};
+
+    /// [`TreeDeserialize::deserialize_by_key()`]
+    pub fn deserialize_by_key<'de, D: Deserializer<'de>>(
+        value: &mut f32,
+        mut keys: impl Keys,
+        de: D,
+    ) -> Result<(), SerdeError<D::Error>> {
+        keys.finalize()?;
+        Deserialize::deserialize_in_place(de, value).map_err(SerdeError::Inner)?;
+
+        *value = value.clamp(0.0, 1.0);
+
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Tree)]
 pub struct RuntimeSettings {
     pub channel: [Option<ChannelSettings>; 8],
 
     /// The normalized fan speed. 1.0 corresponds to 100% on and 0.0 corresponds to completely
     /// off.
-    #[tree(validate=self.validate_fan_speed)]
+    #[tree(with=validate_fan_speed)]
     pub fan_speed: Leaf<f32>,
 
     /// The configured telemetry period in seconds.
@@ -30,11 +49,6 @@ impl Default for RuntimeSettings {
 }
 
 impl RuntimeSettings {
-    fn validate_fan_speed(&mut self, depth: usize) -> Result<usize, &'static str> {
-        *self.fan_speed = self.fan_speed.clamp(0.0, 1.0);
-        Ok(depth)
-    }
-
     pub fn reset(&mut self) {
         for channel in self.channel.iter_mut().flatten() {
             *channel = ChannelSettings::default();

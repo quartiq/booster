@@ -4,13 +4,11 @@ use super::{
     sinara::{BoardId as SinaraBoardId, SinaraConfiguration},
     SemVersion,
 };
-use crate::{
-    hardware::platform, hardware::I2cProxy, linear_transformation::LinearTransformation, Error,
-};
+use crate::{hardware::I2cProxy, linear_transformation::LinearTransformation, Error};
 use encdec::{Decode, DecodeOwned, Encode};
 use enum_iterator::Sequence;
 use microchip_24aa02e48::Microchip24AA02E48;
-use miniconf::{Leaf, Tree};
+use miniconf::Tree;
 use serde::{Deserialize, Serialize};
 
 /// The expected semver of the BoosterChannelSettings. This version must be updated whenever the
@@ -74,24 +72,83 @@ impl DecodeOwned for ChannelState {
     }
 }
 
+mod validate_output_interlock_threshold {
+    pub use miniconf::{leaf::*, Keys, SerdeError};
+    use serde::{Deserialize, Deserializer};
+
+    use crate::hardware::platform::MAX_OUTPUT_POWER_DBM;
+
+    /// [`TreeDeserialize::deserialize_by_key()`]
+    pub fn deserialize_by_key<'de, D: Deserializer<'de>>(
+        value: &mut f32,
+        mut keys: impl Keys,
+        de: D,
+    ) -> Result<(), SerdeError<D::Error>> {
+        keys.finalize()?;
+        Deserialize::deserialize_in_place(de, value).map_err(SerdeError::Inner)?;
+
+        if *value > MAX_OUTPUT_POWER_DBM {
+            *value = MAX_OUTPUT_POWER_DBM;
+        }
+
+        // FIXME: No `self` here.
+        //
+        // Verify the interlock is mappable to a DAC threshold.
+        // let dac_voltage = self
+        //     .output_power_transform
+        //     .invert(*self.output_interlock_threshold);
+        // let dac_voltage_clamped = dac_voltage.clamp(0.0, ad5627::MAX_VOLTAGE);
+        // if dac_voltage_clamped != dac_voltage {
+        //     *self.output_interlock_threshold = self.output_power_transform.map(dac_voltage_clamped);
+        // }
+
+        Ok(())
+    }
+}
+
+mod validate_bias_voltage {
+    pub use miniconf::{leaf::*, Keys, SerdeError};
+    use serde::{Deserialize, Deserializer};
+
+    use crate::hardware::platform::BIAS_DAC_VCC;
+
+    /// [`TreeDeserialize::deserialize_by_key()`]
+    pub fn deserialize_by_key<'de, D: Deserializer<'de>>(
+        value: &mut f32,
+        mut keys: impl Keys,
+        de: D,
+    ) -> Result<(), SerdeError<D::Error>> {
+        keys.finalize()?;
+        Deserialize::deserialize_in_place(de, value).map_err(SerdeError::Inner)?;
+
+        *value = -(-*value).clamp(0.0, BIAS_DAC_VCC);
+
+        Ok(())
+    }
+}
+
 /// Represents booster channel-specific configuration values.
 #[derive(Tree, Encode, Debug, Copy, Clone, PartialEq)]
 pub struct ChannelSettings {
     // dBm
-    #[tree(validate=self.validate_output_interlock_threshold)]
-    pub output_interlock_threshold: Leaf<f32>,
+    #[tree(with=validate_output_interlock_threshold)]
+    pub output_interlock_threshold: f32,
 
     // V
-    #[tree(validate=self.validate_bias_voltage)]
-    pub bias_voltage: Leaf<f32>,
+    #[tree(with=validate_bias_voltage)]
+    pub bias_voltage: f32,
 
-    pub state: Leaf<ChannelState>,
+    #[tree(with=miniconf::leaf)]
+    pub state: ChannelState,
 
-    pub input_power_transform: Leaf<LinearTransformation>,
+    #[tree(with=miniconf::leaf)]
+    pub input_power_transform: LinearTransformation,
 
-    pub output_power_transform: Leaf<LinearTransformation>,
+    #[tree(with=miniconf::leaf)]
+    pub output_power_transform: LinearTransformation,
 
-    pub reflected_power_transform: Leaf<LinearTransformation>,
+    #[tree(with=miniconf::leaf)]
+    pub reflected_power_transform: LinearTransformation,
 }
 
 impl DecodeOwned for ChannelSettings {
@@ -113,12 +170,12 @@ impl DecodeOwned for ChannelSettings {
         let (inner, inner_len) = ChannelSettingsDecoder::decode_owned(buff)?;
         Ok((
             ChannelSettings {
-                output_interlock_threshold: Leaf(inner.output_interlock_threshold),
-                bias_voltage: Leaf(inner.bias_voltage),
-                state: Leaf(inner.state),
-                input_power_transform: Leaf(inner.input_power_transform),
-                output_power_transform: Leaf(inner.output_power_transform),
-                reflected_power_transform: Leaf(inner.reflected_power_transform),
+                output_interlock_threshold: inner.output_interlock_threshold,
+                bias_voltage: inner.bias_voltage,
+                state: inner.state,
+                input_power_transform: inner.input_power_transform,
+                output_power_transform: inner.output_power_transform,
+                reflected_power_transform: inner.reflected_power_transform,
             },
             inner_len,
         ))
@@ -130,12 +187,12 @@ impl Default for ChannelSettings {
     fn default() -> Self {
         Self {
             // dBm
-            output_interlock_threshold: Leaf(20.0),
+            output_interlock_threshold: 20.0,
 
             // V
-            bias_voltage: Leaf(-3.2),
+            bias_voltage: -3.2,
 
-            state: Leaf(ChannelState::Off),
+            state: ChannelState::Off,
 
             // When operating at 100MHz, the power detectors specify the following output
             // characteristics for -10 dBm to 10 dBm:
@@ -144,44 +201,16 @@ impl Default for ChannelSettings {
             //
             // All of the power meters are preceded by attenuators which are incorporated in
             // the offset.
-            output_power_transform: Leaf(LinearTransformation::new(
-                1.0 / 0.035,
-                -35.6 + 19.8 + 10.0,
-            )),
+            output_power_transform: LinearTransformation::new(1.0 / 0.035, -35.6 + 19.8 + 10.0),
 
             // The input power and reflected power detectors have an op-amp gain of 1.5
-            reflected_power_transform: Leaf(LinearTransformation::new(
+            reflected_power_transform: LinearTransformation::new(
                 1.0 / 1.5 / 0.035,
                 -35.6 + 19.8 + 10.0,
-            )),
+            ),
 
-            input_power_transform: Leaf(LinearTransformation::new(1.0 / 1.5 / 0.035, -35.6 + 8.9)),
+            input_power_transform: LinearTransformation::new(1.0 / 1.5 / 0.035, -35.6 + 8.9),
         }
-    }
-}
-
-impl ChannelSettings {
-    fn validate_bias_voltage(&mut self, depth: usize) -> Result<usize, &'static str> {
-        *self.bias_voltage = -(-*self.bias_voltage).clamp(0.0, platform::BIAS_DAC_VCC);
-        Ok(depth)
-    }
-
-    fn validate_output_interlock_threshold(&mut self, depth: usize) -> Result<usize, &'static str> {
-        // Ensure the output interlock is within acceptable values.
-        if *self.output_interlock_threshold > platform::MAX_OUTPUT_POWER_DBM {
-            *self.output_interlock_threshold = platform::MAX_OUTPUT_POWER_DBM;
-        }
-
-        // Verify the interlock is mappable to a DAC threshold.
-        let dac_voltage = self
-            .output_power_transform
-            .invert(*self.output_interlock_threshold);
-        let dac_voltage_clamped = dac_voltage.clamp(0.0, ad5627::MAX_VOLTAGE);
-        if dac_voltage_clamped != dac_voltage {
-            *self.output_interlock_threshold = self.output_power_transform.map(dac_voltage_clamped);
-        }
-
-        Ok(depth)
     }
 }
 
@@ -214,7 +243,7 @@ impl VersionedChannelData {
         let (data, _) = VersionedChannelData::decode_owned(data).or(Err(Error::Invalid))?;
 
         // Validate configuration parameters.
-        if *data.settings.bias_voltage < -3.3 || *data.settings.bias_voltage > 0.0 {
+        if data.settings.bias_voltage < -3.3 || data.settings.bias_voltage > 0.0 {
             return Err(Error::Invalid);
         }
 
@@ -234,8 +263,8 @@ impl VersionedChannelData {
         // We will never store `Powered` in EEPROM, since this is never desired. Cache the current
         // power state while we serialize to ensure we only serialize Enabled and Off.
         let mut versioned_copy = *self;
-        if *versioned_copy.settings.state == ChannelState::Powered {
-            *versioned_copy.settings.state = ChannelState::Off;
+        if versioned_copy.settings.state == ChannelState::Powered {
+            versioned_copy.settings.state = ChannelState::Off;
         }
 
         let mut buffer: [u8; 64] = [0; 64];

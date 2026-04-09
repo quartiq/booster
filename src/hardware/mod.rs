@@ -48,7 +48,7 @@ pub enum Mac {
 pub type SerialSettingsPlatform =
     crate::settings::flash::SerialSettingsPlatform<crate::settings::Settings>;
 
-pub type SerialTerminal = serial_settings::Runner<'static, SerialSettingsPlatform, 5>;
+pub type SerialTerminal = serial_settings::Runner<'static, SerialSettingsPlatform>;
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<'static, Mac, SystemTimer>;
 
