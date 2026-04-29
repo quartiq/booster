@@ -7,17 +7,18 @@ use crate::hardware::chassis_fans::DEFAULT_FAN_SPEED;
 use crate::net::mqtt_control::DEFAULT_TELEMETRY_PERIOD_SECS;
 
 mod validate_fan_speed {
-    pub use miniconf::{leaf::*, Keys, SerdeError};
-    use serde::{Deserialize, Deserializer};
+    pub use miniconf::{
+        leaf::{self, *},
+        Keys, SerdeError,
+    };
+    use serde::Deserializer;
 
-    /// [`TreeDeserialize::deserialize_by_key()`]
     pub fn deserialize_by_key<'de, D: Deserializer<'de>>(
         value: &mut f32,
-        mut keys: impl Keys,
+        keys: impl Keys,
         de: D,
     ) -> Result<(), SerdeError<D::Error>> {
-        keys.finalize()?;
-        Deserialize::deserialize_in_place(de, value).map_err(SerdeError::Inner)?;
+        leaf::deserialize_by_key(value, keys, de)?;
 
         *value = value.clamp(0.0, 1.0);
 

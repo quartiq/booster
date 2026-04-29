@@ -73,34 +73,36 @@ impl DecodeOwned for ChannelState {
 }
 
 mod validate_output_interlock_threshold {
-    pub use miniconf::{leaf::*, Keys, SerdeError};
-    use serde::{Deserialize, Deserializer};
+    pub use miniconf::{
+        leaf::{self, *},
+        Keys, SerdeError,
+    };
+    use serde::Deserializer;
 
+    use super::ChannelSettings;
     use crate::hardware::platform::MAX_OUTPUT_POWER_DBM;
 
     /// [`TreeDeserialize::deserialize_by_key()`]
     pub fn deserialize_by_key<'de, D: Deserializer<'de>>(
-        value: &mut f32,
-        mut keys: impl Keys,
+        value: &mut ChannelSettings,
+        keys: impl Keys,
         de: D,
     ) -> Result<(), SerdeError<D::Error>> {
-        keys.finalize()?;
-        Deserialize::deserialize_in_place(de, value).map_err(SerdeError::Inner)?;
+        leaf::deserialize_by_key(&mut value.output_interlock_threshold, keys, de)?;
 
-        if *value > MAX_OUTPUT_POWER_DBM {
-            *value = MAX_OUTPUT_POWER_DBM;
+        if value.output_interlock_threshold > MAX_OUTPUT_POWER_DBM {
+            value.output_interlock_threshold = MAX_OUTPUT_POWER_DBM;
         }
 
-        // FIXME: No `self` here.
-        //
         // Verify the interlock is mappable to a DAC threshold.
-        // let dac_voltage = self
-        //     .output_power_transform
-        //     .invert(*self.output_interlock_threshold);
-        // let dac_voltage_clamped = dac_voltage.clamp(0.0, ad5627::MAX_VOLTAGE);
-        // if dac_voltage_clamped != dac_voltage {
-        //     *self.output_interlock_threshold = self.output_power_transform.map(dac_voltage_clamped);
-        // }
+        let dac_voltage = value
+            .output_power_transform
+            .invert(value.output_interlock_threshold);
+        let dac_voltage_clamped = dac_voltage.clamp(0.0, ad5627::MAX_VOLTAGE);
+        if dac_voltage_clamped != dac_voltage {
+            value.output_interlock_threshold =
+                value.output_power_transform.map(dac_voltage_clamped);
+        }
 
         Ok(())
     }
@@ -128,10 +130,10 @@ mod validate_bias_voltage {
 }
 
 /// Represents booster channel-specific configuration values.
-#[derive(Tree, Encode, Debug, Copy, Clone, PartialEq)]
+#[derive(Tree, Encode, DecodeOwned, Serialize, Debug, Copy, Clone, PartialEq)]
 pub struct ChannelSettings {
     // dBm
-    #[tree(with=validate_output_interlock_threshold)]
+    #[tree(with=validate_output_interlock_threshold, defer=*self)]
     pub output_interlock_threshold: f32,
 
     // V
@@ -149,37 +151,6 @@ pub struct ChannelSettings {
 
     #[tree(with=miniconf::leaf)]
     pub reflected_power_transform: LinearTransformation,
-}
-
-impl DecodeOwned for ChannelSettings {
-    type Output = ChannelSettings;
-
-    type Error = encdec::Error;
-
-    fn decode_owned(buff: &[u8]) -> Result<(Self::Output, usize), Self::Error> {
-        #[derive(Debug, DecodeOwned)]
-        struct ChannelSettingsDecoder {
-            pub output_interlock_threshold: f32,
-            pub bias_voltage: f32,
-            pub state: ChannelState,
-            pub input_power_transform: LinearTransformation,
-            pub output_power_transform: LinearTransformation,
-            pub reflected_power_transform: LinearTransformation,
-        }
-
-        let (inner, inner_len) = ChannelSettingsDecoder::decode_owned(buff)?;
-        Ok((
-            ChannelSettings {
-                output_interlock_threshold: inner.output_interlock_threshold,
-                bias_voltage: inner.bias_voltage,
-                state: inner.state,
-                input_power_transform: inner.input_power_transform,
-                output_power_transform: inner.output_power_transform,
-                reflected_power_transform: inner.reflected_power_transform,
-            },
-            inner_len,
-        ))
-    }
 }
 
 impl Default for ChannelSettings {
