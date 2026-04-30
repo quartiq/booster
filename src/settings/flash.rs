@@ -1,7 +1,7 @@
 //! Booster NGFW Application
 
 use heapless::{String, Vec};
-use miniconf::{Path, TreeAny, TreeDeserializeOwned, TreeSerialize};
+use miniconf::{Path, TreeDeserializeOwned, TreeSerialize};
 
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use embassy_futures::block_on;
@@ -43,7 +43,7 @@ pub struct SerialSettingsPlatform<C> {
 
 impl<C> SerialSettingsPlatform<C>
 where
-    C: TreeDeserializeOwned + TreeSerialize + TreeAny,
+    C: TreeDeserializeOwned + TreeSerialize,
 {
     pub fn load(structure: &mut C, storage: &mut Flash) {
         // Loop over flash and read settings
