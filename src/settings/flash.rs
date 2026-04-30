@@ -1,7 +1,7 @@
 //! Booster NGFW Application
 
 use heapless::{String, Vec};
-use miniconf::{Path, TreeDeserializeOwned, TreeKey, TreeSerialize};
+use miniconf::{Path, TreeDeserializeOwned, TreeSerialize};
 
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use embassy_futures::block_on;
@@ -43,13 +43,13 @@ pub struct SerialSettingsPlatform<C> {
 
 impl<C> SerialSettingsPlatform<C>
 where
-    C: TreeDeserializeOwned + TreeSerialize + TreeKey,
+    C: TreeDeserializeOwned + TreeSerialize,
 {
     pub fn load(structure: &mut C, storage: &mut Flash) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
-        for path in C::nodes::<Path<String<128>, '/'>, 8>() {
-            let (path, _node) = path.unwrap();
+        for path in C::nodes::<Path<String<128>>, 8>() {
+            let path = path.unwrap();
 
             // Try to fetch the setting from flash.
             let value: &[u8] = match block_on(fetch_item(
@@ -60,7 +60,7 @@ where
                 &SettingsKey(path.clone().into_inner().into_bytes()),
             )) {
                 Err(e) => {
-                    log::warn!("Failed to fetch `{}` from flash: {e:?}", path.as_str());
+                    log::warn!("Failed to fetch `{}` from flash: {e:?}", path);
                     continue;
                 }
                 Ok(Some(value)) => value,
@@ -73,14 +73,11 @@ where
                 continue;
             }
 
-            log::info!("Loading initial `{}` from flash", path.as_str());
+            log::info!("Loading initial `{}` from flash", path);
 
             let flavor = postcard::de_flavors::Slice::new(value);
             if let Err(e) = miniconf::postcard::set_by_key(structure, &path, flavor) {
-                log::warn!(
-                    "Failed to deserialize `{}` from flash: {e:?}",
-                    path.as_str()
-                );
+                log::warn!("Failed to deserialize `{}` from flash: {e:?}", path);
             }
         }
     }

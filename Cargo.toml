@@ -51,20 +51,20 @@ usbd-serial = "0.2.2"
 encdec = { version = "0.10", default-features = false }
 crc-any = { version = "2.5.0", default-features = false }
 panic-persist = { version = "0.3", features = ["custom-panic-handler", "utf8"] }
-miniconf = { version = "0.18.0", features = ["json-core", "derive", "postcard"]}
+miniconf = { version = "0.20", features = ["json-core", "derive", "postcard"]}
 # NOTE: Keep this in sync with `py/pyproject.toml`.
-miniconf_mqtt = "0.18.0"
+miniconf_mqtt = "0.20"
 # NOTE: Keep this in sync with the version used by `miniconf_mqtt`.
-minimq = "0.9.0"
-w5500 = "0.5"
+minimq = "0.10.0"
+w5500 = "0.6"
 smlang= "0.8"
 minireq = "0.5"
 rtt-target = { version = "0.6", optional = true }
 enum-iterator = { version = "2.1", default-features = false }
 enc424j600 = "0.4"
 embedded-hal = "1"
-smoltcp-nal = { version = "0.5", features=["shared-stack"] }
-serial-settings = "0.2"
+smoltcp-nal = { version = "0.7", features=["shared-stack"] }
+serial_settings = "0.2"
 stm32f4xx-hal = {version = "0.22.1", features = ["stm32f407", "usb_fs"] }
 postcard = "1"
 
@@ -78,11 +78,13 @@ built = { version = "0.7", features = ["git2"], default-features = false }
 path = "ad5627"
 version = "0.2"
 
-[patch.crates-io.smoltcp]
-# Locking to a patch where the poll() function no longer loops infinitely during packet floods. This
-# can be removed once smoltcp is re-released.
-git = "https://github.com/smoltcp-rs/smoltcp"
-rev = "53caf70f640d5ccb3cd1492e1cb178bc7dfa3cdd"
+[patch.crates-io]
+miniconf = { git = "https://github.com/quartiq/miniconf.git" }
+miniconf_mqtt = { git = "https://github.com/quartiq/miniconf.git" }
+miniconf_derive = { git = "https://github.com/quartiq/miniconf.git" }
+minireq = { git = "https://github.com/quartiq/minireq" }
+serial_settings = { git = "https://github.com/quartiq/stabilizer" }
+smoltcp-nal = { git = "https://github.com/quartiq/smoltcp-nal" }
 
 [dependencies.ads7924]
 path = "ads7924"

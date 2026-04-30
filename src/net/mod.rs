@@ -2,7 +2,7 @@
 
 use crate::hardware::{NetworkStack, SystemTimer};
 
-use core::fmt::Write;
+use core::{fmt::Write, num::NonZero};
 use heapless::String;
 
 pub mod mqtt_control;
@@ -139,6 +139,8 @@ impl NetworkDevices {
     pub fn process(&mut self) -> bool {
         self.telemetry.update();
 
-        self.stack.lock(|stack| stack.poll()).unwrap_or(true)
+        self.stack
+            .lock(|stack| stack.poll_n(const { NonZero::new(1).unwrap() }))
+            .unwrap_or(true)
     }
 }

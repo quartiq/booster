@@ -5,18 +5,18 @@ use crate::{
     Channel,
 };
 
-use minimq::{DeferredPublication, Publication};
+use heapless::{String, Vec};
+use miniconf::{IntoKeys, Keys, NodeIter, Path, TreeSchema};
+use minimq::Publication;
+use serde::Serialize;
+use serial_settings::Platform;
 
 use super::NetworkStackProxy;
 
 use core::fmt::Write;
-use heapless::{String, Vec};
-use serde::Serialize;
 
 use crate::hardware::SerialSettingsPlatform;
 use crate::settings::Settings;
-use miniconf::{IntoKeys, Keys, Path, TreeKey};
-use serial_settings::Platform;
 
 /// Default metadata message if formatting errors occur.
 const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
@@ -124,12 +124,9 @@ impl TelemetryClient {
         // All telemtry is published in a best-effort manner.
         self.mqtt
             .client()
-            .publish(
-                DeferredPublication::new(|buf| serde_json_core::to_slice(telemetry, buf))
-                    .topic(&topic)
-                    .finish()
-                    .unwrap(),
-            )
+            .publish(Publication::new(&topic, |buf: &mut [u8]| {
+                serde_json_core::to_slice(telemetry, buf)
+            }))
             .ok();
     }
 
@@ -155,23 +152,15 @@ impl TelemetryClient {
 
             if mqtt
                 .client()
-                .publish(
-                    DeferredPublication::new(|buf| serde_json_core::to_slice(&metadata, buf))
-                        .topic(&topic)
-                        .finish()
-                        .unwrap(),
-                )
+                .publish(Publication::new(&topic, |buf: &mut [u8]| {
+                    serde_json_core::to_slice(&metadata, buf)
+                }))
                 .is_err()
             {
                 // Note(unwrap): We can guarantee that this message will be sent because we checked
                 // for ability to publish above.
                 mqtt.client()
-                    .publish(
-                        Publication::new(DEFAULT_METADATA.as_bytes())
-                            .topic(&topic)
-                            .finish()
-                            .unwrap(),
-                    )
+                    .publish(Publication::new(&topic, DEFAULT_METADATA.as_bytes()))
                     .unwrap();
             }
 
@@ -250,25 +239,33 @@ pub fn save_settings_to_flash(
 
     let settings = channel.context().settings();
 
-    let channel_root: Path<_, '/'> = Path("/booster/channel");
+    let channel_root = Path::new("/booster/channel", '/');
 
     let mut buf = [0u8; 256];
-    for channel_path in Settings::nodes::<Path<String<64>, '/'>, 4>()
-        .root(channel_root.into_keys().chain([request.channel as usize]))
-        .unwrap()
-    {
-        let (channel_path, _) = channel_path.unwrap();
+
+    let it = NodeIter::<Path<String<64>>, 4>::with_root(
+        Settings::SCHEMA,
+        channel_root.into_keys().chain([request.channel as usize]),
+        '/',
+    );
+
+    for channel_path in it.unwrap() {
+        let channel_path = channel_path.unwrap();
 
         let mut data: Vec<u8, 256> = Vec::new();
         data.resize(data.capacity(), 0).unwrap();
         let flavor = postcard::ser_flavors::Slice::new(&mut data);
-        let len = miniconf::postcard::get_by_key(settings, channel_path.split('/').skip(4), flavor)
-            .unwrap()
-            .len();
+        let len = miniconf::postcard::get_by_key(
+            settings,
+            channel_path.as_ref().split('/').skip(4),
+            flavor,
+        )
+        .unwrap()
+        .len();
         data.truncate(len);
 
         settings_platform
-            .store(&mut buf[..], channel_path.0.as_bytes(), &data)
+            .store(&mut buf[..], channel_path.as_ref().as_bytes(), &data)
             .map_err(|_| "Failed to save to flash")?;
     }
 
