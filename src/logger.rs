@@ -1,18 +1,20 @@
 //! Booster NGFW logging utilities
-use heapless::String;
+use core::fmt::Write;
+
+use heapless::{mpmc::Queue, String};
+use log::LevelFilter;
 
 use super::SerialTerminal;
-use core::fmt::Write;
-use log::LevelFilter;
 
 /// A logging buffer for storing serialized logs pending transmission.
 ///
 /// # Notes
+///
 /// The BufferedLog contains a character buffer of the log data waiting to be written. It is
 /// intended to be consumed asynchronously. In the case of booster, this log data is consumed in the
 /// USB task.
 pub struct BufferedLog {
-    logs: heapless::mpmc::Q16<heapless::String<256>>,
+    logs: Queue<heapless::String<256>, 16>,
     level_filter: LevelFilter,
 }
 
@@ -20,7 +22,8 @@ impl BufferedLog {
     /// Construct a new buffered log object.
     pub const fn new() -> Self {
         Self {
-            logs: heapless::mpmc::Q16::new(),
+            #[expect(deprecated)]
+            logs: Queue::new(),
             level_filter: LevelFilter::Info,
         }
     }
